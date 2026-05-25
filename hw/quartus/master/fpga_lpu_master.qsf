@@ -56,6 +56,13 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/kv_dma_engine.sv
 set_global_assignment -name SDC_FILE ../../hw/constraints/fpga_lpu.sdc
 
 # --------------------------------------------------------------------------- #
+# Pin Assignments (Master: PCIe + C2C + HBM)
+# --------------------------------------------------------------------------- #
+# Pin locations follow Intel GSRD format. [TODO-BSP] markers require
+# DK-DEV-AGM039EA board BSP to fill actual pin numbers.
+set_global_assignment -name SOURCE_TCL_FILE ../../hw/constraints/pin_assignment_master.tcl
+
+# --------------------------------------------------------------------------- #
 # Synthesis & Fitter — Master-specific
 # --------------------------------------------------------------------------- #
 set_global_assignment -name OPTIMIZATION_MODE "PERFORMANCE"

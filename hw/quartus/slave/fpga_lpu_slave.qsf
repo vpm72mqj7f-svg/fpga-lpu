@@ -54,6 +54,13 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../hw/src/top_slave.sv
 set_global_assignment -name SDC_FILE ../../hw/constraints/fpga_lpu.sdc
 
 # --------------------------------------------------------------------------- #
+# Pin Assignments (Slave: C2C + HBM, no PCIe)
+# --------------------------------------------------------------------------- #
+# Pin locations follow Intel GSRD format. [TODO-BSP] markers require
+# DK-DEV-AGM039EA board BSP to fill actual pin numbers.
+set_global_assignment -name SOURCE_TCL_FILE ../../hw/constraints/pin_assignment_slave.tcl
+
+# --------------------------------------------------------------------------- #
 # Synthesis & Fitter — Slave-specific
 # --------------------------------------------------------------------------- #
 set_global_assignment -name OPTIMIZATION_MODE "PERFORMANCE"

@@ -1,60 +1,79 @@
 # ========================================================================== #
 # FPGA LPU — Timing Constraints (SDC)
-# Target: Intel Agilex 7 M (AGMF039R47A1E2V, DK-DEV-AGM039EA)
+# Target: Intel Agilex 7 M (AGMF039R47A1E2VR0, DK-DEV-AGM039EA)
 #
-# Clock frequencies per ref: Intel doc 782461 (Dev Kit User Guide)
-#   CLK_100M_PCIE:   100.00 MHz  (PCIe reference)
-#   CLK_156_25MHZ:    156.25 MHz  (F-Tile / QSFP-DD)
-#   CLK_245_76MHZ:    245.76 MHz  (QSFP-DD)
-#   CLK_312_50MHZ:    312.50 MHz  (Sample clock)
-#   CLK_390_625MHZ:   390.625 MHz (DSP target — derived from PLL)
-#   DDR5:             5600 Mbps   (board has Micron MTC10F1084S1RC56BG1 x1 DIMM)
-#   HBM2e:            920 GB/s    (2048-bit Avalon-MM @ 450 MHz effective)
+# Reference: Intel doc 782461 (Agilex 7 M-Series Dev Kit User Guide)
+#            https://github.com/altera-fpga/agilex7f-ed-gsrd (GSRD format)
+#
+# Clock domains:
+#   clk_board_100m:    100.00 MHz  (onboard oscillator, sys/control)
+#   clk_dsp:           390.625 MHz (DSP systolic array, from PLL)
+#   clk_pcie:          250.00 MHz  (PCIe 5.0 R-Tile reference)
+#   clk_hbm:           450.00 MHz  (HBM2e UIB, from dedicated HBM refclk)
 # ========================================================================== #
 
-# ── Clock Definitions ──────────────────────────────────────────────────────
+# ── Board Clock (100 MHz oscillator) ─────────────────────────────────────
+create_clock -name clk_board_100m -period 10.000 [get_ports clk_board_100m]
 
-# PCIe reference (from onboard 100 MHz oscillator via R-Tile)
-create_clock -name clk_pcie_ref -period 10.000 [get_ports pcie_refclk_p]
+# ── Reset ────────────────────────────────────────────────────────────────
+# Asynchronous reset (false path from reset port)
+set_false_path -from [get_ports cpu_reset_n]
 
-# Board system clock (from Si5332 clock generator, 156.25 MHz default)
-# create_clock -name clk_sys_156 -period 6.400 [get_ports clk_156_p]
+# ── Generated Clocks (from PLL) ──────────────────────────────────────────
+# [TODO] Uncomment after PLL instantiation in top-level:
+#
+# DSP clock: 100 MHz × 39/10 = 390 MHz → 100 MHz × 125/32 = 390.625 MHz
+# create_generated_clock -name clk_dsp -source [get_ports clk_board_100m] \
+#     -multiply_by 125 -divide_by 32 [get_pins u_pll|outclk_dsp]
+#
+# PCIe reference: 100 MHz (pass-through to R-Tile)
+# create_generated_clock -name clk_pcie -source [get_ports clk_board_100m] \
+#     -divide_by 1 [get_pins u_pll|outclk_pcie]
+#
+# HBM reference: from dedicated UIB refclk pins
+# create_generated_clock -name clk_hbm -source [get_ports hbm_refclk_p] \
+#     -divide_by 1 [get_pins u_pll|outclk_hbm]
 
-# DSP core clock: target 450 MHz (period = 2222 ps)
-# Derive from CLK_390_625MHZ via PLL (390.625 × 23/20 ≈ 449.2 MHz)
-# create_generated_clock -name clk_dsp -source [get_ports clk_390_p] \
-#     -multiply_by 23 -divide_by 20 [get_pins pll_dsp|outclk_0]
-
-# HBM reference clock (from UIB dedicated pins)
-# create_clock -name clk_hbm_ref -period 2.222 [get_ports hbm_refclk_p]
-
-# ── Clock Groups ───────────────────────────────────────────────────────────
-
+# ── Clock Groups (asynchronous domains) ──────────────────────────────────
 # set_clock_groups -asynchronous \
+#     -group [get_clocks clk_board_100m] \
 #     -group [get_clocks clk_dsp] \
-#     -group [get_clocks clk_pcie_ref] \
-#     -group [get_clocks clk_hbm_ref]
+#     -group [get_clocks clk_pcie] \
+#     -group [get_clocks clk_hbm]
 
-# ── False Paths ────────────────────────────────────────────────────────────
+# ── I/O Constraints ──────────────────────────────────────────────────────
+# Board LED outputs (slow, no tight timing)
+set_output_delay -clock clk_board_100m -max 5.000 [get_ports debug_led*]
+set_output_delay -clock clk_board_100m -min 0.000 [get_ports debug_led*]
 
-# Reset is asynchronous
-# set_false_path -from [get_ports cpu_reset_n]
+# UART TX (115200 baud → ~8.68 us per bit, relaxed timing)
+set_output_delay -clock clk_board_100m -max 20.000 [get_ports uart_tx]
+set_output_delay -clock clk_board_100m -min 0.000  [get_ports uart_tx]
 
-# JTAG / Signal Tap debug paths
-# set_false_path -to [get_pins sld_signaltap:*]
-
-# ── DSP Multicycle Paths ───────────────────────────────────────────────────
-
+# ── DSP Multicycle Paths ─────────────────────────────────────────────────
 # fp4_mac: 3-stage pipeline, accumulator toggles on valid only
-# set_multicycle_path -setup 2 \
-#     -to [get_registers *u_mac*accumulator*]
-# set_multicycle_path -hold  1 \
-#     -to [get_registers *u_mac*accumulator*]
+# Relax timing on accumulator path
+# set_multicycle_path -setup 2 -to [get_registers *u_mac*accumulator*]
+# set_multicycle_path -hold  1 -to [get_registers *u_mac*accumulator*]
 
-# ── Clock Uncertainty ──────────────────────────────────────────────────────
+# ── Systolic Array Timing ────────────────────────────────────────────────
+# HBM → DSP data path: 1-cycle to cross clock domain
+# set_max_delay -from [get_registers *hbm*] -to [get_registers *u_array*] 2.500
+# set_min_delay -from [get_registers *hbm*] -to [get_registers *u_array*] 0.000
 
-# set_clock_uncertainty -setup 0.050 [get_clocks clk_dsp]
-# set_clock_uncertainty -hold  0.020 [get_clocks clk_dsp]
+# ── False Paths ──────────────────────────────────────────────────────────
+# JTAG / Signal Tap debug
+set_false_path -to [get_pins sld_signaltap:*]
 
+# Cross-clock-domain synchronizers (2-FF chains)
+# set_false_path -from [get_registers *sync_reg*] -to [get_registers *sync_reg*]
+
+# ── Clock Uncertainty ────────────────────────────────────────────────────
 # derive_pll_clocks -create_base_clocks
 # derive_clock_uncertainty
+
+# ── Report Timing (post-fit) ─────────────────────────────────────────────
+# After fitting, run:
+#   report_timing -setup -npaths 100 -detail full_path -file timing_setup.rpt
+#   report_timing -hold  -npaths 100 -detail full_path -file timing_hold.rpt
+#   report_clock_transfer -file clock_transfer.rpt
