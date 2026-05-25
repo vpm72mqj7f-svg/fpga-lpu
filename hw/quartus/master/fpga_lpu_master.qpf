@@ -1,0 +1,11 @@
+# --------------------------------------------------------------------------- #
+# fpga_lpu_master.qpf — Master FPGA Project File
+# --------------------------------------------------------------------------- #
+
+QUARTUS_VERSION = "24.3"
+PROJECT_REVISION = "fpga_lpu_master"
+
+# Project paths are relative to this .qpf file location
+PROJECT_OUTPUT_DIRECTORY = output_files
+SEARCH_PATH = ../../rtl/include
+SEARCH_PATH = ../../rtl/interfaces

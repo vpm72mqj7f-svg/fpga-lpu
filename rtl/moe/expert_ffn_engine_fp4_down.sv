@@ -1,0 +1,135 @@
+//=============================================================================
+// expert_ffn_engine_fp4_down.sv — Expert FFN with gate/up/down fp4 linear engines
+//=============================================================================
+
+module expert_ffn_engine_fp4_down #(
+    parameter int HIDDEN = 8,
+    parameter int INTER  = 4,
+    parameter int LANES  = 4,
+    parameter int K_BEATS_H = (HIDDEN + LANES - 1) / LANES,
+    parameter int K_BEATS_I = (INTER + LANES - 1) / LANES
+) (
+    input  logic clk,
+    input  logic rst_n,
+
+    input  logic activ_wr_en,
+    input  logic [$clog2(K_BEATS_H+1)-1:0] activ_wr_beat,
+    input  logic [LANES*8-1:0] activ_wr_data,
+
+    input  logic scale_wr_en,
+    input  logic [1:0] scale_wr_addr,
+    input  logic [7:0] scale_wr_data,
+
+    input  logic gate_w_wr_en,
+    input  logic [$clog2(INTER)-1:0] gate_w_wr_row,
+    input  logic [$clog2(K_BEATS_H)-1:0] gate_w_wr_beat,
+    input  logic [LANES*4-1:0] gate_w_wr_data,
+
+    input  logic up_w_wr_en,
+    input  logic [$clog2(INTER)-1:0] up_w_wr_row,
+    input  logic [$clog2(K_BEATS_H)-1:0] up_w_wr_beat,
+    input  logic [LANES*4-1:0] up_w_wr_data,
+
+    input  logic down_w_wr_en,
+    input  logic [$clog2(HIDDEN)-1:0] down_w_wr_row,
+    input  logic [$clog2(K_BEATS_I+1)-1:0] down_w_wr_beat,
+    input  logic [LANES*4-1:0] down_w_wr_data,
+
+    input  logic start,
+    output logic busy,
+    output logic done,
+    output logic result_valid,
+    output logic [$clog2(HIDDEN)-1:0] result_row,
+    output logic [31:0] result_data
+);
+
+    typedef enum logic [2:0] {S_IDLE, S_RUN_GU, S_MID, S_LOAD_DOWN, S_RUN_DOWN, S_DONE} state_t;
+    state_t state;
+
+    logic gate_start, up_start, down_start;
+    logic gate_done, up_done, down_done;
+    logic gate_rv, up_rv, down_rv;
+    logic [$clog2(INTER)-1:0] gate_rr, up_rr;
+    logic [$clog2(HIDDEN)-1:0] down_rr;
+    logic [31:0] gate_rd, up_rd, down_rd;
+
+    logic signed [31:0] gate_vec [INTER];
+    logic signed [31:0] up_vec [INTER];
+    logic signed [31:0] silu_vec [INTER];
+    logic signed [31:0] mid_vec [INTER];
+    logic [LANES*8-1:0] down_activ_pack;
+    logic down_activ_wr_en;
+    logic down_started;
+
+    assign busy = (state != S_IDLE) && (state != S_DONE);
+    assign result_valid = down_rv;
+    assign result_row = down_rr;
+    assign result_data = down_rd;
+
+    genvar gi;
+    generate
+        for (gi = 0; gi < INTER; gi++) begin : g_silu
+            silu_q12_lut u_silu (.x_q12(gate_vec[gi]), .y_q12(silu_vec[gi]));
+            q12_to_fp8_e4m3 u_mid_enc (.x_q12(mid_vec[gi]), .fp8(down_activ_pack[gi*8 +: 8]));
+        end
+    endgenerate
+
+    fp4_linear_engine #(.M_OUT(INTER), .K_TOTAL(HIDDEN), .LANES(LANES), .GROUP_SIZE(4), .NUM_GROUPS(4), .ADDR_WIDTH(2)) u_gate (
+        .clk(clk), .rst_n(rst_n), .weight_wr_en(gate_w_wr_en), .weight_wr_row(gate_w_wr_row),
+        .weight_wr_beat(gate_w_wr_beat), .weight_wr_data(gate_w_wr_data),
+        .activ_wr_en(activ_wr_en), .activ_wr_beat(activ_wr_beat), .activ_wr_data(activ_wr_data),
+        .scale_wr_en(scale_wr_en), .scale_wr_addr(scale_wr_addr), .scale_wr_data(scale_wr_data),
+        .start(gate_start), .busy(), .done(gate_done), .result_valid(gate_rv), .result_row(gate_rr), .result_data(gate_rd),
+        .result_ready(1'b1)
+    );
+
+    fp4_linear_engine #(.M_OUT(INTER), .K_TOTAL(HIDDEN), .LANES(LANES), .GROUP_SIZE(4), .NUM_GROUPS(4), .ADDR_WIDTH(2)) u_up (
+        .clk(clk), .rst_n(rst_n), .weight_wr_en(up_w_wr_en), .weight_wr_row(up_w_wr_row),
+        .weight_wr_beat(up_w_wr_beat), .weight_wr_data(up_w_wr_data),
+        .activ_wr_en(activ_wr_en), .activ_wr_beat(activ_wr_beat), .activ_wr_data(activ_wr_data),
+        .scale_wr_en(scale_wr_en), .scale_wr_addr(scale_wr_addr), .scale_wr_data(scale_wr_data),
+        .start(up_start), .busy(), .done(up_done), .result_valid(up_rv), .result_row(up_rr), .result_data(up_rd),
+        .result_ready(1'b1)
+    );
+
+    fp4_linear_engine #(.M_OUT(HIDDEN), .K_TOTAL(INTER), .LANES(LANES), .GROUP_SIZE(4), .NUM_GROUPS(4), .ADDR_WIDTH(2)) u_down (
+        .clk(clk), .rst_n(rst_n), .weight_wr_en(down_w_wr_en), .weight_wr_row(down_w_wr_row),
+        .weight_wr_beat(down_w_wr_beat), .weight_wr_data(down_w_wr_data),
+        .activ_wr_en(down_activ_wr_en), .activ_wr_beat('0), .activ_wr_data(down_activ_pack),
+        .scale_wr_en(scale_wr_en), .scale_wr_addr(scale_wr_addr), .scale_wr_data(scale_wr_data),
+        .start(down_start), .busy(), .done(down_done), .result_valid(down_rv), .result_row(down_rr), .result_data(down_rd),
+        .result_ready(1'b1)
+    );
+
+    always_ff @(posedge clk) begin
+        if (gate_rv) gate_vec[gate_rr] <= gate_rd;
+        if (up_rv)   up_vec[up_rr] <= up_rd;
+    end
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state <= S_IDLE; gate_start <= 0; up_start <= 0; down_start <= 0; done <= 0; down_activ_wr_en <= 0; down_started <= 0;
+            for (int i=0; i<INTER; i++) begin gate_vec[i] <= 0; up_vec[i] <= 0; mid_vec[i] <= 0; end
+        end else begin
+            gate_start <= 0; up_start <= 0; down_start <= 0; done <= 0; down_activ_wr_en <= 0;
+            case (state)
+                S_IDLE: if (start) begin gate_start <= 1; up_start <= 1; state <= S_RUN_GU; end
+                S_RUN_GU: if (gate_done && up_done) state <= S_MID;
+                S_MID: begin
+                    for (int i=0; i<INTER; i++) mid_vec[i] <= ($signed(silu_vec[i]) * $signed(up_vec[i])) >>> 12;
+                    state <= S_LOAD_DOWN;
+                end
+                S_LOAD_DOWN: begin down_activ_wr_en <= 1; down_started <= 0; state <= S_RUN_DOWN; end
+                S_RUN_DOWN: begin
+                    if (!down_started) begin
+                        down_start <= 1;
+                        down_started <= 1;
+                    end
+                    if (down_done) begin done <= 1; state <= S_DONE; end
+                end
+                S_DONE: if (!start) state <= S_IDLE;
+            endcase
+        end
+    end
+
+endmodule

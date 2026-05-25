@@ -1,0 +1,48 @@
+# --------------------------------------------------------------------------- #
+# common_modules.qsf — Shared RTL source files for Master and Slave projects
+# --------------------------------------------------------------------------- #
+
+# Activation functions
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/activation/silu_q12_lut.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/activation/q12_to_fp8_e4m3.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/activation/rms_norm.sv
+
+# DSP / MAC
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_mac.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_scale_reader.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_systolic_tile.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_scaled_tile.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_systolic_array.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_linear_engine.sv
+
+# Attention
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_attention.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_qkv_proj.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_rope.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_kv_cache.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_attention_v2.sv
+
+# MoE
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/moe/router_topk.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/moe/expert_ffn_engine_fp4_down.sv
+
+# Layer
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/layer/mhc_mixer.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/layer/full_transformer_layer.sv
+
+# Head (MTP)
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/head/mtp_head.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/head/mtp_verify.sv
+
+# Engram
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/engram/hash_unit.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/engram/sram_cache.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/engram/lookup_engine.sv
+
+# Chip
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/chip_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/c2c_node.sv
+
+# Include directories
+set_global_assignment -name SEARCH_PATH ../../rtl/include
+set_global_assignment -name SEARCH_PATH ../../rtl/interfaces

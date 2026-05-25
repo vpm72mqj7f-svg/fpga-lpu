@@ -1,0 +1,99 @@
+[
+  {
+    "name": "chip_resources",
+    "status": "PASS",
+    "value": {
+      "dsp_1G_mac_us": 90.334,
+      "hbm_920MB_us": 1024.0,
+      "chip_weight_gb": 0.565
+    }
+  },
+  {
+    "name": "interconnect",
+    "status": "PASS",
+    "value": {
+      "c2c_7KB_us": 0.551,
+      "pcie_7KB_us": 0.896
+    }
+  },
+  {
+    "name": "cluster_replication",
+    "status": "PASS",
+    "value": {
+      "baseline_experts_chip0": 12,
+      "hot_min_avg_max": [
+        12,
+        14.3,
+        16
+      ],
+      "hottest_expert_replicas": 8
+    }
+  },
+  {
+    "name": "expert_popularity",
+    "status": "PASS",
+    "value": {
+      "top20_mass": 0.551,
+      "top77_mass": 0.755,
+      "top_replica_count": 8
+    }
+  },
+  {
+    "name": "pipeline_models",
+    "status": "PASS",
+    "value": {
+      "k_pipeline": 23.08,
+      "decode_tps_B1": 724.3,
+      "decode_tps_B8": 4489.7,
+      "prefill_chip0_us": 13480.3,
+      "chip0_rate_clone2_req_s": 37.1
+    }
+  },
+  {
+    "name": "weight_layout",
+    "status": "PASS",
+    "value": {
+      "max_used_gb": 23.29,
+      "min_free_gb": 8.71,
+      "total_weight_gb": 744.5
+    }
+  },
+  {
+    "name": "kv_cache",
+    "status": "PASS",
+    "value": {
+      "prefill_blocks": 40,
+      "after_decode_blocks": 40,
+      "allocated_before_free": 32,
+      "after_free": 0
+    }
+  },
+  {
+    "name": "scheduler",
+    "status": "PASS",
+    "value": {
+      "num_batches": 1,
+      "first_batch_type": "PREFILL",
+      "batch_size": 4
+    }
+  },
+  {
+    "name": "api_server",
+    "status": "PASS",
+    "value": {
+      "generated": 6,
+      "first_prompt": 181
+    }
+  },
+  {
+    "name": "serving_short",
+    "status": "PASS",
+    "value": {
+      "requests": 49,
+      "finished": 44,
+      "accept_rate": 89.8,
+      "output_tps": 402.3,
+      "ttft_p95_ms": 523.9
+    }
+  }
+]

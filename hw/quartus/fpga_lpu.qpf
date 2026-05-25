@@ -1,0 +1,6 @@
+# --------------------------------------------------------------------------- #
+# FPGA LPU Inference Accelerator — Quartus Prime Pro Project File
+# --------------------------------------------------------------------------- #
+QUARTUS_VERSION = "24.3"
+DATE = "2026-05-25"
+PROJECT_REVISION = "fpga_lpu"

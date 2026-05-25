@@ -1,0 +1,58 @@
+# FPGA LPU Project — .gitignore
+
+# Quartus / FPGA build artifacts
+output_files/
+db/
+incremental_db/
+*.qws
+*.sopcinfo
+*.sopc
+*.sof
+*.pof
+*.jdi
+*.rpt
+*.summary
+*.pin
+*.done
+*.qar
+*.qarlog
+*.qdf
+*.stp
+
+# Icarus Verilator simulation build
+rtl/sim/build/*.vvp
+*.vcd
+*.lxt
+*.lxt2
+*.fst
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Claude Code internal
+.claude/
+
+# Temp files
+/tmp/
+*.tmp
+
+# Large binaries (PPT, PDF — keep only source documents)
+*.ppt
+*.pptx
+*.pdf
+*.docx
+*.doc

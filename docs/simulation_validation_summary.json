@@ -1,0 +1,79 @@
+{
+  "generated_at": "2026-05-23T09:58:12",
+  "passed": 4,
+  "total": 4,
+  "results": [
+    {
+      "name": "module_smoke",
+      "cmd": "C:\\Users\\liyan\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/run_module_smoke.py",
+      "exit_code": 0,
+      "log": "docs\\sim_module_smoke.log",
+      "tail": [
+        "| chip_resources | PASS | dsp_1G_mac_us=90.334, hbm_920MB_us=1024.0, chip_weight_gb=0.565 |",
+        "| interconnect | PASS | c2c_7KB_us=0.551, pcie_7KB_us=0.896 |",
+        "| cluster_replication | PASS | baseline_experts_chip0=12, hot_min_avg_max=[12, 14.3, 16], hottest_expert_replicas=8 |",
+        "| expert_popularity | PASS | top20_mass=0.551, top77_mass=0.755, top_replica_count=8 |",
+        "| pipeline_models | PASS | k_pipeline=23.08, decode_tps_B1=724.3, decode_tps_B8=4489.7, prefill_chip0_us=13480.3, chip0_rate_clone2_req_s=37.1 |",
+        "| weight_layout | PASS | max_used_gb=23.29, min_free_gb=8.71, total_weight_gb=744.5 |",
+        "| kv_cache | PASS | prefill_blocks=40, after_decode_blocks=40, allocated_before_free=32, after_free=0 |",
+        "| scheduler | PASS | num_batches=1, first_batch_type=PREFILL, batch_size=4 |",
+        "| api_server | PASS | generated=6, first_prompt=181 |",
+        "| serving_short | PASS | requests=49, finished=44, accept_rate=89.8, output_tps=402.3, ttft_p95_ms=523.9 |"
+      ]
+    },
+    {
+      "name": "functional_suite",
+      "cmd": "C:\\Users\\liyan\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/simulation/run_all.py",
+      "exit_code": 0,
+      "log": "docs\\sim_functional_suite.log",
+      "tail": [
+        "  �X�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�[",
+        "  �U             �����ж�: [PASS] ȫ�� 3 ��ʵ��ͨ��            �U",
+        "  �U              -> ���Խ��뿪���� Phase 1 ��֤             �U",
+        "  �^�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�a",
+        "",
+        "  ��һ��:",
+        "    1. ���� Intel DK-SI-AGM027 ������ ��2",
+        "    2. ����ʵ FPGA Ӳ���ϸ������� 3 ��ʵ��",
+        "    3. �Աȷ�������Ӳ��ʵ��, У׼ģ�Ͳ���",
+        ""
+      ]
+    },
+    {
+      "name": "architecture_integration",
+      "cmd": "C:\\Users\\liyan\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe -m scripts.architecture.integration",
+      "exit_code": 0,
+      "log": "docs\\sim_architecture_integration.log",
+      "tail": [
+        "    [TODO] dsp_gemm           �� fp4/FP8��FP8��fp32 MAC ����",
+        "    [TODO] mla_qk_proj        �� MLA Q/K ����ͶӰ + RoPE",
+        "    [TODO] mla_attention      �� flash attention (QK^T + softmax + V)",
+        "    [TODO] swiglu_ffn         �� gate/up SiLU + down ͶӰ",
+        "    [TODO] router_topk        �� Top-K ·�� (softmax + argsort)",
+        "    [TODO] hbm_reader         �� HBM ˳�� burst �� (expert Ȩ��)",
+        "    [TODO] pcie_dma           �� PCIe Gen5 x16 DMA ����",
+        "    [TODO] eth_mac_rdma       �� 100GbE MAC + RDMA ����",
+        "    [TODO] pipeline_ctrl      �� 9-stage ��ˮ�߿����� (˫���� + flow control)",
+        ""
+      ]
+    },
+    {
+      "name": "serving_agent_short",
+      "cmd": "C:\\Users\\liyan\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe scripts/run_serving.py --duration 30 --arrival-rate 4 --agent --agent-output-per-turn 256 --microbatch --expert-replication hot --pipeline-clone 2",
+      "exit_code": 0,
+      "log": "docs\\sim_serving_agent_short.log",
+      "tail": [
+        "  Decode TPS (high concur)             17,445          2,000          1,500",
+        "  Decode TPS (raw HW)                  14,000            N/A            N/A",
+        "  Prefill TPS (P=512,P0+P1)             6,122          8,000          6,000",
+        "  TTFT single (P=512) ms                2,550            120            160",
+        "  TTFT chunked (P=128) ms                 411            N/A            N/A",
+        "  Server cost (RMB 10k)                   100            300            130",
+        "  Cost / (tok/s) RMB                      57           1500            867",
+        "  P0: fp4 K/V attention (2x attn MAC). P1: router-guided sparse (88.8%).",
+        "  Chunked prefill P=128: TTFT 2,551ms -> 411ms (6.2x).",
+        "======================================================================"
+      ]
+    }
+  ]
+}

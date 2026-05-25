@@ -1,0 +1,104 @@
+
+======================================================================
+  FPGA Cloud Serving Simulation
+======================================================================
+  Architecture: 8 cards x 4 chips = 32 AGM 039-F
+  Deployment:   Monolithic (1 servers) + PipelineCloning x2
+  Agent mode:   10 turns/session, 500ms think, P_delta=256, O=256
+  Expert repl:  Hot replication (Zipf ��=1.0)
+                K_pipeline: 23.1 (was 25.4)
+  Scheduler:    Microbatch (token-level injection, release=57us) (max decode batch=256)
+  Duration:     30s
+  Arrival rate: 4.0 req/s (Poisson)
+  Seed:         42
+
+
+======================================================================
+  SIMULATION RESULTS
+======================================================================
+
+  --- Configuration ---
+  Duration:        31s
+  Arrival rate:    4.0 req/s
+  Deployment:      Monolithic (1 servers)
+  Total servers:   1
+  Max decode batch: 256
+  Warmup:          30s
+
+  --- Throughput ---
+  Total requests:       986
+  Finished:             986
+  Rejected:               0
+  Accept rate:       100.0%
+  Tokens in:         284777
+  Tokens out:        252416
+  Output TPS:       11721.0 tok/s
+  Theoretical TPS:     2006 tok/s  (at B=4)
+  Sys efficiency:     584.2%
+  Peak TPS (B=inf):  17,445 tok/s  (fully saturated)
+  Concurrent time:    100.0%  (prefill + decode overlap, of measured duration)
+  Avg contention:      1.05x  (resource sharing overhead)
+
+  --- Latency ---
+  TTFT P50:           389.2 ms  (target: 450 ms, SLA: 500 ms)
+  TTFT P95:           449.6 ms
+  TTFT P99:           529.6 ms
+  TPOT P50:             0.3 ms  (target: 10 ms, SLA: 30 ms)
+  TPOT P95:             0.6 ms
+  E2E Latency P50:    484.0 ms
+  E2E Latency P95:    599.6 ms
+
+  TTFT SLA compliance: 98.4% (970/986)
+  TPOT SLA compliance: 100.0% (986/986)
+
+  --- Prefill Batch Stats ---
+  Prefill batches:        500
+  Avg prefill reqs:       2.0
+  Max prefill reqs:         6
+  Avg prefill tokens:     570
+  Max prefill tokens:    1536
+  Avg prefill dur:      470.3 ms
+  Prefill admission:     45.8 req/s  (token-level:    13224 tok/s)
+  Peak concurrent prefills:       14
+
+  --- Agent KV Cache Reuse ---
+  Sessions started:       127
+  Turns completed:         16 / 38
+  Prefill w/ reuse:    284777 tokens
+  Prefill w/o reuse:   634519 tokens
+  Tokens saved:        349742 (55%)
+
+  --- Batch Stats ---
+  Avg batch size:       3.6
+  Max batch size:        12
+  Avg batch dur:       4086 us
+  Avg batch TPS:       2365 tok/s
+  Peak batch TPS:     17187 tok/s
+
+  --- Cost Analysis ---
+  Servers:         1
+  HW cost:         RMB 1,000,000
+  Power:           1 x 5.3 kW x 0.35 RMB/kWh = RMB 16,250/yr
+  Revenue/yr:      RMB 1,108,897 (at 3.0 RMB/1M tokens)
+  Tokens/yr:       369.63B
+
+  --- Steady-State (post-warmup) ---
+  Avg active:           1.0 requests
+  Peak active:            1 requests
+  Avg KV util:         17.4%
+
+  --- Hardware Comparison (DS V4 Pro, FP8, per server) ---
+  Metric                              FPGA A7           H200   Ascend 950PR
+  ---------------------------- -------------- -------------- --------------
+  Decode TPS (high concur)             17,445          2,000          1,500
+  Decode TPS (raw HW)                  14,000            N/A            N/A
+  Prefill TPS (P=512,P0+P1)             6,122          8,000          6,000
+  TTFT single (P=512) ms                2,550            120            160
+  TTFT chunked (P=128) ms                 411            N/A            N/A
+  Server cost (RMB 10k)                   100            300            130
+  Cost / (tok/s) RMB                      57           1500            867
+  P0: fp4 K/V attention (2x attn MAC). P1: router-guided sparse (88.8%).
+  Chunked prefill P=128: TTFT 2,551ms -> 411ms (6.2x).
+======================================================================
+
+--- STDERR ---
