@@ -115,9 +115,17 @@ module fp4_linear_engine #(
         .lane_result_flat (array_lanes)
     );
 
+    //=========================================================================
+    // Data source selection (TALOS-V2 pattern: explicit case-select mapping)
+    //
+    // The systolic array is time-multiplexed: same hardware, different data
+    // sources per row. For multi-operation future use (Q/K/V/FC1/FC2),
+    // add cases to the always_comb below.
+    //=========================================================================
     always_comb begin
-        array_weight_flat = weight_mem[mem_index(row_idx, beat_idx)];
-        array_activ_flat  = activ_mem[beat_idx];
+        // Default: current row/beat from memory
+        array_weight_flat   = weight_mem[mem_index(row_idx, beat_idx)];
+        array_activ_flat    = activ_mem[beat_idx];
         array_elem_idx_base = beat_idx * LANES;
     end
 

@@ -193,11 +193,35 @@ module fp4_mac #(
 
     //=========================================================================
     // Stage 3: Accumulate — 32b product → accumulator
-    //   Sign-extend product, add to running sum.
+    //   Sign-extend product, add to running sum. Saturation prevents overflow
+    //   wrap-around on deep accumulations (inspired by TALOS-V2 sat16).
     //   Clear on accum_clr (new token start).
     //=========================================================================
     logic [ACCUM_WIDTH-1:0] accumulator;
     logic                   s3_valid;
+
+    // Saturation: if operands have same sign but result has opposite sign,
+    // clamp to max/min instead of wrapping around.
+    function automatic logic [ACCUM_WIDTH-1:0] sat_acc;
+        input [ACCUM_WIDTH-1:0] old_acc;
+        input [ACCUM_WIDTH-1:0] add_val;
+        logic [ACCUM_WIDTH-1:0] sum_raw;
+        logic old_sign, val_sign, sum_sign;
+        begin
+            sum_raw  = old_acc + add_val;
+            old_sign = old_acc[ACCUM_WIDTH-1];
+            val_sign = add_val[ACCUM_WIDTH-1];
+            sum_sign = sum_raw[ACCUM_WIDTH-1];
+            // Overflow: both positive but sum went negative
+            if (!old_sign && !val_sign && sum_sign)
+                sat_acc = {1'b0, {(ACCUM_WIDTH-1){1'b1}}};  // max positive
+            // Underflow: both negative but sum went positive
+            else if (old_sign && val_sign && !sum_sign)
+                sat_acc = {1'b1, {(ACCUM_WIDTH-1){1'b0}}};  // max negative
+            else
+                sat_acc = sum_raw;
+        end
+    endfunction
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -208,7 +232,7 @@ module fp4_mac #(
             s3_valid    <= 1'b0;
         end else begin
             if (s2_valid) begin
-                accumulator <= accumulator + s2_product;
+                accumulator <= sat_acc(accumulator, s2_product);
             end
             s3_valid <= s2_valid;
         end
