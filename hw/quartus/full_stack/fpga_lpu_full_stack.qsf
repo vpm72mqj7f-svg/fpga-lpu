@@ -1,0 +1,28 @@
+QUARTUS_VERSION = "24.3"
+PROJECT_REVISION = "fpga_lpu_full_stack"
+PROJECT_OUTPUT_DIRECTORY = output_files
+
+set_global_assignment -name TOP_LEVEL_ENTITY top_full_stack
+set_global_assignment -name FAMILY "Agilex 7"
+set_global_assignment -name DEVICE AGMF039R47A1E2VR0
+
+source ../common/common_modules.qsf
+
+set_global_assignment -name SYSTEMVERILOG_FILE ../../hw/src/full_stack/top_full_stack.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/kv_dma_engine.sv
+
+# Intel IP (uncomment after QSYS generation):
+# set_global_assignment -name QSYS_FILE pcie_r_tile.qsys
+# set_global_assignment -name QSYS_FILE hbm2e_ctrl.qsys
+# set_global_assignment -name QSYS_FILE c2c_f_tile.qsys
+
+set_global_assignment -name SDC_FILE ../../hw/constraints/fpga_lpu.sdc
+set_global_assignment -name SOURCE_TCL_FILE ../../hw/constraints/pin_assignment_master.tcl
+
+set_global_assignment -name OPTIMIZATION_MODE "PERFORMANCE"
+set_global_assignment -name SYNTH_GATED_CLOCK_CONVERSION ON
+set_global_assignment -name SYNTH_PROTECT_SDC_CONSTRAINT ON
+set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
+set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL MAXIMUM
+set_global_assignment -name FITTER_EFFORT "STANDARD_FIT"
+set_global_assignment -name PHYSICAL_SYNTHESIS_EFFORT NORMAL

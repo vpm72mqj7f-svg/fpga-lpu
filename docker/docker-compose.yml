@@ -1,0 +1,62 @@
+# ============================================================================
+# docker-compose.yml — FPGA LPU Cloud Build Orchestration
+#
+# Usage:
+#   Local:  docker compose up
+#   Cloud:  docker compose -f docker-compose.yml -f docker-compose.cloud.yml up
+#
+# Required environment:
+#   QUARTUS_INSTALL_DIR=/host/path/to/intelFPGA_pro
+#   QUARTUS_LICENSE_FILE=/host/path/to/license.dat
+# ============================================================================
+
+version: "3.9"
+
+services:
+  quartus-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fpgalpu-builder:latest
+    container_name: fpgalpu-build
+    hostname: fpgalpu-builder
+
+    # Resource limits — tune for your cloud instance
+    deploy:
+      resources:
+        limits:
+          cpus: "32"
+          memory: 128G
+        reservations:
+          cpus: "16"
+          memory: 64G
+
+    volumes:
+      # Project source (read-write)
+      - ..:/workspace
+
+      # Quartus installation (read-only)
+      - ${QUARTUS_INSTALL_DIR:-/opt/intelFPGA_pro}:/opt/intelFPGA_pro:ro
+
+      # License file
+      - ${QUARTUS_LICENSE_FILE:-/dev/null}:/opt/flexlm/license.dat:ro
+
+      # Shared memory for Quartus IPC
+      - /dev/shm:/dev/shm
+
+    environment:
+      - LM_LICENSE_FILE=/opt/flexlm/license.dat
+      - QUARTUS_HOME=/opt/intelFPGA_pro/quartus
+      # License server (alternative to file)
+      - MGLS_LICENSE_FILE=${MGLS_LICENSE_FILE:-}
+
+    # Use tmpfs for Quartus working directory (fast I/O)
+    tmpfs:
+      - /tmp:exec,size=32G
+
+    # Entry point
+    command: ${BUILD_CMD:-build-all}
+
+    # Keep container alive for debugging
+    stdin_open: true
+    tty: true

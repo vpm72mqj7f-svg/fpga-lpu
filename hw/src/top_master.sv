@@ -48,10 +48,12 @@ module top_master (
     logic rst_n_sys;
 
     // [TODO] PLL: 100 MHz board clock → multiple domains
+    //   clk_dsp  = 450 MHz (DSP systolic array, same as HBM)
     //   clk_pcie = 250 MHz (PCIe 5.0 reference)
-    //   clk_dsp  = 390.625 MHz (DSP systolic array)
     //   clk_hbm  = 450 MHz (HBM2e controller)
     //   clk_sys  = 100 MHz (control plane)
+    //
+    // PLL ratios: DSP = 100 × 9/2 = 450, PCIe = 100 × 5/2 = 250
 
     // Phase 1 workaround
     assign clk_sys  = clk_board_100m;

@@ -30,7 +30,7 @@ module fp4_scaled_tile #(
 );
 
     logic [LANES-1:0] scale_valid;
-    logic [LANES*8-1:0] scale_flat;
+    logic [LANES*12-1:0] scale_flat;
     logic [LANES*4-1:0] weight_d1;
     logic [LANES*8-1:0] activ_d1;
     logic valid_d1;
@@ -38,19 +38,19 @@ module fp4_scaled_tile #(
     genvar i;
     generate
         for (i = 0; i < LANES; i++) begin : g_scale
-            logic [7:0] scale_i;
+            logic [11:0] scale_i;
             logic [ADDR_WIDTH-1:0] group_unused;
             logic [ELEM_WIDTH-1:0] elem_idx_i;
 
             assign elem_idx_i = elem_idx_base + i;
-            assign scale_flat[i*8 +: 8] = scale_i;
+            assign scale_flat[i*12 +: 12] = scale_i;
 
             fp4_scale_reader #(
                 .NUM_GROUPS(NUM_GROUPS),
                 .GROUP_SIZE(GROUP_SIZE),
                 .ADDR_WIDTH(ADDR_WIDTH),
                 .ELEM_WIDTH(ELEM_WIDTH),
-                .SCALE_WIDTH(8)
+                .SCALE_WIDTH(12)
             ) u_scale_reader (
                 .clk        (clk),
                 .rst_n      (rst_n),

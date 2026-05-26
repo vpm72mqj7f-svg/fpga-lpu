@@ -2,19 +2,22 @@
 // fp4_mac.sv — fp4(E2M1) × fp8(E4M3) Multiply-Accumulate Unit
 // Target: Intel Agilex 7 M-Series DSP (AGM 039-F)
 //
-// Pipeline: 3 stages
+// Pipeline: 4 stages
+//   Stage 0: Input register (capture fp4 weight / fp8 scale / fp8 activation)
 //   Stage 1: fp4 decode → signed 8b, fp8 decode → signed 12b
-//   Stage 2: 8b×12b signed multiply → 20-bit product
-//   Stage 3: 20b sign-extend → 32b accumulate
+//   Stage 2: 8b×12b signed multiply → 20-bit base product (DSP Block)
+//   Stage 3: 20b base × 12b scale → 32b scaled product (DSP Block)
+//   Stage 4: 32b sign-extend → accumulate (DSP accumulator chain)
 //
-// Data flow:
-//   fp4_weight → LUT decode → signed 8b (×16 scaled)
-//   fp8_activ  → E4M3 decode → signed 12b (×256 scaled)
-//   Multiply in DSP 18×19 mode, accumulate in 32b accumulator
+// DSP usage (Agilex 7 M-Series):
+//   2 DSP blocks per MAC lane (18×19 signed multiply mode, cascaded).
+//   Synthesis attribute DSP_BLOCK_BALANCING AUTO lets Quartus optimize
+//   DSP placement and cascading for the systolic array.
 //=============================================================================
 
 `include "fp4_types.svh"
 
+(* altera_attribute = "-name DSP_BLOCK_BALANCING AUTO" *)
 module fp4_mac #(
     parameter int ACCUM_WIDTH = 32,          // accumulator bit width
     parameter int VEC_LANES    = 2           // parallel MAC lanes per instance
@@ -35,15 +38,18 @@ module fp4_mac #(
     //=========================================================================
     // Stage 0: Input Register
     //=========================================================================
+    (* altera_attribute = "-name ALLOW_RETIMING ON" *)
     logic [3:0]  s0_weight;
-    logic [7:0]  s0_scale;
+    (* altera_attribute = "-name ALLOW_RETIMING ON" *)
+    logic [11:0] s0_scale;
+    (* altera_attribute = "-name ALLOW_RETIMING ON" *)
     logic [7:0]  s0_activ;
     logic        s0_valid;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             s0_weight <= 4'd0;
-            s0_scale  <= 8'd0;
+            s0_scale  <= 12'd0;
             s0_activ  <= 8'd0;
             s0_valid  <= 1'b0;
         end else begin
@@ -55,39 +61,31 @@ module fp4_mac #(
     end
 
     //=========================================================================
-    // Stage 1: fp4 Decode + fp8 Decode → Signed 8-bit Operands
+    // Stage 1: fp4 Decode + fp8 Decode → Signed Operands
     //=========================================================================
 
-    // --- fp4 weight decode ---
-    // Extract fields
+    // --- fp4 weight decode (E2M1) ---
     logic        w_sign;
-    logic [1:0]  w_exp;
-    logic        w_mant;
     logic [2:0]  w_mag;
 
     assign w_sign = s0_weight[3];
-    assign w_exp  = s0_weight[2:1];
-    assign w_mant = s0_weight[0];
-    assign w_mag  = s0_weight[2:0];  // magnitude index for LUT
+    assign w_mag  = s0_weight[2:0];
 
-    // LUT: magnitude → scaled integer (×16)
     logic [5:0]  w_mag_scaled;
     assign w_mag_scaled = fp4_mag_to_scaled(w_mag);
 
-    // fp4 decoded as signed 8-bit: w_sign ? -w_mag : +w_mag
-    // (values already ×16 for fractional representation)
     logic [7:0]  w_signed;
     always_comb begin
         if (w_mag == 3'd0) begin
-            w_signed = 8'd0;  // zero
+            w_signed = 8'd0;
         end else if (w_sign) begin
-            w_signed = -{2'd0, w_mag_scaled};  // negative
+            w_signed = -{2'd0, w_mag_scaled};
         end else begin
-            w_signed = {2'd0, w_mag_scaled};   // positive
+            w_signed = {2'd0, w_mag_scaled};
         end
     end
 
-    // --- fp8 activation decode (E4M3) ---
+    // --- fp8 activation decode (E4M3, decoded on-the-fly) ---
     logic        a_sign;
     logic [3:0]  a_exp;
     logic [2:0]  a_mant;
@@ -95,58 +93,28 @@ module fp4_mac #(
     assign a_exp  = s0_activ[6:3];
     assign a_mant = s0_activ[2:0];
 
-    // --- fp8 per-group scale decode (E4M3, expected positive) ---
-    logic        sc_sign;
-    logic [3:0]  sc_exp;
-    logic [2:0]  sc_mant;
-    assign sc_sign = s0_scale[7];
-    assign sc_exp  = s0_scale[6:3];
-    assign sc_mant = s0_scale[2:0];
+    // --- Pre-decoded scale (12-bit signed, decoded at load time) ---
+    // s0_scale is already decoded by fp4_scale_reader — no decode needed here.
+    // This removes ~4 LUT levels from the MAC critical path at 450 MHz.
+    logic signed [11:0] sc_scaled;
+    assign sc_scaled = $signed(s0_scale);
 
-    // FP8 E4M3 → signed scaled integer:
-    //   Normal:  (-1)^s × 2^(e-7) × (1 + m/8)  [e ≠ 0]
-    //   Subnorm: (-1)^s × 2^(-6) × m/8          [e = 0]
-    // Represent with ×256 scaling.
-    //   value × 256 = (8+m)/8 × 2^(e-7) × 2^8 = (8+m) × 2^(e-2)  [normal]
-    //   value × 256 = m/8 × 2^(-6) × 2^8 = m/2                     [subnorm]
     logic signed [11:0] a_scaled;
     always_comb begin
         if (a_exp == 4'd0) begin
-            // Subnorm: m/2 (with round-down from LSB)
             a_scaled = $signed({1'b0, {8'd0, a_mant[2:1]}});
         end else if (a_exp < 4'd2) begin
-            // e = 1: (8+m) >> 1
             a_scaled = $signed({1'b0, 1'b1, a_mant}) >>> 1;
         end else begin
-            // e ≥ 2: (8+m) << (e-2), use 16-bit intermediate to avoid truncation
             logic [4:0]  shift;
             logic signed [15:0] a_full;
             shift  = a_exp - 4'd2;
             a_full = $signed({8'd0, 1'b1, a_mant}) << shift;
-            // Saturate to 12-bit signed range
             if (a_full > 16'sd2047)      a_scaled = 12'sd2047;
             else if (a_full < -16'sd2048) a_scaled = -12'sd2048;
             else                          a_scaled = a_full[11:0];
         end
         if (a_sign) a_scaled = -a_scaled;
-    end
-
-    logic signed [11:0] sc_scaled;
-    always_comb begin
-        if (sc_exp == 4'd0) begin
-            sc_scaled = $signed({1'b0, {8'd0, sc_mant[2:1]}});
-        end else if (sc_exp < 4'd2) begin
-            sc_scaled = $signed({1'b0, 1'b1, sc_mant}) >>> 1;
-        end else begin
-            logic [4:0]  shift;
-            logic signed [15:0] sc_full;
-            shift   = sc_exp - 4'd2;
-            sc_full = $signed({8'd0, 1'b1, sc_mant}) << shift;
-            if (sc_full > 16'sd2047)       sc_scaled = 12'sd2047;
-            else if (sc_full < -16'sd2048) sc_scaled = -12'sd2048;
-            else                            sc_scaled = sc_full[11:0];
-        end
-        if (sc_sign) sc_scaled = -sc_scaled;
     end
 
     // Register Stage 1 outputs
@@ -170,38 +138,51 @@ module fp4_mac #(
     end
 
     //=========================================================================
-    // Stage 2: Multiply — (8b fp4 × 12b activation) × 12b scale
-    //   fp4 and activation are both decoded as fixed-point. Scale is decoded
-    //   as FP8 E4M3 ×256, so product is rescaled by >>>8.
+    // Stage 2: Base Multiply — 8b fp4 × 12b activation → 20b product
+    //   Single DSP 18×19 multiply. The scale multiply moves to Stage 3.
     //=========================================================================
-    logic signed [31:0] s2_product;
+    logic signed [19:0] s2_base_product;
+    logic [11:0]        s2_sc_scaled;
     logic               s2_valid;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            s2_product <= 32'sd0;
-            s2_valid   <= 1'b0;
+            s2_base_product <= 20'sd0;
+            s2_sc_scaled    <= 12'd0;
+            s2_valid        <= 1'b0;
         end else begin
-            logic signed [19:0] base_product;
-            logic signed [31:0] scaled_product;
-            base_product   = $signed(s1_w_signed) * $signed(s1_a_scaled);
-            scaled_product = $signed(base_product) * $signed(s1_sc_scaled);
-            s2_product     <= scaled_product >>> 8;
-            s2_valid       <= s1_valid;
+            s2_base_product <= $signed(s1_w_signed) * $signed(s1_a_scaled);
+            s2_sc_scaled    <= s1_sc_scaled;
+            s2_valid        <= s1_valid;
         end
     end
 
     //=========================================================================
-    // Stage 3: Accumulate — 32b product → accumulator
+    // Stage 3: Scale Multiply — 20b base × 12b scale → 32b product
+    //   Second DSP 18×19 multiply. Rescale by >>>8 to match fixed-point.
+    //=========================================================================
+    logic signed [31:0] s3_product;
+    logic               s3_valid;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            s3_product <= 32'sd0;
+            s3_valid   <= 1'b0;
+        end else begin
+            s3_product <= $signed(s2_base_product) * $signed(s2_sc_scaled) >>> 8;
+            s3_valid   <= s2_valid;
+        end
+    end
+
+    //=========================================================================
+    // Stage 4: Accumulate — 32b product → accumulator
     //   Sign-extend product, add to running sum. Saturation prevents overflow
     //   wrap-around on deep accumulations (inspired by TALOS-V2 sat16).
     //   Clear on accum_clr (new token start).
     //=========================================================================
     logic [ACCUM_WIDTH-1:0] accumulator;
-    logic                   s3_valid;
+    logic                   s4_valid;
 
-    // Saturation: if operands have same sign but result has opposite sign,
-    // clamp to max/min instead of wrapping around.
     function automatic logic [ACCUM_WIDTH-1:0] sat_acc;
         input [ACCUM_WIDTH-1:0] old_acc;
         input [ACCUM_WIDTH-1:0] add_val;
@@ -212,12 +193,10 @@ module fp4_mac #(
             old_sign = old_acc[ACCUM_WIDTH-1];
             val_sign = add_val[ACCUM_WIDTH-1];
             sum_sign = sum_raw[ACCUM_WIDTH-1];
-            // Overflow: both positive but sum went negative
             if (!old_sign && !val_sign && sum_sign)
-                sat_acc = {1'b0, {(ACCUM_WIDTH-1){1'b1}}};  // max positive
-            // Underflow: both negative but sum went positive
+                sat_acc = {1'b0, {(ACCUM_WIDTH-1){1'b1}}};
             else if (old_sign && val_sign && !sum_sign)
-                sat_acc = {1'b1, {(ACCUM_WIDTH-1){1'b0}}};  // max negative
+                sat_acc = {1'b1, {(ACCUM_WIDTH-1){1'b0}}};
             else
                 sat_acc = sum_raw;
         end
@@ -226,19 +205,19 @@ module fp4_mac #(
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             accumulator <= '0;
-            s3_valid    <= 1'b0;
+            s4_valid    <= 1'b0;
         end else if (accum_clr) begin
             accumulator <= '0;
-            s3_valid    <= 1'b0;
+            s4_valid    <= 1'b0;
         end else begin
-            if (s2_valid) begin
-                accumulator <= sat_acc(accumulator, s2_product);
+            if (s3_valid) begin
+                accumulator <= sat_acc(accumulator, s3_product);
             end
-            s3_valid <= s2_valid;
+            s4_valid <= s3_valid;
         end
     end
 
     assign mac_out.result = accumulator;
-    assign mac_out.valid  = s3_valid;
+    assign mac_out.valid  = s4_valid;
 
 endmodule

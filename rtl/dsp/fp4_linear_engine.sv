@@ -57,8 +57,9 @@ module fp4_linear_engine #(
     logic [$clog2(M_OUT)-1:0] row_idx;
     logic [$clog2(K_BEATS)-1:0] beat_idx;
 
-    logic [LANES*4-1:0] weight_mem [M_OUT*K_BEATS];
-    logic [LANES*8-1:0] activ_mem  [K_BEATS];
+    // Weight/activation preload memories (MLAB for small, M20K for large)
+    (* ramstyle = "M20K" *) logic [LANES*4-1:0] weight_mem [M_OUT*K_BEATS];
+    (* ramstyle = "MLAB" *) logic [LANES*8-1:0] activ_mem  [K_BEATS];
 
     logic array_start;
     logic array_k_valid;
@@ -204,6 +205,8 @@ module fp4_linear_engine #(
                         state <= S_IDLE;
                     end
                 end
+
+                default: state <= S_IDLE;
             endcase
         end
     end

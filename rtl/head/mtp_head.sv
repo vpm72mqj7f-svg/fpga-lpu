@@ -4,10 +4,12 @@
 // N_HEADS independent projection matrices share the same hidden state input.
 // Each head: hidden_state × W_head → logits → argmax → (token_id, logprob)
 //
-// Iterates over VOCAB entries, computing dot products for all heads in parallel.
-// Tracks argmax per head. Total latency: VOCAB + 2 cycles.
+// Multicycle dot-product: VOCAB cycles per inference.
+// DSP: one 18×19 multiply per hidden dim per head per cycle (Agilex 7 M-Series).
+// Weight storage: M20K BRAM (N_HEADS × VOCAB × HIDDEN entries × 16-bit).
 //=============================================================================
 
+(* altera_attribute = "-name DSP_BLOCK_BALANCING AUTO" *)
 module mtp_head #(
     parameter int HIDDEN    = 8,
     parameter int VOCAB     = 16,
@@ -143,6 +145,8 @@ module mtp_head #(
                 S_DONE: begin
                     state <= S_IDLE;
                 end
+
+                default: state <= S_IDLE;
             endcase
         end
     end

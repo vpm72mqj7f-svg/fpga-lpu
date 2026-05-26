@@ -32,10 +32,11 @@ module sram_cache #(
     logic [TAG_WIDTH-1:0]    lookup_tag;
     logic [INDEX_WIDTH-1:0]  fill_idx;
 
-    // Cache storage — use unpacked array for BRAM inference
-    logic                    entry_valid  [NUM_ENTRIES];
-    logic [TAG_WIDTH-1:0]    entry_tag    [NUM_ENTRIES];
-    logic [DATA_WIDTH-1:0]   entry_data   [NUM_ENTRIES];
+    // Cache storage — M20K BRAM for data/tag, MLAB for valid bits
+    // M20K: 20 Kbit blocks, true dual-port, 512×40 max per block
+    (* ramstyle = "MLAB" *) logic                    entry_valid  [NUM_ENTRIES];
+    (* ramstyle = "M20K" *) logic [TAG_WIDTH-1:0]    entry_tag    [NUM_ENTRIES];
+    (* ramstyle = "M20K" *) logic [DATA_WIDTH-1:0]   entry_data   [NUM_ENTRIES];
 
     assign lookup_idx = lookup_hash[INDEX_WIDTH-1:0];
     assign lookup_tag = lookup_hash[31:INDEX_WIDTH];

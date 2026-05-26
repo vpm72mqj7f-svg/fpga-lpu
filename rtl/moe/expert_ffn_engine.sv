@@ -195,6 +195,8 @@ module expert_ffn_engine #(
                     done <= 1'b1;
                     if (!start) state <= S_IDLE;
                 end
+
+                default: state <= S_IDLE;
             endcase
         end
     end

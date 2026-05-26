@@ -154,6 +154,8 @@ module fp4_systolic_array #(
                         state <= S_IDLE;
                     end
                 end
+
+                default: state <= S_IDLE;
             endcase
         end
     end

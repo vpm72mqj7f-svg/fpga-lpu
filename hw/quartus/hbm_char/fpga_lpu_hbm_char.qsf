@@ -1,0 +1,32 @@
+# --------------------------------------------------------------------------- #
+# fpga_lpu_hbm_char.qsf — HBM2e Characterization Project
+# --------------------------------------------------------------------------- #
+QUARTUS_VERSION = "24.3"
+PROJECT_REVISION = "fpga_lpu_hbm_char"
+PROJECT_OUTPUT_DIRECTORY = output_files
+
+set_global_assignment -name TOP_LEVEL_ENTITY top_hbm_char
+set_global_assignment -name FAMILY "Agilex 7"
+set_global_assignment -name DEVICE AGMF039R47A1E2VR0
+
+source ../common/common_modules.qsf
+
+set_global_assignment -name SYSTEMVERILOG_FILE ../../hw/src/hbm_char/top_hbm_char.sv
+
+# HBM2e IP (uncomment after QSYS generation)
+# set_global_assignment -name QSYS_FILE hbm2e_ctrl.qsys
+# set_global_assignment -name SYSTEMVERILOG_FILE ../../hw/ip/hbm2e_ctrl/hbm2e_ctrl.sv
+
+set_global_assignment -name SDC_FILE ../../hw/constraints/fpga_lpu.sdc
+set_global_assignment -name SOURCE_TCL_FILE ../../hw/constraints/pin_assignment_master.tcl
+
+set_global_assignment -name OPTIMIZATION_MODE "PERFORMANCE"
+set_global_assignment -name SYNTH_GATED_CLOCK_CONVERSION ON
+set_global_assignment -name SYNTH_PROTECT_SDC_CONSTRAINT ON
+set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL MAXIMUM
+set_global_assignment -name FITTER_EFFORT "STANDARD_FIT"
+
+# HBM-specific
+# set_global_assignment -name HBM_STACK_HEIGHT 4
+# set_global_assignment -name HBM_DATA_RATE "1800 MHz"
+# set_global_assignment -name HBM_AXI_DATA_WIDTH 256

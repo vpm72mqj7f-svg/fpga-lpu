@@ -1,15 +1,23 @@
 //=============================================================================
-// router_topk.sv — MoE Router Top-K (HIDDEN=8, EXPERTS=4 bring-up)
+// router_topk.sv — MoE Router Top-K (EXPERTS=4, HIDDEN=8 bring-up)
+//
+// Pipeline: 3 stages
+//   Stage 1: Latch activations, 32 parallel 32b×32b multiplies → pairwise sums
+//   Stage 2: Adder-tree reduction → 4 expert scores
+//   Stage 3: Top-2 search → output
+//
+// Weight storage: 2D array w[EXPERTS][HIDDEN] (replaces flat register set).
 //=============================================================================
 
 module router_topk #(
-    parameter int EXPERTS  = 4
+    parameter int EXPERTS = 4,
+    parameter int HIDDEN  = 8
 ) (
     input  logic                         clk,
     input  logic                         rst_n,
     input  logic                         w_wr_en,
-    input  logic [1:0]                   w_wr_expert,
-    input  logic [2:0]                   w_wr_idx,
+    input  logic [$clog2(EXPERTS)-1:0]   w_wr_expert,
+    input  logic [$clog2(HIDDEN)-1:0]    w_wr_idx,
     input  logic signed [31:0]           w_wr_data,
 
     input  logic                         valid_in,
@@ -17,105 +25,126 @@ module router_topk #(
 
     output logic                         valid_out,
     input  logic                         result_ready,
-    output logic [1:0]                   top0_idx, top1_idx,
+    output logic [$clog2(EXPERTS)-1:0]   top0_idx, top1_idx,
     output logic signed [31:0]           top0_score, top1_score
 );
 
-    // 4 experts × 8 hidden = 32 weights
-    logic signed [31:0] w_e0h0, w_e0h1, w_e0h2, w_e0h3, w_e0h4, w_e0h5, w_e0h6, w_e0h7;
-    logic signed [31:0] w_e1h0, w_e1h1, w_e1h2, w_e1h3, w_e1h4, w_e1h5, w_e1h6, w_e1h7;
-    logic signed [31:0] w_e2h0, w_e2h1, w_e2h2, w_e2h3, w_e2h4, w_e2h5, w_e2h6, w_e2h7;
-    logic signed [31:0] w_e3h0, w_e3h1, w_e3h2, w_e3h3, w_e3h4, w_e3h5, w_e3h6, w_e3h7;
-
-    logic signed [31:0] ar0, ar1, ar2, ar3, ar4, ar5, ar6, ar7;
-    logic active;
-    logic holding;
-    logic [0:0] delay;
-    logic signed [63:0] s0, s1, s2, s3;
-    logic signed [63:0] best, second;
-    logic [1:0] bi, si;
-
-    function automatic void set_w(input [1:0] ex, input [2:0] ix, input signed [31:0] d);
-        case ({ex, ix})
-            {2'd0, 3'd0}: w_e0h0 = d; {2'd0, 3'd1}: w_e0h1 = d;
-            {2'd0, 3'd2}: w_e0h2 = d; {2'd0, 3'd3}: w_e0h3 = d;
-            {2'd0, 3'd4}: w_e0h4 = d; {2'd0, 3'd5}: w_e0h5 = d;
-            {2'd0, 3'd6}: w_e0h6 = d; {2'd0, 3'd7}: w_e0h7 = d;
-            {2'd1, 3'd0}: w_e1h0 = d; {2'd1, 3'd1}: w_e1h1 = d;
-            {2'd1, 3'd2}: w_e1h2 = d; {2'd1, 3'd3}: w_e1h3 = d;
-            {2'd1, 3'd4}: w_e1h4 = d; {2'd1, 3'd5}: w_e1h5 = d;
-            {2'd1, 3'd6}: w_e1h6 = d; {2'd1, 3'd7}: w_e1h7 = d;
-            {2'd2, 3'd0}: w_e2h0 = d; {2'd2, 3'd1}: w_e2h1 = d;
-            {2'd2, 3'd2}: w_e2h2 = d; {2'd2, 3'd3}: w_e2h3 = d;
-            {2'd2, 3'd4}: w_e2h4 = d; {2'd2, 3'd5}: w_e2h5 = d;
-            {2'd2, 3'd6}: w_e2h6 = d; {2'd2, 3'd7}: w_e2h7 = d;
-            {2'd3, 3'd0}: w_e3h0 = d; {2'd3, 3'd1}: w_e3h1 = d;
-            {2'd3, 3'd2}: w_e3h2 = d; {2'd3, 3'd3}: w_e3h3 = d;
-            {2'd3, 3'd4}: w_e3h4 = d; {2'd3, 3'd5}: w_e3h5 = d;
-            {2'd3, 3'd6}: w_e3h6 = d; {2'd3, 3'd7}: w_e3h7 = d;
-        endcase
-    endfunction
+    //=========================================================================
+    // Weight storage — 2D array replacing 32 individual registers
+    //=========================================================================
+    logic signed [31:0] w [EXPERTS-1:0][HIDDEN-1:0];
 
     always_ff @(posedge clk) begin
-        if (w_wr_en) set_w(w_wr_expert, w_wr_idx, w_wr_data);
+        if (w_wr_en) w[w_wr_expert][w_wr_idx] <= w_wr_data;
     end
 
+    //=========================================================================
+    // Pipeline registers
+    //=========================================================================
+    typedef enum logic [1:0] { S_IDLE, S_COMPUTE, S_REDUCE, S_OUTPUT } state_t;
+    state_t state;
+
+    // Stage 1: latched activations + partial products
+    logic signed [31:0]       s1_a [HIDDEN-1:0];
+    logic signed [63:0]       s1_pair [EXPERTS-1:0][(HIDDEN/2)-1:0];
+    logic                     s1_active;
+
+    // Stage 2: reduced scores per expert
+    logic signed [63:0]       s2_score [EXPERTS-1:0];
+    logic                     s2_active;
+
+    //=========================================================================
+    // FSM + Pipeline
+    //=========================================================================
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            valid_out <= 1'b0; active <= 1'b0; delay <= '0;
-            holding <= 1'b0;
-            top0_idx <= '0; top1_idx <= '0; top0_score <= '0; top1_score <= '0;
+            state      <= S_IDLE;
+            valid_out  <= 1'b0;
+            s1_active  <= 1'b0;
+            s2_active  <= 1'b0;
+            top0_idx   <= '0;
+            top1_idx   <= '0;
+            top0_score <= '0;
+            top1_score <= '0;
+            for (int i = 0; i < HIDDEN; i++) s1_a[i] <= '0;
+            for (int e = 0; e < EXPERTS; e++) begin
+                s2_score[e] <= '0;
+                for (int p = 0; p < HIDDEN/2; p++) s1_pair[e][p] <= '0;
+            end
         end else begin
             valid_out <= 1'b0;
-            if (valid_in && !active) begin
-                active <= 1'b1; delay <= 1'b1;
-                ar0 <= a0; ar1 <= a1; ar2 <= a2; ar3 <= a3;
-                ar4 <= a4; ar5 <= a5; ar6 <= a6; ar7 <= a7;
-            end else if (active) begin
-                if (delay == 0 && !holding) begin
-                    holding <= 1'b1; active <= 1'b0;
-                    // Dot products (same as before)
-                    s0 = $signed(ar0)*$signed(w_e0h0) + $signed(ar1)*$signed(w_e0h1)
-                       + $signed(ar2)*$signed(w_e0h2) + $signed(ar3)*$signed(w_e0h3)
-                       + $signed(ar4)*$signed(w_e0h4) + $signed(ar5)*$signed(w_e0h5)
-                       + $signed(ar6)*$signed(w_e0h6) + $signed(ar7)*$signed(w_e0h7);
-                    s1 = $signed(ar0)*$signed(w_e1h0) + $signed(ar1)*$signed(w_e1h1)
-                       + $signed(ar2)*$signed(w_e1h2) + $signed(ar3)*$signed(w_e1h3)
-                       + $signed(ar4)*$signed(w_e1h4) + $signed(ar5)*$signed(w_e1h5)
-                       + $signed(ar6)*$signed(w_e1h6) + $signed(ar7)*$signed(w_e1h7);
-                    s2 = $signed(ar0)*$signed(w_e2h0) + $signed(ar1)*$signed(w_e2h1)
-                       + $signed(ar2)*$signed(w_e2h2) + $signed(ar3)*$signed(w_e2h3)
-                       + $signed(ar4)*$signed(w_e2h4) + $signed(ar5)*$signed(w_e2h5)
-                       + $signed(ar6)*$signed(w_e2h6) + $signed(ar7)*$signed(w_e2h7);
-                    s3 = $signed(ar0)*$signed(w_e3h0) + $signed(ar1)*$signed(w_e3h1)
-                       + $signed(ar2)*$signed(w_e3h2) + $signed(ar3)*$signed(w_e3h3)
-                       + $signed(ar4)*$signed(w_e3h4) + $signed(ar5)*$signed(w_e3h5)
-                       + $signed(ar6)*$signed(w_e3h6) + $signed(ar7)*$signed(w_e3h7);
-                    // Top-2 from 4 experts
-                    best = s0; bi = 2'd0;
-                    if (s1 > best) begin best = s1; bi = 2'd1; end
-                    if (s2 > best) begin best = s2; bi = 2'd2; end
-                    if (s3 > best) begin best = s3; bi = 2'd3; end
-                    second = -64'sd1 << 62;
-                    for (int e = 0; e < 4; e++) begin
-                        if (e != bi) begin
-                            if      (e==0 && s0 > second) begin second = s0; si = 2'd0; end
-                            else if (e==1 && s1 > second) begin second = s1; si = 2'd1; end
-                            else if (e==2 && s2 > second) begin second = s2; si = 2'd2; end
-                            else if (e==3 && s3 > second) begin second = s3; si = 2'd3; end
-                        end
-                    end
-                    top0_idx <= bi; top1_idx <= si;
-                    top0_score <= best[31:0]; top1_score <= second[31:0];
-                    valid_out <= 1'b1;
-                end else if (delay == 1 && !holding) begin
-                    delay <= 1'b0;
-                end else if (holding) begin
-                    if (result_ready) begin
-                        valid_out <= 1'b0; holding <= 1'b0;
+
+            case (state)
+                S_IDLE: begin
+                    if (valid_in) begin
+                        s1_a[0] <= a0; s1_a[1] <= a1; s1_a[2] <= a2; s1_a[3] <= a3;
+                        s1_a[4] <= a4; s1_a[5] <= a5; s1_a[6] <= a6; s1_a[7] <= a7;
+                        s1_active <= 1'b1;
+                        state <= S_COMPUTE;
                     end
                 end
-            end
+
+                S_COMPUTE: begin
+                    // Stage 1→2: pairwise products → partial sums
+                    // 32 DSP multiplies, then pairwise additions
+                    for (int e = 0; e < EXPERTS; e++) begin
+                        for (int p = 0; p < HIDDEN/2; p++) begin
+                            s1_pair[e][p] <=
+                                $signed(s1_a[2*p]) * $signed(w[e][2*p]) +
+                                $signed(s1_a[2*p+1]) * $signed(w[e][2*p+1]);
+                        end
+                    end
+                    s1_active <= 1'b0;
+                    s2_active <= 1'b1;
+                    state <= S_REDUCE;
+                end
+
+                S_REDUCE: begin
+                    // Stage 2→3: adder-tree reduction to per-expert scores
+                    for (int e = 0; e < EXPERTS; e++) begin
+                        s2_score[e] <=
+                            (s1_pair[e][0] + s1_pair[e][1]) +
+                            (s1_pair[e][2] + s1_pair[e][3]);
+                    end
+                    s2_active <= 1'b0;
+                    state <= S_OUTPUT;
+                end
+
+                S_OUTPUT: begin
+                    // Top-2 search over EXPERTS scores
+                    logic signed [63:0] best, second;
+                    logic [$clog2(EXPERTS)-1:0] bi, si;
+
+                    best   = s2_score[0];
+                    bi     = '0;
+                    for (int e = 1; e < EXPERTS; e++) begin
+                        if (s2_score[e] > best) begin
+                            best = s2_score[e];
+                            bi   = e[$clog2(EXPERTS)-1:0];
+                        end
+                    end
+
+                    second = {1'b1, {63{1'b0}}};  // min signed 64b
+                    si     = '0;
+                    for (int e = 0; e < EXPERTS; e++) begin
+                        if (e[$clog2(EXPERTS)-1:0] != bi) begin
+                            if (s2_score[e] > second) begin
+                                second = s2_score[e];
+                                si     = e[$clog2(EXPERTS)-1:0];
+                            end
+                        end
+                    end
+
+                    top0_idx   <= bi;
+                    top1_idx   <= si;
+                    top0_score <= best[31:0];
+                    top1_score <= second[31:0];
+                    valid_out  <= 1'b1;
+                    state      <= S_IDLE;
+                end
+
+                default: state <= S_IDLE;
+            endcase
         end
     end
 

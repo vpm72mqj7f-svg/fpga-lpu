@@ -6,8 +6,10 @@
 //
 // Mixing coefficients are Q12 fixed-point, pre-loaded via config port.
 // Pipeline: 1 warmup + N_HW run + 1 done = N_HW+2 cycles total.
+// DSP: one 18×19 multiply per hidden dim per cycle (Agilex 7 M-Series).
 //=============================================================================
 
+(* altera_attribute = "-name DSP_BLOCK_BALANCING AUTO" *)
 module mhc_mixer #(
     parameter int HIDDEN    = 8,
     parameter int N_HW      = 4,

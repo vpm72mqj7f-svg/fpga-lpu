@@ -33,21 +33,23 @@ module mla_kv_cache #(
     output logic [V_LATENT*DATA_W-1:0]   rd_V_flat,
 
     // Status
-    output logic [$clog2(NUM_SLOTS)-1:0] fill_count,    // number of valid entries
+    output logic [CNT_W-1:0] fill_count,    // number of valid entries (0..NUM_SLOTS)
     output logic                         full,
     output logic                         empty
 );
 
     localparam int ADDR_W = $clog2(NUM_SLOTS);
+    localparam int CNT_W  = $clog2(NUM_SLOTS+1);  // +1 to hold NUM_SLOTS without overflow
 
-    // Cache storage
-    logic [K_LATENT*DATA_W-1:0] K_mem [NUM_SLOTS];
-    logic [V_LATENT*DATA_W-1:0] V_mem [NUM_SLOTS];
-    logic                        valid  [NUM_SLOTS];
+    // Cache storage — M20K BRAM for Agilex 7 M-Series
+    // K_latent: K_LATENT×32b per slot, V_latent: V_LATENT×32b per slot
+    (* ramstyle = "M20K" *) logic [K_LATENT*DATA_W-1:0] K_mem [NUM_SLOTS];
+    (* ramstyle = "M20K" *) logic [V_LATENT*DATA_W-1:0] V_mem [NUM_SLOTS];
+    (* ramstyle = "MLAB" *) logic                        valid  [NUM_SLOTS];
 
     // Write pointer (ring buffer)
     logic [ADDR_W-1:0] wr_ptr;
-    logic [ADDR_W-1:0] entry_count;
+    logic [CNT_W-1:0]  entry_count;
 
     assign wr_addr    = wr_ptr;
     assign fill_count = entry_count;

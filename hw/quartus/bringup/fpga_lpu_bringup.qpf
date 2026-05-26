@@ -1,0 +1,6 @@
+# --------------------------------------------------------------------------- #
+# fpga_lpu_bringup.qpf — Bring-Up Validation Project
+# --------------------------------------------------------------------------- #
+QUARTUS_VERSION = "24.3"
+PROJECT_REVISION = "fpga_lpu_bringup"
+PROJECT_OUTPUT_DIRECTORY = output_files

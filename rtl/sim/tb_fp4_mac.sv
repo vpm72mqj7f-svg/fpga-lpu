@@ -16,7 +16,7 @@
 module tb_fp4_mac;
 
     localparam int CLK_PERIOD = 10;  // 100 MHz
-    localparam int PIPELINE_DEPTH = 6;  // drain cycles after last input
+    localparam int PIPELINE_DEPTH = 6;  // drain cycles (4-stage pipeline + margin)
 
     logic            clk;
     logic            rst_n;
@@ -34,7 +34,7 @@ module tb_fp4_mac;
     //----------------------------------------------------------------------------
     task automatic drive(input logic [3:0] w, input logic [7:0] a, input logic [7:0] s = 8'h38);
         mac_in.weight = w;
-        mac_in.scale  = s;
+        mac_in.scale  = fp8_to_scaled12(s);  // pre-decode at drive time
         mac_in.activ  = a;
         mac_in.valid  = 1'b1;
         @(posedge clk);
@@ -51,7 +51,7 @@ module tb_fp4_mac;
     );
         for (int i = 0; i < weights.size(); i++) begin
             mac_in.weight = weights[i];
-            mac_in.scale  = scales[i];
+            mac_in.scale  = fp8_to_scaled12(scales[i]);
             mac_in.activ  = activs[i];
             mac_in.valid  = 1'b1;
             @(posedge clk);

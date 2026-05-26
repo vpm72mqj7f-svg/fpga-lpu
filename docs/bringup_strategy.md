@@ -104,7 +104,7 @@ Python → BAR0 write (0x1004):
 
 ```text
 Signal Tap 配置:
-  Clock:      clk_dsp (390.625 MHz → PLL → ~450 MHz)
+  Clock:      clk_dsp (450 MHz, from PLL: 100 MHz × 9/2)
   Trigger:    mac_valid_in && weight == trigger_weight
   Depth:      4K samples per node
   Nodes:

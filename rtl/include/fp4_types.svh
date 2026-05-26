@@ -22,10 +22,12 @@ typedef struct packed {
 } fp4_decoded_t;
 
 // fp4 × fp8 MAC input bundle (one MAC operation)
+// scale is PRE-DECODED: stored as 12-bit signed scaled integer (×256)
+// This eliminates the fp8 scale decode from the MAC critical path.
 typedef struct packed {
     logic [3:0]  weight;    // fp4 E2M1 encoded weight
-    logic [7:0]  scale;     // fp8 E4M3 per-group scale
-    logic [7:0]  activ;     // fp8 E4M3 activation
+    logic [11:0] scale;     // pre-decoded fp8 scale (signed 12b, ×256)
+    logic [7:0]  activ;     // fp8 E4M3 activation (decoded on-the-fly)
     logic        valid;     // input valid
 } fp4_mac_input_t;
 
@@ -79,6 +81,39 @@ function automatic fp8_decoded_t decode_fp8(input logic [7:0] fp8);
     decode_fp8.sign = fp8[7];
     decode_fp8.exp  = fp8[6:3];
     decode_fp8.mant = fp8[2:0];
+endfunction
+
+//-----------------------------------------------------------------------------
+// FP8 E4M3 → signed 12-bit scaled integer (×256)
+//   Normal:  (-1)^s × 2^(e-7) × (1 + m/8),  e ≠ 0
+//   Subnorm: (-1)^s × 2^(-6) × m/8,          e = 0
+//   Returns 12-bit signed value with ×256 scaling.
+//   Used at scale LOAD TIME to pre-decode, removing this logic from the
+//   MAC critical path entirely.
+//-----------------------------------------------------------------------------
+function automatic logic signed [11:0] fp8_to_scaled12(logic [7:0] fp8);
+    logic        sign;
+    logic [3:0]  exp;
+    logic [2:0]  mant;
+    logic signed [11:0] result;
+    sign = fp8[7];
+    exp  = fp8[6:3];
+    mant = fp8[2:0];
+    if (exp == 4'd0) begin
+        result = $signed({1'b0, {8'd0, mant[2:1]}});
+    end else if (exp < 4'd2) begin
+        result = $signed({1'b0, 1'b1, mant}) >>> 1;
+    end else begin
+        logic [4:0]  shift;
+        logic signed [15:0] full;
+        shift = exp - 4'd2;
+        full  = $signed({8'd0, 1'b1, mant}) << shift;
+        if (full > 16'sd2047)      result = 12'sd2047;
+        else if (full < -16'sd2048) result = -12'sd2048;
+        else                        result = full[11:0];
+    end
+    if (sign) result = -result;
+    fp8_to_scaled12 = result;
 endfunction
 
 `endif // FP4_TYPES_SVH

@@ -71,6 +71,8 @@ module c2c_node #(parameter int NODE_ID = 0) (
                 S_FWD: begin
                     if (tx_ready) state <= S_IDLE;
                 end
+
+                default: state <= S_IDLE;
             endcase
         end
     end

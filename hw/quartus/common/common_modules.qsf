@@ -1,5 +1,5 @@
 # --------------------------------------------------------------------------- #
-# common_modules.qsf — Shared RTL source files for Master and Slave projects
+# common_modules.qsf — Shared RTL source files for all FPGA projects
 # --------------------------------------------------------------------------- #
 
 # Activation functions
@@ -24,11 +24,13 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_attention
 
 # MoE
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/moe/router_topk.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/moe/expert_ffn_engine.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/moe/expert_ffn_engine_fp4_down.sv
 
 # Layer
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/layer/mhc_mixer.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/layer/full_transformer_layer.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/layer/layer_compute_engine.sv
 
 # Head (MTP)
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/head/mtp_head.sv
@@ -42,6 +44,11 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/engram/lookup_engine.sv
 # Chip
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/chip_top.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/c2c_node.sv
+
+# Debug / Bring-Up
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/uart_debug.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/hbm_bw_test.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/dsp_stress_test.sv
 
 # Include directories
 set_global_assignment -name SEARCH_PATH ../../rtl/include

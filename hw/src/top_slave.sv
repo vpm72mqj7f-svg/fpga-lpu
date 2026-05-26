@@ -40,7 +40,8 @@ module top_slave (
     logic clk_sys, clk_dsp, clk_hbm;
     logic rst_n_sys;
 
-    // [TODO] PLL: 100 MHz → DSP 390.625 MHz, HBM 450 MHz
+    // [TODO] PLL: 100 MHz → DSP 450 MHz (×9/2), HBM 450 MHz
+    // DSP and HBM share same 450 MHz domain — no CDC needed between them
     // No PCIe clock domain needed for slave
     assign clk_sys  = clk_board_100m;
     assign clk_dsp  = clk_board_100m;

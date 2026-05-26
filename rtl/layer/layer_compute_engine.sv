@@ -166,6 +166,7 @@ module layer_compute_engine (
                 end
 
                 S_OUTPUT: state<=S_IDLE;
+                default: state <= S_IDLE;
             endcase
         end
     end

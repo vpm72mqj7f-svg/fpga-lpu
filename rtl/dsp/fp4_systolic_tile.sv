@@ -17,7 +17,7 @@ module fp4_systolic_tile #(
 
     input  logic                         valid_in,
     input  logic [LANES*4-1:0]           weight_fp4_flat,
-    input  logic [LANES*8-1:0]           scale_fp8_flat,
+    input  logic [LANES*12-1:0]          scale_fp8_flat,
     input  logic [LANES*8-1:0]           activ_fp8_flat,
 
     output logic                         valid_out,
@@ -36,7 +36,7 @@ module fp4_systolic_tile #(
 
             always_comb begin
                 mac_in.weight = weight_fp4_flat[i*4 +: 4];
-                mac_in.scale  = scale_fp8_flat[i*8 +: 8];
+                mac_in.scale  = scale_fp8_flat[i*12 +: 12];
                 mac_in.activ  = activ_fp8_flat[i*8 +: 8];
                 mac_in.valid  = valid_in;
             end

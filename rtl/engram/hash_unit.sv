@@ -31,6 +31,7 @@ module hash_unit #(
     typedef enum logic [1:0] { ST_IDLE, ST_MIX1, ST_MIX2, ST_FINAL } state_t;
     state_t state;
     logic [31:0] h;
+    logic [N_GRAMS*32-1:0] tokens_r;  // registered token_ids for pipeline
 
     assign ready_out = (state == ST_IDLE);
 
@@ -38,6 +39,7 @@ module hash_unit #(
         if (!rst_n) begin
             state     <= ST_IDLE;
             h         <= '0;
+            tokens_r  <= '0;
             valid_out <= 1'b0;
             hash_out  <= '0;
         end else begin
@@ -46,19 +48,19 @@ module hash_unit #(
             case (state)
                 ST_IDLE: begin
                     if (valid_in) begin
-                        // XOR first two tokens (combinational), multiply (1 DSP)
+                        tokens_r <= token_ids_flat;
                         h     <= (token_ids_flat[0*32+:32] ^ token_ids_flat[1*32+:32]) * MURMUR_M;
                         state <= ST_MIX1;
                     end
                 end
 
                 ST_MIX1: begin
-                    h     <= (h ^ token_ids_flat[2*32+:32]) * MURMUR_M;
+                    h     <= (h ^ tokens_r[2*32+:32]) * MURMUR_M;
                     state <= ST_MIX2;
                 end
 
                 ST_MIX2: begin
-                    h     <= (h ^ token_ids_flat[3*32+:32]) * MURMUR_M;
+                    h     <= (h ^ tokens_r[3*32+:32]) * MURMUR_M;
                     state <= ST_FINAL;
                 end
 
@@ -67,6 +69,8 @@ module hash_unit #(
                     valid_out <= 1'b1;
                     state     <= ST_IDLE;
                 end
+
+                default: state <= ST_IDLE;
             endcase
         end
     end

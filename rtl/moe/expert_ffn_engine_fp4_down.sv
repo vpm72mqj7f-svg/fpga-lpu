@@ -128,6 +128,7 @@ module expert_ffn_engine_fp4_down #(
                     if (down_done) begin done <= 1; state <= S_DONE; end
                 end
                 S_DONE: if (!start) state <= S_IDLE;
+                default: state <= S_IDLE;
             endcase
         end
     end

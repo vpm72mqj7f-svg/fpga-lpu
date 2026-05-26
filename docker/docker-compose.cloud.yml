@@ -1,0 +1,40 @@
+# ============================================================================
+# docker-compose.cloud.yml — Cloud-specific overrides
+#
+# Merge with: docker compose -f docker-compose.yml -f docker-compose.cloud.yml up
+# ============================================================================
+
+version: "3.9"
+
+services:
+  quartus-builder:
+    deploy:
+      resources:
+        limits:
+          cpus: "64"        # c6i.16xlarge / c2-standard-60
+          memory: 256G
+        reservations:
+          cpus: "32"
+          memory: 128G
+
+    tmpfs:
+      - /tmp:exec,size=64G
+
+    # Cloud logging driver
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+    # Restart on failure
+    restart: "no"
+
+    # Result export
+    volumes:
+      - ..:/workspace
+      - ${QUARTUS_INSTALL_DIR}:/opt/intelFPGA_pro:ro
+      - ${QUARTUS_LICENSE_FILE}:/opt/flexlm/license.dat:ro
+      - /dev/shm:/dev/shm
+      # Export results to cloud storage
+      - build_output:/workspace/build_results

@@ -66,7 +66,7 @@ module mla_attention_v2 #(
     logic [V_LATENT*DATA_W-1:0] cache_V_in, cache_V_out;
     logic [$clog2(NUM_SLOTS)-1:0] cache_wr_addr, cache_rd_addr;
     logic cache_rd_en, cache_rd_valid;
-    logic [$clog2(NUM_SLOTS)-1:0] cache_fill_count;
+    logic [$clog2(NUM_SLOTS+1)-1:0] cache_fill_count;
     logic cache_empty;
 
     // Top-level FSM

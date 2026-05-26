@@ -21,10 +21,15 @@ incremental_db/
 
 # Icarus Verilator simulation build
 rtl/sim/build/*.vvp
+rtl/sim/*.vvp
 *.vcd
 *.lxt
 *.lxt2
 *.fst
+*.wlf
+*.log
+transcript
+work/
 
 # Python
 __pycache__/

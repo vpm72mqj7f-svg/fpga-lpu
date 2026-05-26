@@ -1,0 +1,19 @@
+# Docker — exclude these from build context
+.git
+.gitignore
+*.vvp
+*.vcd
+*.wlf
+*.log
+build_results
+output_files
+work
+transcript
+*.sof
+*.pof
+*.jic
+obj_dir
+__pycache__
+*.pyc
+.env
+*.stp
