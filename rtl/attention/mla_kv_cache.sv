@@ -1,17 +1,14 @@
 //=============================================================================
 // mla_kv_cache.sv — Hardware KV cache for compressed key/value storage
 //
-// Stores low-rank K_latent and V_latent for past tokens. Supports:
-//   - Write: store compressed K/V for new token position
-//   - Read: retrieve K/V for any cached position (1-cycle latency)
-//   - Auto-increment write pointer (ring buffer, NUM_SLOTS deep)
-//
-// The cache stores COMPRESSED representations. Decompression (K_latent→K)
-// happens on-the-fly during attention score computation.
+// Ring buffer, NUM_SLOTS deep. Stores K_latent + V_latent per token.
+// Production: NUM_SLOTS = lpu_config_pkg::LPU_KV_CACHE_SLOTS
 //=============================================================================
 
+`include "lpu_config.svh"
+
 module mla_kv_cache #(
-    parameter int NUM_SLOTS  = 64,
+    parameter int NUM_SLOTS  = lpu_config_pkg::LPU_KV_CACHE_SLOTS,
     parameter int K_LATENT   = 4,
     parameter int V_LATENT   = 4,
     parameter int DATA_W     = 32

@@ -1,24 +1,16 @@
 //=============================================================================
-// rms_norm.sv — signed Q12 RMSNorm (HIDDEN=8 bring-up, Icarus-friendly)
+// rms_norm.sv — signed Q12 RMSNorm
 //
-// Pipeline: 4-cycle compute + sqrt
-//   Stage 0: Latch x[0:7], g[0:7]; pairwise sum-of-squares products
-//   Stage 1: Reduce pairwise sums → total sum_sq; launch sqrt computation
-//   Stage 2: Wait for sqrt (combinational function, registered here)
-//   Stage 3: x*g multiply (registered)
-//   Stage 4: *rsqrt multiply → output
+// Pipeline: 5-stage FSM (SOS_PAIR → SOS_REDUCE → SQRT → XG_MUL → OUTPUT)
+// SQRT_MODE: 0=Newton-Raphson (fast, DSP), 1=digit-recurrence (LUT only)
 //
-// SQRT_MODE: 0 = Newton-Raphson (fast, uses DSP divide)
-//            1 = Digit-recurrence (slow, pure LUT+FF, zero DSP)
-//               Inspired by TALOS-V2 rms_scale_engine.sv
-//
-// TODO: Convert sqrt functions to proper multi-cycle state machines
-//       for production use at >100 MHz. Current combinational functions
-//       limit fmax to ~50-80 MHz depending on SQRT_ITERS.
+// TODO(prod): Convert sqrt combinational function to pipelined IP for >100MHz
 //=============================================================================
 
+`include "lpu_config.svh"
+
 module rms_norm #(
-    parameter int HIDDEN     = 8,
+    parameter int HIDDEN     = lpu_config_pkg::LPU_HIDDEN,
     parameter int SQRT_ITERS = 3,
     parameter int SQRT_MODE  = 0,    // 0=Newton-Raphson, 1=digit-recurrence
     parameter int LATENCY    = 5     // pipeline depth (input → output)

@@ -18,6 +18,9 @@ set_global_assignment -name FAMILY "Agilex 7"
 set_global_assignment -name DEVICE AGMF039R47A1E2VR0
 # Production: AGMF039R47A1E1VC
 
+# Production build — use full DeepSeek V4 parameters
+set_global_assignment -name VERILOG_MACRO "FPGA_LPU_PRODUCTION"
+
 # --------------------------------------------------------------------------- #
 # Source files — Shared RTL (all compute + debug modules)
 # --------------------------------------------------------------------------- #

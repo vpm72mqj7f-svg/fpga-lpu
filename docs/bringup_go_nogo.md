@@ -216,6 +216,25 @@ Receive:
 
 ---
 
+## CPU Prefill Validation (Go/No-Go #6)
+
+After FPGA tests pass, validate CPU prefill capability on the host server:
+
+| CPU | P=128 TTFT Target | Status |
+|-----|-------------------|--------|
+| Dual Xeon SPR (current BOM) | < 2500 ms | Baseline |
+| Dual Xeon GNR 6980P (2026 upgrade) | < 400 ms | **Recommended** |
+| Dual EPYC Turin 9755 (2026 upgrade) | < 400 ms | **Recommended** |
+
+Validation procedure:
+1. Run fp8 GEMM benchmark (M=128, K=7168, N=7168) using Intel AMX or AMD AVX-512
+2. Measure GFLOPS vs theoretical peak
+3. Run full prefill benchmark with DeepSeek V4 model weights
+4. Verify P=128 chunk TTFT matches analytical prediction
+5. Test CPU+FPGA concurrent operation (CPU prefill + FPGA decode simultaneously)
+
+---
+
 ## Signal Tap / ILA Probe Points
 
 Pre-wire these signals for ILA capture during bring-up:

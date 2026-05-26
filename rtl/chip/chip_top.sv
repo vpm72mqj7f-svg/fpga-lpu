@@ -120,11 +120,8 @@ module chip_top #(
     endgenerate
 
     // === Assign chip identity ===
-    // These would normally come from register reads or top-level parameters.
-    // For bring-up, they are hard-coded.
+    // Set via top-level parameters or register writes (PCIe BAR0 / C2C CTRL).
     assign cfg_layer_start  = LAYER_START;
     assign cfg_layer_end    = LAYER_END;
-    // Expert bitmap: loaded from HBM or config ROM, 12 experts per chip baseline
-    // assign cfg_expert_bitmap = ... (from weight layout compiler output)
 
 endmodule

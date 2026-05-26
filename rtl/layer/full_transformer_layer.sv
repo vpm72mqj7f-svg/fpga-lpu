@@ -1,17 +1,20 @@
 //=============================================================================
-// full_transformer_layer.sv — RMS→ATTN_v2→RMS→Router→FFN→RMS (HIDDEN=8)
+// full_transformer_layer.sv — RMS→ATTN_v2→RMS→Router→FFN→RMS
 //
 // Uses mla_attention_v2 with MLA low-rank QKV, RoPE, and KV cache.
+// Parameters default from lpu_config_pkg (production or bring-up).
 //=============================================================================
 
+`include "lpu_config.svh"
+
 module full_transformer_layer #(
-    parameter int HIDDEN    = 8,
-    parameter int K_LATENT  = 4,
-    parameter int V_LATENT  = 4,
-    parameter int NUM_SLOTS = 64,
+    parameter int HIDDEN    = lpu_config_pkg::LPU_HIDDEN,
+    parameter int K_LATENT  = lpu_config_pkg::LPU_K_LATENT,
+    parameter int V_LATENT  = lpu_config_pkg::LPU_V_LATENT,
+    parameter int NUM_SLOTS = lpu_config_pkg::LPU_KV_CACHE_SLOTS,
     parameter int MAX_POS   = 64,
-    parameter int WEIGHT_W  = 16,
-    parameter int DATA_W    = 32
+    parameter int WEIGHT_W  = lpu_config_pkg::LPU_WEIGHT_WIDTH,
+    parameter int DATA_W    = lpu_config_pkg::LPU_DATA_WIDTH
 ) (
     input  logic clk, rst_n,
 

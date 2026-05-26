@@ -1,55 +1,91 @@
 # --------------------------------------------------------------------------- #
 # common_modules.qsf — Shared RTL source files for all FPGA projects
+#
+# Legacy bring-up modules moved to rtl/legacy/.
+# Production uses fp4_gemm_engine + fp4_systolic_2d.
 # --------------------------------------------------------------------------- #
 
+# Include paths
+set_global_assignment -name SEARCH_PATH ../../rtl/include
+set_global_assignment -name SEARCH_PATH ../../rtl/interfaces
+
+# --------------------------------------------------------------------------- #
+# Production macro — add to individual project QSF for production builds.
+# Bring-up projects should NOT define this.
+#   set_global_assignment -name VERILOG_MACRO "FPGA_LPU_PRODUCTION"
+# --------------------------------------------------------------------------- #
+
+# --------------------------------------------------------------------------- #
 # Activation functions
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/activation/silu_q12_lut.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/activation/q12_to_fp8_e4m3.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/activation/rms_norm.sv
 
-# DSP / MAC
+# --------------------------------------------------------------------------- #
+# DSP — Production 2D Systolic Array
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_mac.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_scale_reader.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_systolic_tile.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_scaled_tile.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_systolic_array.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_linear_engine.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_systolic_cell.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_systolic_2d.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/dsp/fp4_gemm_engine.sv
 
-# Attention
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_attention.sv
+# --------------------------------------------------------------------------- #
+# Attention — MLA v2 (production)
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_qkv_proj.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_rope.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_kv_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/attention/mla_attention_v2.sv
 
+# --------------------------------------------------------------------------- #
 # MoE
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/moe/router_topk.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/moe/expert_ffn_engine.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/moe/expert_ffn_engine_fp4_down.sv
 
+# --------------------------------------------------------------------------- #
 # Layer
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/layer/mhc_mixer.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/layer/full_transformer_layer.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/layer/layer_compute_engine.sv
 
+# --------------------------------------------------------------------------- #
 # Head (MTP)
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/head/mtp_head.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/head/mtp_verify.sv
 
+# --------------------------------------------------------------------------- #
 # Engram
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/engram/hash_unit.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/engram/sram_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/engram/lookup_engine.sv
 
+# --------------------------------------------------------------------------- #
 # Chip
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/chip_top.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/c2c_node.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/chip/kv_dma_engine.sv
 
-# Debug / Bring-Up
+# --------------------------------------------------------------------------- #
+# Debug (shared by all projects)
+# --------------------------------------------------------------------------- #
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/uart_debug.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/hbm_bw_test.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/dsp_stress_test.sv
 
-# Include directories
-set_global_assignment -name SEARCH_PATH ../../rtl/include
-set_global_assignment -name SEARCH_PATH ../../rtl/interfaces
+# --------------------------------------------------------------------------- #
+# Legacy bring-up modules (excluded from production, in rtl/legacy/)
+# Uncomment for bring-up testing only:
+# --------------------------------------------------------------------------- #
+# set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/legacy/fp4_linear_engine.sv
+# set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/legacy/fp4_systolic_array.sv
+# set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/legacy/fp4_scaled_tile.sv
+# set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/legacy/fp4_systolic_tile.sv
+# set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/legacy/mla_attention.sv
+# set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/legacy/expert_ffn_engine.sv
+# set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/legacy/c2c_node.sv

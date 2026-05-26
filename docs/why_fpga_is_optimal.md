@@ -358,9 +358,13 @@ DeepSeek V3/R1 API 定价极低 (~$0.27/百万 token 输入, ~$1.10/输出),
 ### 其他局限
 
 ```
-✗ Prefill (大 batch): GPU 完胜
+✗ Prefill (大 batch): GPU 完胜 (但 CPU 已追近, 2026 更新)
   → Tensor Core 在 batch 下利用率高
-  → 但 prefill 只占推理时间的 ~5%
+  → 2026: Dual Xeon GNR / EPYC Turin P=128 chunk TTFT ~400ms
+    (SPR 的 6x 提升), CPU prefill 可覆盖 80% 商业场景
+  → 长 prompt: FPGA chunked prefill 兜底 (首 token ~125ms)
+  → 极致低延迟: 加 GPU (可选, 管制风险)
+  → 详见 fpga_inference_cluster_proposal.md 4.8.6
 
 ✗ Training: FPGA 根本不能做
   → 这是 GPU 的绝对领地

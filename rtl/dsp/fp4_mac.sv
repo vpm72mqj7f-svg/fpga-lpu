@@ -2,17 +2,8 @@
 // fp4_mac.sv — fp4(E2M1) × fp8(E4M3) Multiply-Accumulate Unit
 // Target: Intel Agilex 7 M-Series DSP (AGM 039-F)
 //
-// Pipeline: 4 stages
-//   Stage 0: Input register (capture fp4 weight / fp8 scale / fp8 activation)
-//   Stage 1: fp4 decode → signed 8b, fp8 decode → signed 12b
-//   Stage 2: 8b×12b signed multiply → 20-bit base product (DSP Block)
-//   Stage 3: 20b base × 12b scale → 32b scaled product (DSP Block)
-//   Stage 4: 32b sign-extend → accumulate (DSP accumulator chain)
-//
-// DSP usage (Agilex 7 M-Series):
-//   2 DSP blocks per MAC lane (18×19 signed multiply mode, cascaded).
-//   Synthesis attribute DSP_BLOCK_BALANCING AUTO lets Quartus optimize
-//   DSP placement and cascading for the systolic array.
+// Production: 4-stage pipeline, pre-decoded fp8 scales, DSP block retiming.
+// Used as the fundamental compute cell in fp4_systolic_cell / fp4_gemm_engine.
 //=============================================================================
 
 `include "fp4_types.svh"

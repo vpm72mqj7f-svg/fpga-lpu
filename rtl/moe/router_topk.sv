@@ -1,17 +1,15 @@
 //=============================================================================
-// router_topk.sv — MoE Router Top-K (EXPERTS=4, HIDDEN=8 bring-up)
+// router_topk.sv — MoE Router Top-K
 //
-// Pipeline: 3 stages
-//   Stage 1: Latch activations, 32 parallel 32b×32b multiplies → pairwise sums
-//   Stage 2: Adder-tree reduction → 4 expert scores
-//   Stage 3: Top-2 search → output
-//
-// Weight storage: 2D array w[EXPERTS][HIDDEN] (replaces flat register set).
+// Pipeline: 3-stage (latch → partials → reduce+top2)
+// Parameters from lpu_config_pkg. Override for non-standard configurations.
 //=============================================================================
 
+`include "lpu_config.svh"
+
 module router_topk #(
-    parameter int EXPERTS = 4,
-    parameter int HIDDEN  = 8
+    parameter int EXPERTS = lpu_config_pkg::LPU_NUM_EXPERTS,
+    parameter int HIDDEN  = lpu_config_pkg::LPU_HIDDEN
 ) (
     input  logic                         clk,
     input  logic                         rst_n,
