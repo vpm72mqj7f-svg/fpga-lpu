@@ -2,9 +2,16 @@
 
 ## FPGA 原型验证 → ASIC 流片量产
 
-> 版本: v1.2  
-> 状态: 商业叙事重构 — FPGA 为验证平台，ASIC 为终局产品  
+> 版本: v1.3 (2026/05)
+> 状态: RTL 优化完成, 2D脉动阵列验证通过, 三级Prefill架构就绪
+>        Bring-up/Production 代码分离, Docker云编译环境可用
 > 保密: 内部
+>
+> 最新更新 (§4.8.6, §8.0.1, §9.2, §14):
+> - 2026 CPU Prefill 评估: GNR/Turin 可达 10.5 TFLOPS, P=128 TTFT ~400ms
+> - 三级 Prefill: CPU (短) → FPGA chunked (长) → GPU (可选)
+> - P0/P1 代码就绪: GEMM 双模引擎, KV DMA 桥, 并发调度器
+> - 生产参数: HIDDEN=7168, LANES=128, M_ROWS=32 (via FPGA_LPU_PRODUCTION)
 
 ---
 
@@ -3286,13 +3293,19 @@ FPGA 软件栈为什么薄:
    → FPGA B=1 已有 ~50% DSP 利用率，SD 的边际收益小。
    → 列为 v2 特性。
 
-4. P/D 分离 (Prefill/Decode Disaggregation):
-   -> FPGA 方案结构上就支持。Prefill 在 4.8 已分析 —
-   -> 2026 更新: CPU prefill 已可用。Dual GNR/Turin 的有效 TFLOPS
-     是 SPR 的 6x, P=128 chunk TTFT ~400ms, 可覆盖 80% 商业场景。
-   -> CPU Prefill (短/中 prompt) + FPGA Chunked Prefill (长 prompt)
-     + GPU (极致低延迟, 可选) — 三级 Prefill 体系。
-   -> 详见 4.8.6 "2026 CPU Prefill 评估"
+4. P/D 分离 (Prefill/Decode Disaggregation) — **已实现 (2026/05)**:
+   -> FPGA 方案结构上就支持。Prefill 在 §4.8 已分析 —
+   -> **2026 更新**: CPU prefill 已可用。Dual GNR/Turin 有效 10.5 TFLOPS,
+      是 SPR 的 6x。P=128 chunk TTFT ~400ms, 覆盖 80% 商业场景。
+   -> **三级 Prefill 架构 (已编码)**:
+      Tier 1 — CPU (Intel AMX / AMD AVX-512): 短/中 prompt, TTFT 395-618ms
+      Tier 2 — FPGA chunked prefill: 长 prompt, TTFT 85ms 首 chunk
+      Tier 3 — GPU (可选): 极致低延迟, TTFT < 50ms
+   -> **代码就绪**: c_ref/prefill/cpu_prefill.c (AMX GEMM),
+      scripts/prefill/{coordinator,scheduler,vllm_prefill}.py,
+      rtl/dsp/fp4_{prefill,gemm}_engine.sv,
+      rtl/chip/kv_dma_bridge.sv
+   -> 详见 §4.8.6 "2026 CPU Prefill 评估" 和 §14.E "Prefill 架构速查"
 
 5. Profiler / Debugger:
    → FPGA 的可观测性远超 GPU profiler:
@@ -3748,26 +3761,30 @@ Phase 5: 优化与生产化 (Month 9-10)
 
 FPGA 开发不是 ASIC 的"仿真验证完 → 一次流片成功"流程，而是"模块仿真 + 快速上板迭代 + Signal Tap 在线抓信号"。本方案的设计规模决定了这个流程是高效的。
 
-**9.2.1 设计规模澄清：中等规模，非巨兽级**
+**9.2.1 设计规模：生产 vs 仿真 (2026/05 更新)**
 
 ```
-评审的担忧: 9000 DSP + 40MB BRAM → 巨兽级设计, 编译 8h+
+Bring-Up (仿真, `ifndef FPGA_LPU_PRODUCTION`):
+  fp4 脉动阵列 (1D):   ~8 DSP    (LANES=4)
+  2D 脉动阵列:         ~16 DSP   (LANES=4, M_ROWS=2, test only)
+  MLA 数据路径:         ~5 DSP
+  MoE Router:           ~2 DSP
+  单卡 DSP 用量:        ~30 DSP   (占 9,375 的 0.3%)
+  Icarus 仿真:          ~30s 全编译
+  → 用于快速功能验证
 
-现实 (每卡 RTL 实际用量):
-  fp4 脉动阵列:    ~200 DSP  (可配置规模, 非固定 9000)
-  MLA 数据路径:     ~50 DSP
-  MoE Router:       ~10 DSP  (纯 BRAM lookup)
-  RMSNorm:          ~10 DSP
-  KV Cache 管理:    ~5 DSP   (地址生成, 纯逻辑)
-  RoCE 协议栈:      零 DSP   (纯 LUT + BRAM)
-  HBM 控制器:       零 DSP   (硬核 IP)
-  ─────────────────────────
-  单卡 DSP 用量:    ~300 DSP  (占芯片 9,375 DSP 的 3.2%)
-  单卡 BRAM 用量:   ~29.4 MB  (占 M20K 的 75.6%)
+Production (`define FPGA_LPU_PRODUCTION`):
+  2D 脉动阵列:          ~8192 DSP (LANES=128, M_ROWS=32, 87% 利用率)
+  MLA 数据路径:          ~200 DSP (QKV 投影并行化)
+  MoE Router:            ~50 DSP  (EXPERTS=384)
+  RMSNorm:               ~30 DSP
+  单卡 DSP 用量:         ~8500 DSP (占 9,375 的 91%)
+  Quartus 全编译:        4-6h (cloud: c6i.16xlarge)
+  增量编译:              1-2h
+  → 生产 bitstream
 
-这是 "适度利用 FPGA 资源" 的中等规模设计。
-Quartus 全编译: 2-3h, 增量编译: 20-40min。
-不是 "榨干芯片强制 8h+ 编译" 的巨兽。
+通过 `ifdef FPGA_LPU_PRODUCTION 控制两套参数。
+Bring-up 编译 30s 快速迭代, Production 编译 4-6h 生成 bitstream。
 ```
 
 **9.2.2 模块级验证：并行推进，不跑全系统仿真**
@@ -5904,6 +5921,92 @@ LE +19%, DSP +31%, M20K +19% vs AGM 032.
 │    ├── data_len:   12b  (元素数, fp4 或 FP8)                  │
 │    └── data[]:     Variable                                 │
 └─────────────────────────────────────────────────────────────┘
+
+---
+
+### E. Prefill 架构速查 (2026/05 实现)
+
+```
+三级 Prefill 体系:
+
+┌─────────────────────────────────────────────────────────────┐
+│ Tier 1: CPU Prefill (Host Xeon/EPYC)                        │
+│   Prompt < 512 tok: 全量 prefill, TTFT ~600ms (GNR)         │
+│   Prompt < 4K tok:   chunked P=128, TTFT ~395ms             │
+│   代码: c_ref/prefill/{cpu_prefill.c, weight_preloader.c}   │
+│   硬件: 已包含在服务器 BOM 中 (¥0 额外成本)                  │
+├─────────────────────────────────────────────────────────────┤
+│ Tier 2: FPGA Chunked Prefill                                │
+│   Prompt > 4K tok:   chunked P=512, TTFT ~85ms 首 chunk     │
+│   DSP 阵列切换到 PREFILL 模式 (output-stationary)            │
+│   代码: rtl/dsp/fp4_prefill_engine.sv                        │
+│         rtl/chip/kv_dma_bridge.sv (双缓冲 DMA)              │
+│   硬件: 片上, 无额外成本                                     │
+├─────────────────────────────────────────────────────────────┤
+│ Tier 3: GPU Prefill (可选, 预算允许时)                       │
+│   任意 prompt:       全量 prefill, TTFT < 50ms              │
+│   硬件: +¥80K/GPU (A100), 管制风险                          │
+│   当前状态: 不推荐 (管制 + CPU 已够用)                       │
+└─────────────────────────────────────────────────────────────┘
+
+KV Cache 协调:
+  CPU prefill → PCIe DMA (28 GB/s) → FPGA HBM 双缓冲
+  FPGA decode 读取 buf A || CPU prefill 写入 buf B
+  原子 swap: B ready 且 A 耗尽时切换
+
+并发调度器 (scripts/prefill/scheduler.py):
+  并发 CPU prefill (后台) + FPGA decode (前台)
+  Double-buffered KV cache, 原子 buffer swap
+  vLLM 集成: scripts/prefill/vllm_prefill.py (monkey-patch)
+
+性能总结:
+  200 tok short:     CPU,  TTFT=618ms,  总 0.6s
+  3K agent:          CPU,  TTFT=395ms,  总 9.5s
+  4K RAG:            FPGA, TTFT=85ms,   总 0.7s
+  16K code review:   FPGA, TTFT=85ms,   总 2.7s
+  128K ultra-long:   FPGA, TTFT=85ms,   总 21.3s
+  500 tok cached:    CPU,  TTFT=1548ms, 总 1.5s (prefix reuse)
+```
+
+### F. RTL 模块清单 (2026/05)
+
+```
+Production (rtl/):
+  dsp/fp4_mac.sv              — 4-stage MAC (pre-decoded scales)
+  dsp/fp4_scale_reader.sv     — Pre-decode scale lookup
+  dsp/fp4_systolic_cell.sv    — 2D array cell (weight-stationary)
+  dsp/fp4_systolic_2d.sv      — 2D systolic array (M_ROWS x LANES)
+  dsp/fp4_gemm_engine.sv      — GEMM controller (decode mode)
+  dsp/fp4_prefill_engine.sv   — Prefill mode wrapper (P0)
+  attention/mla_attention_v2.sv — MLA with KV cache + RoPE
+  attention/mla_kv_cache.sv   — KV cache (ring buffer, BRAM)
+  moe/router_topk.sv          — Top-K router (3-stage pipeline)
+  moe/expert_ffn_engine_fp4_down.sv — FFN with fp4 down-projection
+  layer/full_transformer_layer.sv — Full transformer layer
+  chip/chip_top.sv            — Chip-level wrapper
+  chip/kv_dma_engine.sv       — KV DMA engine (host→HBM)
+  chip/kv_dma_bridge.sv       — Double-buffered KV DMA bridge (P0)
+
+  debug/uart_debug.sv         — UART console
+  debug/hbm_bw_test.sv        — HBM bandwidth validation
+  debug/dsp_stress_test.sv    — DSP accuracy test
+
+  include/lpu_config.svh      — Production/Bring-up parameter switch
+
+Legacy (rtl/legacy/):
+  fp4_linear_engine.sv        — Old 1D GEMV (superseded)
+  fp4_systolic_array.sv       — Old 1D array (superseded)
+  mla_attention.sv            — Old attention v1 (superseded)
+  expert_ffn_engine.sv        — Old FFN (superseded)
+  c2c_node.sv                 — Bring-up C2C test node
+
+Software:
+  c_ref/prefill/cpu_prefill.{h,c}      — CPU AMX/AVX-512 fp8 GEMM
+  c_ref/prefill/weight_preloader.c    — SSD→pinned memory loader
+  scripts/prefill/coordinator.py      — Three-tier decision logic
+  scripts/prefill/scheduler.py        — Concurrent CPU+FPGA scheduler
+  scripts/prefill/vllm_prefill.py     — vLLM monkey-patch
+```
 
 传输层 A — C2C SerDes (同卡内 4 芯片间, 见 §6.3):
   帧格式: SOP(8b) + Header(64b) + CRC16 + Payload(≤4KB) + CRC32 + EOP(8b)
