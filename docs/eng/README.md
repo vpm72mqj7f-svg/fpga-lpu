@@ -21,6 +21,7 @@ Team: 10 engineers (4 RTL / 3 Verification / 3 Software). All docs in English fo
 | 03 | [RTL Developer Guide](03_rtl_developer_guide.md) | 1,412 | Codebase map, coding conventions, bring-up vs production, interfaces, Icarus/Quartus flows, design patterns |
 | 04 | [Verification Guide](04_verification_guide.md) | 1,526 | Golden model methodology, 24+ testbench inventory, unit/integration/system test strategy, on-board validation, CI |
 | 05 | [Software & Simulation Guide](05_software_guide.md) | 1,301 | Python sim stack (fpga_arch + vllm_serve), C runtime, APIs/protocols, weight compiler, development workflow |
+| 06 | [GitHub Setup Guide](06_github_setup_guide.md) | — | Teams, branch protection, project board, milestones, labels, CI runners, access control matrix |
 
 ## Key Reference Files
 

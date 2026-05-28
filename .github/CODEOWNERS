@@ -1,0 +1,84 @@
+# FPGA LPU — Code Ownership & Review Hierarchy
+#
+# Rules are matched in order; last matching pattern takes precedence.
+# Each directory/file requires at least ONE approval from its owner before merge.
+# * = everyone else (fallback — requires lead approval)
+
+# ============================================================================
+# LAYER 0: Global Owners (Project Leads)
+# ============================================================================
+*                        @fpga-lpu-leads
+
+# ============================================================================
+# LAYER 1: RTL Hardware (rtl/, hw/)
+# — Owned by RTL Team (4 engineers)
+# — SW/Verif can read, CANNOT approve changes
+# ============================================================================
+rtl/                     @fpga-lpu-rtl
+hw/                      @fpga-lpu-rtl
+
+# RTL sub-module granularity
+rtl/dsp/                 @fpga-lpu-rtl
+rtl/attention/           @fpga-lpu-rtl
+rtl/moe/                 @fpga-lpu-rtl
+rtl/activation/          @fpga-lpu-rtl
+rtl/layer/               @fpga-lpu-rtl
+rtl/chip/                @fpga-lpu-rtl
+rtl/engram/              @fpga-lpu-rtl
+rtl/head/                @fpga-lpu-rtl
+rtl/debug/               @fpga-lpu-rtl
+rtl/interfaces/          @fpga-lpu-rtl
+rtl/include/             @fpga-lpu-rtl
+rtl/sim/                 @fpga-lpu-rtl  @fpga-lpu-verif  # Testbenches: RTL + Verif jointly
+
+# Legacy RTL — require lead + RTL approval (higher risk)
+rtl/legacy/              @fpga-lpu-leads  @fpga-lpu-rtl
+
+# ============================================================================
+# LAYER 2: Verification (rtl/sim/, scripts/simulation/)
+# — Owned by Verification Team (3 engineers)
+# — Test vector generation, golden models, precision validation
+# ============================================================================
+rtl/sim/                 @fpga-lpu-verif  @fpga-lpu-rtl
+scripts/simulation/      @fpga-lpu-verif
+
+# ============================================================================
+# LAYER 3: Software (scripts/fpga_arch/, scripts/vllm_serve/, scripts/prefill/, c_ref/)
+# — Owned by Software Team (3 engineers)
+# — Python simulation stack, C reference, scheduler
+# ============================================================================
+scripts/fpga_arch/       @fpga-lpu-sw
+scripts/vllm_serve/      @fpga-lpu-sw
+scripts/prefill/         @fpga-lpu-sw
+c_ref/                   @fpga-lpu-sw
+
+# Software entry points & orchestration
+scripts/run_serving.py   @fpga-lpu-sw
+scripts/run_e2e_validation.py  @fpga-lpu-sw
+scripts/run_module_smoke.py    @fpga-lpu-sw  @fpga-lpu-verif
+scripts/run_all_validations.py @fpga-lpu-sw
+
+# ============================================================================
+# LAYER 4: Documentation (docs/)
+# — Engineering docs: respective teams own their guides
+# — Architecture & plan: leads own
+# ============================================================================
+docs/eng/01_project_plan.md       @fpga-lpu-leads
+docs/eng/02_architecture_overview.md  @fpga-lpu-leads
+docs/eng/03_rtl_developer_guide.md    @fpga-lpu-rtl
+docs/eng/04_verification_guide.md     @fpga-lpu-verif
+docs/eng/05_software_guide.md         @fpga-lpu-sw
+docs/eng/README.md                    @fpga-lpu-leads
+
+# Proposal documents — leads only
+docs/fpga_inference_cluster_proposal*.md  @fpga-lpu-leads
+
+# ============================================================================
+# LAYER 5: Configuration & CI (root config files)
+# — .github/ owned by leads
+# — Build configs owned by respective teams
+# ============================================================================
+.github/                 @fpga-lpu-leads
+Makefile                 @fpga-lpu-leads
+hw/quartus/              @fpga-lpu-rtl
+hw/constraints/          @fpga-lpu-rtl

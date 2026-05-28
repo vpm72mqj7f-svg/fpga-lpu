@@ -1,0 +1,41 @@
+# FPGA LPU — Python Simulation Tests (PR Gate)
+# Runs module smoke tests + functional experiments on every PR.
+# Target: <3 minutes.
+
+name: Python Simulation Tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/python-tests.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'scripts/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install numpy
+
+      - name: Module Smoke Tests
+        working-directory: scripts
+        run: python run_module_smoke.py
+
+      - name: Functional Experiments
+        working-directory: scripts/simulation
+        run: python run_all.py
+
+      - name: Quick Serving Smoke (10s)
+        working-directory: scripts
+        run: python run_serving.py --duration 10 --arrival-rate 2
