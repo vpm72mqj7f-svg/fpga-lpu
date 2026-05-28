@@ -279,13 +279,17 @@ FPGA_DECODE_TPS         = PIPELINE_TPS  # 17,445 (decode-only, saturated batch)
 FPGA_DECODE_TPS_HW      = 14_000        # raw hardware decode (~flat across B, from simulate_pipeline)
 
 # ── Chunked Prefill (PREFILL_CHUNK_SIZE=128, P0+P1 carry-fwd) ──
-# Splits prompt into 128-token chunks. First chunk = TTFT, chunks pipelined.
-FPGA_TTFT_CHUNKED_MS    = 411     # P=512, first chunk latency
-FPGA_PREFILL_TOTAL_MS   = 481     # P=512, all 4 chunks (pipelined)
-FPGA_PREFILL_TPS_CHUNKED = 1_064  # P=512, effective prefill TPS with chunking
+# Splits prompt into 128-token chunks.
+# Real TTFT = all chunks + first decode (attention needs full KV cache).
+# "First chunk" number is streaming prefill only (partial context, approximate).
+FPGA_TTFT_FIRST_CHUNK_MS = 411     # P=128, first chunk completion (NOT full TTFT)
+FPGA_PREFILL_TOTAL_MS    = 481     # P=512, all 4 chunks (pipelined) — true TTFT ≈ this + 1.5ms decode
+FPGA_TTFT_CHUNKED_MS     = 483     # P=512, true TTFT = total prefill + first decode (481 + 1.5)
+FPGA_PREFILL_TPS_CHUNKED = 1_064   # P=512, effective prefill TPS with chunking
 # Chunked prefill vs non-chunked P=512:
-#   TTFT: 2,551ms → 411ms (6.2×)
-#   Prefill TPS: 679 → 1,064 (1.6×, pipeline parallelism)
+#   First chunk:  2,551ms → 411ms (6.2×, partial context only)
+#   True TTFT:    2,551ms → 483ms (5.3×, full KV cache ready)
+#   Prefill TPS:  679 → 1,064 (1.6×, pipeline parallelism)
 
 # Note: carry-forward overhead vs ideal is only 9.9% TPS loss (6,122 vs 6,730).
 # Pipeline reorder (Router → Attention) would recover this but requires HW changes.

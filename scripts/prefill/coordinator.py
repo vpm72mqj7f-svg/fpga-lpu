@@ -125,12 +125,14 @@ def estimate_cpu_prefill_latency(prompt_tokens: int, cfg: PrefillConfig) -> floa
 
 
 def estimate_fpga_prefill_latency(prompt_tokens: int, cfg: PrefillConfig) -> float:
-    """Estimate FPGA chunked prefill latency in microseconds."""
+    """Estimate FPGA chunked prefill TTFT in microseconds.
+
+    TTFT = all chunks completed + first decode step.
+    NOT just first chunk time — decode cannot start until full KV cache is ready.
+    """
     chunk_size = cfg.fpga_chunk_size
     num_chunks = math.ceil(prompt_tokens / chunk_size)
-    # First chunk determines TTFT
-    # Each chunk: chunk_latency_us
-    return cfg.fpga_chunk_latency_us  # TTFT = first chunk
+    return cfg.fpga_chunk_latency_us * num_chunks
 
 
 def estimate_gpu_prefill_latency(prompt_tokens: int, cfg: PrefillConfig) -> float:
@@ -204,6 +206,12 @@ def decide_prefill_tier(prompt_tokens: int, prefix_cached_tokens: int,
     cpu_lat = estimate_cpu_prefill_latency(new_tokens, cfg)
     cpu_sustainable = cpu_can_sustain(new_tokens, cfg)
 
+    # CPU chunked prefill parameters (always computed for later comparison)
+    chunk_size = cfg.cpu_chunk_size
+    num_chunks = max(1, math.ceil(new_tokens / chunk_size))
+    cpu_chunk_lat = estimate_cpu_prefill_latency(chunk_size, cfg)
+    cpu_total = cpu_chunk_lat * num_chunks
+
     # CPU full prefill (no chunking): viable for short prompts
     if new_tokens <= cfg.cpu_short_threshold:
         if cpu_lat < cfg.ttft_acceptable_us:
@@ -217,27 +225,23 @@ def decide_prefill_tier(prompt_tokens: int, prefix_cached_tokens: int,
             )
 
     # CPU chunked prefill: viable for medium prompts
-    chunk_size = cfg.cpu_chunk_size
-    num_chunks = math.ceil(new_tokens / chunk_size)
-    cpu_chunk_lat = estimate_cpu_prefill_latency(chunk_size, cfg)
-    cpu_total = cpu_chunk_lat * num_chunks
     drain_gap = cpu_kv_drain_gap(new_tokens, cfg)
 
     # CPU chunked prefill is viable if:
-    #   1. TTFT is under target (500ms), AND
+    #   1. Total prefill time (TTFT) is under acceptable threshold (2s), AND
     #   2. Total prefill time is not absurd (< 10s), AND
     #   3. KV drain gap is manageable (< 2s stall)
-    cpu_viable = (cpu_chunk_lat < cfg.ttft_target_us and
+    cpu_viable = (cpu_total < cfg.ttft_acceptable_us and
                   cpu_total < 10_000_000 and      # 10s max total prefill
                   drain_gap < 2.0)                 # 2s max stall
 
     if cpu_viable:
         return PrefillDecision(
-            tier=PrefillTier.CPU, ttft_us=cpu_chunk_lat,
+            tier=PrefillTier.CPU, ttft_us=cpu_total,
             total_prefill_us=cpu_total,
             num_chunks=num_chunks, chunk_size=chunk_size,
             reasoning=f"CPU chunked prefill, P={chunk_size}x{num_chunks}, "
-                      f"TTFT={cpu_chunk_lat/1000:.0f}ms, total={cpu_total/1e6:.1f}s",
+                      f"TTFT={cpu_total/1000:.0f}ms",
             cpu_sustainable=cpu_sustainable,
             cpu_drain_gap_s=drain_gap
         )
@@ -246,14 +250,18 @@ def decide_prefill_tier(prompt_tokens: int, prefix_cached_tokens: int,
     fpga_lat = estimate_fpga_prefill_latency(new_tokens, cfg)
     fpga_chunks = math.ceil(new_tokens / cfg.fpga_chunk_size)
 
-    if fpga_lat < cfg.ttft_acceptable_us:
+    # Use FPGA if it's faster than CPU (best available), or if within target
+    fpga_faster_than_cpu = fpga_lat < cpu_total
+    fpga_within_target = fpga_lat < cfg.ttft_acceptable_us
+
+    if fpga_within_target or fpga_faster_than_cpu:
         return PrefillDecision(
             tier=PrefillTier.FPGA, ttft_us=fpga_lat,
             total_prefill_us=cfg.fpga_chunk_latency_us * fpga_chunks,
             num_chunks=fpga_chunks, chunk_size=cfg.fpga_chunk_size,
             reasoning=f"FPGA chunked prefill, P={cfg.fpga_chunk_size}×{fpga_chunks}, "
-                      f"TTFT={fpga_lat/1000:.0f}ms (first chunk), "
-                      f"CPU would take {cpu_lat/1000:.0f}ms"
+                      f"TTFT={fpga_lat/1000:.0f}ms (all chunks), "
+                      f"CPU would take {cpu_total/1000:.0f}ms"
         )
 
     # ── Tier 3: GPU (if available) ────────────────────────
@@ -266,13 +274,13 @@ def decide_prefill_tier(prompt_tokens: int, prefix_cached_tokens: int,
             reasoning=f"GPU prefill, TTFT={gpu_lat/1000:.0f}ms"
         )
 
-    # ── Fallback: CPU with large chunks ───────────────────
+    # ── Fallback: CPU — slower than FPGA but no better option ──
     return PrefillDecision(
-        tier=PrefillTier.CPU, ttft_us=cpu_chunk_lat,
-        total_prefill_us=cpu_chunk_lat * num_chunks,
+        tier=PrefillTier.CPU, ttft_us=cpu_total,
+        total_prefill_us=cpu_total,
         num_chunks=num_chunks, chunk_size=chunk_size,
         reasoning=f"Fallback: CPU chunked (no better option), "
-                  f"TTFT={cpu_chunk_lat/1000:.0f}ms"
+                  f"TTFT={cpu_total/1000:.0f}ms (all chunks)"
     )
 
 
@@ -359,20 +367,20 @@ def simulate_prefill_pipeline(prompt_tokens: int, output_tokens: int,
             timeline.append((chunk_start + chunk_lat, "KV_TRANSFER",
                             f"PCIe DMA, {xfer_us:.0f}us"))
 
-    # First chunk done → TTFT
-    first_chunk_lat = (estimate_cpu_prefill_latency(decision.chunk_size, cfg)
-                       if decision.tier == PrefillTier.CPU
-                       else cfg.fpga_chunk_latency_us)
-    timeline.append((first_chunk_lat, "TTFT_READY",
-                    f"First token visible at {first_chunk_lat/1000:.1f}ms"))
+    # TTFT = all chunks completed + first decode step
+    # Decode can only start after full KV cache is available (all chunks done)
+    decode_lat_first_token = 1e6 / cfg.fpga_decode_rate
+    ttft_us = t + decode_lat_first_token
+    timeline.append((t, "TTFT_READY",
+                    f"All {decision.num_chunks} chunks done, "
+                    f"TTFT={ttft_us/1000:.1f}ms (prefill={t/1000:.1f}ms + decode={decode_lat_first_token/1000:.1f}ms)"))
 
-    # Step 2: Decode (overlaps with remaining prefill chunks)
-    decode_lat_per_token = 1e6 / cfg.fpga_decode_rate  # microseconds
+    # Step 2: Decode (starts after all chunks are in KV cache)
     for tok in range(output_tokens):
-        t += decode_lat_per_token
-    timeline.append((t - output_tokens * decode_lat_per_token, "DECODE",
+        t += decode_lat_first_token
+    timeline.append((t - output_tokens * decode_lat_first_token, "DECODE",
                     f"{output_tokens} tokens @ {cfg.fpga_decode_rate} tok/s, "
-                    f"{output_tokens * decode_lat_per_token / 1000:.1f}ms"))
+                    f"{output_tokens * decode_lat_first_token / 1000:.1f}ms"))
 
     timeline.append((t, "DONE", "Pipeline complete"))
 

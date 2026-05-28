@@ -61,3 +61,6 @@ Thumbs.db
 *.pdf
 *.docx
 *.doc
+
+# Node.js
+node_modules/

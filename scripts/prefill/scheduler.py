@@ -179,8 +179,9 @@ class ConcurrentScheduler:
         # Prefill first chunk → TTFT
         first_chunk = min(chunk_size, total_prompt_tokens)
         self.clock_us += self.cpu_prefill_fn(first_chunk)
-        self.log("PREFILL_CHUNK_0", f"{first_chunk} tokens, TTFT={self.clock_us/1000:.1f}ms")
-        self.log("TTFT", f"First token ready at {self.clock_us/1000:.1f}ms")
+        self.log("PREFILL_CHUNK_0", f"{first_chunk} tokens, first_chunk_done={self.clock_us/1000:.1f}ms")
+        self.log("FIRST_CHUNK_READY", f"KV for tokens 0-{first_chunk-1} ready at {self.clock_us/1000:.1f}ms "
+                 f"(partial context; full TTFT = all chunks + first decode)")
 
         # DMA to FPGA
         dma_time = self.dma.start_transfer(first_chunk)

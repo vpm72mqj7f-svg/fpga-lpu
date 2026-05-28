@@ -1103,7 +1103,7 @@ def print_report(metrics: SimulationMetrics, args: argparse.Namespace,
         H200_DECODE_TPS, H200_PREFILL_TPS, H200_TTFT_P50_MS, H200_SRV_COST,
         ASCEND_DECODE_TPS, ASCEND_PREFILL_TPS, ASCEND_TTFT_P50_MS, ASCEND_SRV_COST,
         FPGA_DECODE_TPS, FPGA_DECODE_TPS_HW, FPGA_PREFILL_TPS, FPGA_TTFT_P50_MS,
-        FPGA_TTFT_CHUNKED_MS, FPGA_PREFILL_TPS_CHUNKED,
+        FPGA_TTFT_FIRST_CHUNK_MS, FPGA_TTFT_CHUNKED_MS, FPGA_PREFILL_TPS_CHUNKED,
     )
     print("  --- Hardware Comparison (DS V4 Pro, FP8, per server) ---")
     print(f"  {'Metric':<28s} {'FPGA A7':>14s} {'H200':>14s} {'Ascend 950PR':>14s}")
@@ -1111,12 +1111,13 @@ def print_report(metrics: SimulationMetrics, args: argparse.Namespace,
     print(f"  {'Decode TPS (high concur)':<28s} {FPGA_DECODE_TPS:>14,d} {H200_DECODE_TPS:>14,d} {ASCEND_DECODE_TPS:>14,d}")
     print(f"  {'Decode TPS (raw HW)':<28s} {FPGA_DECODE_TPS_HW:>14,d} {'N/A':>14s} {'N/A':>14s}")
     print(f"  {'Prefill TPS (P=512,P0+P1)':<28s} {FPGA_PREFILL_TPS:>14,d} {H200_PREFILL_TPS:>14,d} {ASCEND_PREFILL_TPS:>14,d}")
-    print(f"  {'TTFT single (P=512) ms':<28s} {FPGA_TTFT_P50_MS:>14,d} {H200_TTFT_P50_MS:>14,d} {ASCEND_TTFT_P50_MS:>14,d}")
-    print(f"  {'TTFT chunked (P=128) ms':<28s} {FPGA_TTFT_CHUNKED_MS:>14,d} {'N/A':>14s} {'N/A':>14s}")
+    print(f"  {'TTFT full (P=512) ms':<28s} {FPGA_TTFT_P50_MS:>14,d} {H200_TTFT_P50_MS:>14,d} {ASCEND_TTFT_P50_MS:>14,d}")
+    print(f"  {'TTFT chunked (true) ms':<28s} {FPGA_TTFT_CHUNKED_MS:>14,d} {'N/A':>14s} {'N/A':>14s}")
+    print(f"  {'  first chunk only':<28s} {FPGA_TTFT_FIRST_CHUNK_MS:>14,d} {'N/A':>14s} {'N/A':>14s}")
     print(f"  {'Server cost (RMB 10k)':<28s} {100:>14,d} {H200_SRV_COST//10000:>14,d} {ASCEND_SRV_COST//10000:>14,d}")
     print(f"  {'Cost / (tok/s) RMB':<28s} {1_000_000/max(1,FPGA_DECODE_TPS):>13.0f}  {H200_SRV_COST/max(1,H200_DECODE_TPS):>13.0f}  {ASCEND_SRV_COST/max(1,ASCEND_DECODE_TPS):>13.0f}")
     print(f"  P0: fp4 K/V attention (2x attn MAC). P1: router-guided sparse (88.8%).")
-    print(f"  Chunked prefill P=128: TTFT 2,551ms -> 411ms (6.2x).")
+    print(f"  Chunked prefill P=128: full TTFT 2,551ms -> 483ms (5.3x); first chunk 411ms (partial context only).")
 
     print("=" * 70)
 
