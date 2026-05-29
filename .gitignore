@@ -48,8 +48,9 @@ Thumbs.db
 *.swo
 *~
 
-# Claude Code internal
-.claude/
+# Claude Code internal (except shared team AI role configs)
+.claude/*
+!.claude/roles/
 
 # Temp files
 /tmp/
