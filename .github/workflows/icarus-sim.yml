@@ -26,25 +26,25 @@ jobs:
       - name: Run Unit Testbenches
         working-directory: rtl/sim
         run: |
-          make tb_fp4_mac          || exit 1
-          make tb_fp4_gemm_engine  || exit 1
-          make tb_fp4_systolic_2d  || exit 1
-          make tb_rms_norm         || exit 1
-          make tb_silu_q12_lut     || exit 1
+          make SIM=iverilog tb_fp4_mac          || exit 1
+          make SIM=iverilog tb_fp4_gemm_engine   || exit 1
+          make SIM=iverilog tb_fp4_systolic_2d   || exit 1
+          make SIM=iverilog tb_rms_norm          || exit 1
+          make SIM=iverilog tb_silu_q12_lut      || exit 1
 
       - name: Run Module Testbenches
         working-directory: rtl/sim
         run: |
-          make tb_mla_qkv          || exit 1
-          make tb_router_topk      || exit 1
-          make tb_expert_ffn_engine_fp4_down || exit 1
+          make SIM=iverilog tb_mla_qkv          || exit 1
+          make SIM=iverilog tb_router_topk       || exit 1
+          make SIM=iverilog tb_expert_ffn_engine_fp4_down || exit 1
 
       - name: Run Integration Testbenches
         working-directory: rtl/sim
         run: |
-          make tb_layer_compute_engine  || exit 1
-          make tb_full_transformer_layer || exit 1
-          make tb_chip_12layer          || exit 1
+          make SIM=iverilog tb_layer_compute_engine  || exit 1
+          make SIM=iverilog tb_full_transformer_layer || exit 1
+          make SIM=iverilog tb_chip_12layer          || exit 1
 
       - name: Summary
         run: echo "All Icarus simulations passed."

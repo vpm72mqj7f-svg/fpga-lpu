@@ -8,7 +8,7 @@ Team: 10 engineers (4 RTL / 3 Verification / 3 Software). All docs in English fo
 | Role | Read This First | Then |
 |------|----------------|------|
 | **Everyone** | [02 Architecture Overview](02_architecture_overview.md) | [01 Project Plan](01_project_plan.md) |
-| **RTL Engineers (4)** | [03 RTL Developer Guide](03_rtl_developer_guide.md) | `rtl/include/lpu_config.svh`, run `make tb_fp4_mac` in `rtl/sim/` |
+| **RTL Engineers (4)** | [RTL Onboarding Guide](onboarding/rtl-onboarding.md) (Day 1-4 walkthrough) | [03 RTL Developer Guide](03_rtl_developer_guide.md), `rtl/include/lpu_config.svh` |
 | **Verification Engineers (3)** | [04 Verification Guide](04_verification_guide.md) | `scripts/simulation/run_all.py`, `rtl/sim/Makefile` |
 | **Software Engineers (3)** | [05 Software & Simulation Guide](05_software_guide.md) | `python scripts/run_serving.py --duration 30` |
 
@@ -16,6 +16,7 @@ Team: 10 engineers (4 RTL / 3 Verification / 3 Software). All docs in English fo
 
 | # | Document | Lines | Description |
 |---|----------|-------|-------------|
+| -- | [RTL Onboarding Guide](onboarding/rtl-onboarding.md) | — | Day 1-4 walkthrough for new RTL engineers: environment setup, architecture, module assignment, first PR |
 | 01 | [Project Plan](01_project_plan.md) | 972 | 5-phase / 10-month plan, staffing, module ownership, critical path, risk register, AI tool strategy, Go/No-Go gates |
 | 02 | [Architecture Overview](02_architecture_overview.md) | 1,158 | System design, 10-stage pipeline, memory hierarchy, interconnect, RTL hierarchy, key design decisions |
 | 03 | [RTL Developer Guide](03_rtl_developer_guide.md) | 1,412 | Codebase map, coding conventions, bring-up vs production, interfaces, Icarus/Quartus flows, design patterns |
@@ -54,10 +55,12 @@ python scripts/run_all_validations.py
 ## RTL Quick Commands
 
 ```bash
-# Run a single testbench (Icarus)
-cd rtl/sim && make tb_fp4_mac
+# Run any testbench (Icarus)
+cd rtl/sim && make SIM=iverilog tb_fp4_mac
+cd rtl/sim && make SIM=iverilog tb_fp4_systolic_2d
+cd rtl/sim && make SIM=iverilog tb_rms_norm
 
-# Run all testbenches
+# Run ALL testbenches
 cd rtl/sim && make all
 
 # Generate golden test vectors from Python reference
