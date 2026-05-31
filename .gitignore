@@ -31,6 +31,11 @@ rtl/sim/*.vvp
 transcript
 work/
 
+# Verilator build artifacts
+rtl/sim/verilator/obj_dir*/
+rtl/sim/verilator/*.exe
+rtl/sim/verilator/*.o
+
 # Python
 __pycache__/
 *.pyc

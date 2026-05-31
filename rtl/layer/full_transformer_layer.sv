@@ -151,7 +151,7 @@ module full_transformer_layer #(
         .valid_out(rtr_vo),.result_ready(1'b1),
         .top0_idx(rtr_t0),.top1_idx(rtr_t1),.top0_score(rtr_s0),.top1_score(rtr_s1));
 
-    expert_ffn_engine_fp4_down #(.HIDDEN(8),.INTER(4)) u_ffn(.clk,.rst_n,
+    expert_ffn_engine_fp4_down #(.HIDDEN(HIDDEN),.INTER(lpu_config_pkg::LPU_INTERMEDIATE)) u_ffn(.clk,.rst_n,
         .activ_wr_en(ffn_aen),.activ_wr_beat(ffn_abeat),.activ_wr_data(ffn_adata),
         .scale_wr_en,.scale_wr_addr,.scale_wr_data,
         .gate_w_wr_en,.gate_w_wr_row,.gate_w_wr_beat,.gate_w_wr_data,
