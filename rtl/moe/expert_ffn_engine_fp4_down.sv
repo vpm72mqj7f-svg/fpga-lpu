@@ -7,13 +7,15 @@ module expert_ffn_engine_fp4_down #(
     parameter int INTER  = 4,
     parameter int LANES  = 4,
     parameter int K_BEATS_H = (HIDDEN + LANES - 1) / LANES,
-    parameter int K_BEATS_I = (INTER + LANES - 1) / LANES
+    parameter int K_BEATS_I = (INTER + LANES - 1) / LANES,
+    parameter int BEAT_W_H  = $clog2(K_BEATS_H > 1 ? K_BEATS_H : 2),
+    parameter int BEAT_W_I  = $clog2(K_BEATS_I > 1 ? K_BEATS_I : 2)
 ) (
     input  logic clk,
     input  logic rst_n,
 
     input  logic activ_wr_en,
-    input  logic [$clog2(K_BEATS_H+1)-1:0] activ_wr_beat,
+    input  logic [BEAT_W_H-1:0] activ_wr_beat,
     input  logic [LANES*8-1:0] activ_wr_data,
 
     input  logic scale_wr_en,
@@ -22,17 +24,17 @@ module expert_ffn_engine_fp4_down #(
 
     input  logic gate_w_wr_en,
     input  logic [$clog2(INTER)-1:0] gate_w_wr_row,
-    input  logic [$clog2(K_BEATS_H)-1:0] gate_w_wr_beat,
+    input  logic [BEAT_W_H-1:0] gate_w_wr_beat,
     input  logic [LANES*4-1:0] gate_w_wr_data,
 
     input  logic up_w_wr_en,
     input  logic [$clog2(INTER)-1:0] up_w_wr_row,
-    input  logic [$clog2(K_BEATS_H)-1:0] up_w_wr_beat,
+    input  logic [BEAT_W_H-1:0] up_w_wr_beat,
     input  logic [LANES*4-1:0] up_w_wr_data,
 
     input  logic down_w_wr_en,
     input  logic [$clog2(HIDDEN)-1:0] down_w_wr_row,
-    input  logic [$clog2(K_BEATS_I+1)-1:0] down_w_wr_beat,
+    input  logic [BEAT_W_I-1:0] down_w_wr_beat,
     input  logic [LANES*4-1:0] down_w_wr_data,
 
     input  logic start,
@@ -57,9 +59,13 @@ module expert_ffn_engine_fp4_down #(
     logic signed [31:0] up_vec [INTER];
     logic signed [31:0] silu_vec [INTER];
     logic signed [31:0] mid_vec [INTER];
-    logic [LANES*8-1:0] down_activ_pack;
+    logic [INTER*8-1:0] down_activ_pack;
     logic down_activ_wr_en;
     logic down_started;
+    logic [BEAT_W_I-1:0] down_beat_cnt;
+    wire  [LANES*8-1:0] down_activ_slice;
+
+    assign down_activ_slice = down_activ_pack[down_beat_cnt * LANES*8 +: LANES*8];
 
     assign busy = (state != S_IDLE) && (state != S_DONE);
     assign result_valid = down_rv;
@@ -69,7 +75,7 @@ module expert_ffn_engine_fp4_down #(
     genvar gi;
     generate
         for (gi = 0; gi < INTER; gi++) begin : g_silu
-            silu_q12_lut u_silu (.x_q12(gate_vec[gi]), .y_q12(silu_vec[gi]));
+            silu_q12_lut u_silu (.clk(clk), .x_q12(gate_vec[gi]), .y_q12(silu_vec[gi]));
             q12_to_fp8_e4m3 u_mid_enc (.x_q12(mid_vec[gi]), .fp8(down_activ_pack[gi*8 +: 8]));
         end
     endgenerate
@@ -95,37 +101,58 @@ module expert_ffn_engine_fp4_down #(
     fp4_linear_engine #(.M_OUT(HIDDEN), .K_TOTAL(INTER), .LANES(LANES), .GROUP_SIZE(4), .NUM_GROUPS(4), .ADDR_WIDTH(2)) u_down (
         .clk(clk), .rst_n(rst_n), .weight_wr_en(down_w_wr_en), .weight_wr_row(down_w_wr_row),
         .weight_wr_beat(down_w_wr_beat), .weight_wr_data(down_w_wr_data),
-        .activ_wr_en(down_activ_wr_en), .activ_wr_beat('0), .activ_wr_data(down_activ_pack),
+        .activ_wr_en(down_activ_wr_en), .activ_wr_beat(down_beat_cnt), .activ_wr_data(down_activ_slice),
         .scale_wr_en(scale_wr_en), .scale_wr_addr(scale_wr_addr), .scale_wr_data(scale_wr_data),
         .start(down_start), .busy(), .done(down_done), .result_valid(down_rv), .result_row(down_rr), .result_data(down_rd),
         .result_ready(1'b1)
     );
 
-    always_ff @(posedge clk) begin
-        if (gate_rv) gate_vec[gate_rr] <= gate_rd;
-        if (up_rv)   up_vec[up_rr] <= up_rd;
+    // ── DSP: altera_mult_add for gate * up multiply (INTER elements) ──
+    wire signed [63:0] gate_up_prod [INTER-1:0];
+
+    for (genvar i = 0; i < INTER; i++) begin : gen_gate_up
+        altera_mult_add #(.A_WIDTH(32), .B_WIDTH(32), .PIPE_STAGES(0))
+        u_mul (.clock(clk),
+            .a($signed(silu_vec[i])), .b($signed(up_vec[i])),
+            .result(gate_up_prod[i]));
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= S_IDLE; gate_start <= 0; up_start <= 0; down_start <= 0; done <= 0; down_activ_wr_en <= 0; down_started <= 0;
+            down_beat_cnt <= '0;
             for (int i=0; i<INTER; i++) begin gate_vec[i] <= 0; up_vec[i] <= 0; mid_vec[i] <= 0; end
         end else begin
             gate_start <= 0; up_start <= 0; down_start <= 0; done <= 0; down_activ_wr_en <= 0;
+            if (gate_rv) gate_vec[gate_rr] <= gate_rd;
+            if (up_rv)   up_vec[up_rr] <= up_rd;
             case (state)
-                S_IDLE: if (start) begin gate_start <= 1; up_start <= 1; state <= S_RUN_GU; end
+                S_IDLE: if (start) begin
+                    gate_start <= 1; up_start <= 1; state <= S_RUN_GU;
+                end
                 S_RUN_GU: if (gate_done && up_done) state <= S_MID;
                 S_MID: begin
-                    for (int i=0; i<INTER; i++) mid_vec[i] <= ($signed(silu_vec[i]) * $signed(up_vec[i])) >>> 12;
+                    for (int i=0; i<INTER; i++) mid_vec[i] <= gate_up_prod[i] >>> 12;
                     state <= S_LOAD_DOWN;
                 end
-                S_LOAD_DOWN: begin down_activ_wr_en <= 1; down_started <= 0; state <= S_RUN_DOWN; end
+                S_LOAD_DOWN: begin
+                    down_activ_wr_en <= 1;
+                    if (down_beat_cnt == K_BEATS_I - 1) begin
+                        down_beat_cnt <= '0;
+                        down_started <= 0;
+                        state <= S_RUN_DOWN;
+                    end else begin
+                        down_beat_cnt <= down_beat_cnt + 1'b1;
+                    end
+                end
                 S_RUN_DOWN: begin
                     if (!down_started) begin
                         down_start <= 1;
                         down_started <= 1;
                     end
-                    if (down_done) begin done <= 1; state <= S_DONE; end
+                    if (down_done) begin
+                        done <= 1; state <= S_DONE;
+                    end
                 end
                 S_DONE: if (!start) state <= S_IDLE;
                 default: state <= S_IDLE;

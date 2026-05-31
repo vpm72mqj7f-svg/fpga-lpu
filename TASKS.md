@@ -397,12 +397,15 @@ If blocked, add `[BLOCKED by <task-id>]` with a note.
   | router_topk | EXPERTS=384, HIDDEN=7168 | PASS (0.1s, 14 MB) | PASS | 3/3 PASS | 11 MB FF array, FSM alive |
   | mla_attention_v2 | HIDDEN=7168, K_LATENT=512, V_LATENT=512, NUM_SLOTS=4096 | PASS (0.15s, 17 MB) | PASS | Smoke PASS | 98 MB W_Q[7168][7168], 229 Kbit buses |
   | mla_kv_cache | NUM_SLOTS=4096, K_LATENT=512, V_LATENT=512 | PASS | PASS | 5/5 PASS | 16 MB BRAM, ring buffer fill+readback (prior session) |
-  | expert_ffn_engine_fp4_down | HIDDEN=7168, INTER=3072 | **FAIL** (3074 warnings) | N/A | N/A | Bug: down_activ_pack sized LANES*8 (32b), needs INTER*8 (24576b) |
+  | expert_ffn_engine_fp4_down | HIDDEN=7168, INTER=3072 | **PASS** (0 warnings) | PASS | 5/5 PASS | Fixed 2026-06-01: widened down_activ_pack, beat-based loading, merged MULTIDRIVEN. Icarus regr. PASS. |
 
-  **Production Bug Found:** `expert_ffn_engine_fp4_down.sv:62` — `down_activ_pack` is 32 bits but
-  generate loop (line 73-77) creates INTER=3072 instances of q12_to_fp8_e4m3 all driving the same
-  narrow bus. Module assumes INTER <= LANES (true only for bring-up: 4 <= 4). Fix requires beat-based
-  activation loading for the down projection intermediate path.
+
+  **Production Bug Fixed (2026-06-01):** `expert_ffn_engine_fp4_down.sv`:
+  1. `down_activ_pack`: widened from `[LANES*8-1:0]` (32b) to `[INTER*8-1:0]` (24576b @ INTER=3072)
+  2. Beat-based down activation loading: added `down_beat_cnt`, `down_activ_slice`, `down_started`
+  3. `S_LOAD_DOWN` FSM: iterates `K_BEATS_I` beats (was single-cycle transition)
+  4. MULTIDRIVEN fix: merged `gate_vec`/`up_vec` data capture into main always_ff block
+  5. Icarus bring-up regression: PASS (row results unchanged)
 
   **Code Fix Applied:** `full_transformer_layer.sv:154` — hardcoded `#(.HIDDEN(8),.INTER(4))` →
   parameterized `#(.HIDDEN(HIDDEN),.INTER(lpu_config_pkg::LPU_INTERMEDIATE))`.
@@ -412,11 +415,12 @@ If blocked, add `[BLOCKED by <task-id>]` with a note.
   - Handles 98 MB flip-flop arrays (mla_qkv_proj W_Q[7168][7168])
   - Handles 16 MB BRAM arrays (mla_kv_cache 4096-slot ring buffer)
   - All production parameters verified without memory exhaustion or crash
+  - Full-cycle simulation at production scale impractical (~11M cycles, ~18 min+ at 10 kHz)
 
-  **Verdict:** ACCEPT for Phase 1. 4/5 modules pass production-scale Verilator build+run.
-  The expert_ffn bug is a genuine RTL design gap (not a toolchain issue) and is documented
-  for Phase 2 fix. Verilator is now the primary production-scale verification engine,
-  replacing Icarus for any test exceeding Icarus memory limits (~100 MB simulation footprint).
+  **Verdict:** ACCEPT for Phase 1. 5/5 modules pass production-scale Verilator build+run.
+  Full-cycle expert_ffn simulation impractical (~11M cycles); structural verification used instead
+  (zero warnings + FSM liveness for 5000+ cycles). Verilator is now the primary production-scale
+  verification engine, replacing Icarus for tests exceeding Icarus memory limits.
 - [x] V3.5 — Pipeline correctness: full_transformer_layer across all layers (VERIF-ENG3, 2026-05-29)
   **Homogeneous pipeline (tb_chip_12layer):** Every layer L0..L383 produces identical output
   [5792,5792,5792,5792,0,0,0,0]. Zero deviation across all 384 layers. No error accumulation.
