@@ -702,6 +702,104 @@ If blocked, add `[BLOCKED by <task-id>]` with a note.
     3. disaggregated_kv_transfer: transfer P=512 in 174us, per-token amortization works → PASS
   - Full smoke suite: 13/13 PASS
 
+## Phase 1 Design Audit (2026-06-01)
+
+Three audits conducted against FPGA 设计铁律：
+1. 全同步逻辑
+2. 384 专家 / 32 芯片 = 12 专家/片 partition
+3. 全参数化 + 单开发板 bring-up
+
+---
+
+### Audit 1: Fully Synchronous Logic
+
+**Verdict: PASS — zero critical violations.**
+
+All 31 production RTL files audited across 8 directories. No latches, gated clocks, mixed-edge
+sensitivity, combinational loops, or blocking-assignment-in-sequential-logic found.
+
+- 14 FSMs: all reset to IDLE, all with `default: state <= S_IDLE`
+- 34 `always_ff @(posedge clk or negedge rst_n)` blocks: all use standard async-reset pattern
+- 17 `always_comb` blocks: all have complete assignment coverage
+- `always_ff` blocks use `<=` exclusively; `always_comb` blocks use `=` exclusively
+- 6 non-resettable data-path registers: intentional (written before read, no functional risk)
+
+**No changes needed.**
+
+---
+
+### Audit 2: Expert-to-Chip Partition (384/32=12)
+
+**Verdict: Topology correct, RTL wiring incomplete.**
+
+The 384 → 32 → 12 partition is correct at the config level (`config.py`, `lpu_config.svh`).
+Each chip gets a contiguous block: chip 0 → experts 0-11, chip 31 → experts 372-383.
+
+**Issues found:**
+
+| # | Severity | File | Issue |
+|---|----------|------|-------|
+| 1 | HIGH | `rtl/layer/full_transformer_layer.sv:94` | `rtr_t0, rtr_t1` hardcoded to `[1:0]` (2 bits). At EXPERTS=384 needs `[$clog2(384)-1:0]` = 9 bits. **Port-width bug.** |
+| 2 | HIGH | `rtl/layer/full_transformer_layer.sv:226` | `rtr_ok <= (rtr_t0==2'd0)` hardcoded expert-0 check. Production needs configurable local-expert bitmap. |
+| 3 | HIGH | `rtl/chip/chip_top.sv` | `cfg_expert_bitmap[11:0]`, `moe_disp_*`, `moe_red_*` ports declared but never connected to logic. MoE dispatch loop not implemented. |
+| 4 | MEDIUM | `rtl/include/lpu_config.svh:39` | `LPU_EXPERTS_PER_FPGA=12` defined but never referenced by any RTL module. |
+| 5 | MEDIUM | Config chain | No `LPU_NUM_CHIPS` or `LPU_TOTAL_CHIPS` in `lpu_config.svh`. Chip count (32) only in testbench localparams and Python config. |
+| 6 | LOW | Config sync | No automated generation from `config.py` → `lpu_config.svh`. Manually maintained. |
+
+---
+
+### Audit 3: Full Parameterization + Single-Board Bring-Up
+
+**Verdict: FAIL — 4 critical, 6 high, 6 medium issues found.**
+
+#### CRITICAL (would prevent production synthesis):
+
+| # | File | Issue |
+|---|------|-------|
+| C1 | `rtl/attention/mla_qkv_proj.sv:82-118` | Dot-product unrolled for exactly HIDDEN=8, K_LATENT=4. Cannot synthesize at HIDDEN=7168. |
+| C2 | `rtl/activation/rms_norm.sv:21-24` | I/O fixed to 8 scalar ports (x0..x7, y0..y7). Internal HIDDEN-parameterized logic contradicts port width. |
+| C3 | `rtl/layer/layer_compute_engine.sv:85` | No parameters; hardcoded `#(.HIDDEN(8),.INTER(4))`. Permanently bring-up only. |
+| C4 | `rtl/chip/chip_top.sv:73-91` | All weight/activation inputs tied to `'0`. No DMA/HBM controller connected. Stub only. |
+
+#### HIGH (would prevent functional single-board bring-up):
+
+| # | File | Issue |
+|---|------|-------|
+| H1 | `rtl/chip/chip_top.sv:28-33` | C2C ring ports always present. No `SINGLE_CHIP` mode or `ifdef` to remove them. |
+| H2 | `rtl/cluster/` | Directory empty. No multi-chip or single-chip cluster wrapper exists. |
+| H3 | `rtl/moe/expert_ffn_engine_fp4_down.sv:22` | `scale_wr_addr[1:0]` hardcoded to 2 bits. Needs `$clog2(LPU_SCALE_GROUPS)` = 9 bits for production (448 groups). |
+| H4 | `rtl/moe/expert_ffn_engine_fp4_down.sv:83,92,101` | `GROUP_SIZE(4), NUM_GROUPS(4), ADDR_WIDTH(2)` hardcoded in fp4_linear_engine instantiations. |
+| H5 | `rtl/layer/full_transformer_layer.sv:15` | `MAX_POS=64` hardcoded. No `LPU_MAX_SEQ_LEN` in either config file. |
+| H6 | `rtl/attention/mla_attention_v2.sv:14-20` | Default parameters hardcoded to bring-up values (HIDDEN=8). No `lpu_config.svh` include. |
+
+#### MEDIUM:
+
+| # | File | Issue |
+|---|------|-------|
+| M1 | `rtl/layer/full_transformer_layer.sv:63-65` | Scalar I/O ports (x0..x7) match rms_norm pattern — implicit HIDDEN=8 lock. |
+| M2 | Config sync | 10+ `config.py` params have no RTL equivalent; 8 `lpu_config.svh` params never referenced by any .sv file. |
+| M3 | `rtl/include/lpu_config.svh` | `LPU_V_LATENT` in RTL config but NO `V_LATENT` in `config.py`. Asymmetric. |
+| M4 | `rtl/attention/mla_attention_v2.sv:135-142` | exp_lut Q12 thresholds hardcoded (mathematical function; lower severity). |
+
+---
+
+### Phase 1 Audit Verdict
+
+| Requirement | Status | Notes |
+|-------------|--------|-------|
+| 全同步逻辑 | **PASS** | Zero violations. 14 FSMs clean. |
+| 384→12 expert partition | **PARTIAL** | Topology correct. RTL dispatch loop + port widths broken. |
+| 全参数化 | **FAIL** | 4 critical hardcodings prevent production synthesis. |
+| 单开发板 bring-up | **FAIL** | chip_top is a stub; no single-chip mode; no DMA; C2C hardwired. |
+
+**Bottom line:** Phase 1 verified functional correctness in simulation (Icarus + Verilator).
+The design is NOT yet ready for FPGA synthesis at production scale. The gaps are:
+parameterization of hardcoded modules, chip_top wiring, and single-chip bring-up infrastructure.
+
+**Priority for Phase 2:** Fix C1-C4 (critical) first, then H1-H6, then M1-M4.
+
+---
+
 ## Blocking Dependencies
 
 ```
