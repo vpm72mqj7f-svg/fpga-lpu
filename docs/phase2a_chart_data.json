@@ -1,0 +1,343 @@
+{
+  "chart1_oi_vs_context": {
+    "description": "OI vs Context Length (full vs window)",
+    "hw_ratio_fp8": 13.14,
+    "data": [
+      {
+        "context_length": 256,
+        "full_oi": 43.89,
+        "window_oi": 43.89
+      },
+      {
+        "context_length": 512,
+        "full_oi": 45.5,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 1024,
+        "full_oi": 48.52,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 2048,
+        "full_oi": 53.83,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 4096,
+        "full_oi": 62.25,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 8192,
+        "full_oi": 73.61,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 16384,
+        "full_oi": 86.02,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 32768,
+        "full_oi": 96.82,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 65536,
+        "full_oi": 104.49,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 131072,
+        "full_oi": 109.19,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 262144,
+        "full_oi": 111.82,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 524288,
+        "full_oi": 113.22,
+        "window_oi": 44.7
+      },
+      {
+        "context_length": 1048576,
+        "full_oi": 113.93,
+        "window_oi": 44.7
+      }
+    ]
+  },
+  "chart2_time_breakdown": {
+    "description": "Per-Layer Time Breakdown",
+    "data": [
+      {
+        "context_length": 256,
+        "full": {
+          "compute_us": 50.58,
+          "kv_read_us": 0.35,
+          "weight_load_us": 14.64,
+          "total_us": 50.58
+        },
+        "window": {
+          "compute_us": 50.58,
+          "kv_read_us": 0.35,
+          "weight_load_us": 14.64,
+          "total_us": 50.58
+        }
+      },
+      {
+        "context_length": 512,
+        "full": {
+          "compute_us": 54.18,
+          "kv_read_us": 0.7,
+          "weight_load_us": 14.64,
+          "total_us": 54.18
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 1024,
+        "full": {
+          "compute_us": 61.36,
+          "kv_read_us": 1.4,
+          "weight_load_us": 14.64,
+          "total_us": 61.36
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 2048,
+        "full": {
+          "compute_us": 75.74,
+          "kv_read_us": 2.8,
+          "weight_load_us": 14.64,
+          "total_us": 75.74
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 4096,
+        "full": {
+          "compute_us": 104.49,
+          "kv_read_us": 5.6,
+          "weight_load_us": 14.64,
+          "total_us": 104.49
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 8192,
+        "full": {
+          "compute_us": 161.99,
+          "kv_read_us": 11.2,
+          "weight_load_us": 14.64,
+          "total_us": 161.99
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 16384,
+        "full": {
+          "compute_us": 277.0,
+          "kv_read_us": 22.4,
+          "weight_load_us": 14.64,
+          "total_us": 277.0
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 32768,
+        "full": {
+          "compute_us": 507.0,
+          "kv_read_us": 44.79,
+          "weight_load_us": 14.64,
+          "total_us": 507.0
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 65536,
+        "full": {
+          "compute_us": 967.02,
+          "kv_read_us": 89.59,
+          "weight_load_us": 14.64,
+          "total_us": 967.02
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 131072,
+        "full": {
+          "compute_us": 1887.05,
+          "kv_read_us": 179.18,
+          "weight_load_us": 14.64,
+          "total_us": 1887.05
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 262144,
+        "full": {
+          "compute_us": 3727.12,
+          "kv_read_us": 358.35,
+          "weight_load_us": 14.64,
+          "total_us": 3727.12
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 524288,
+        "full": {
+          "compute_us": 7407.25,
+          "kv_read_us": 716.7,
+          "weight_load_us": 14.64,
+          "total_us": 7407.25
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      },
+      {
+        "context_length": 1048576,
+        "full": {
+          "compute_us": 14767.5,
+          "kv_read_us": 1433.41,
+          "weight_load_us": 14.64,
+          "total_us": 14767.5
+        },
+        "window": {
+          "compute_us": 52.38,
+          "kv_read_us": 0.52,
+          "weight_load_us": 14.64,
+          "total_us": 52.38
+        }
+      }
+    ]
+  },
+  "chart3_kv_bytes": {
+    "description": "KV Bytes Read per Decode Step vs Context Length",
+    "data": [
+      {
+        "context_length": 256,
+        "full_kv_kb": 144.0,
+        "window_kv_kb": 144.0
+      },
+      {
+        "context_length": 512,
+        "full_kv_kb": 288.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 1024,
+        "full_kv_kb": 576.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 2048,
+        "full_kv_kb": 1152.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 4096,
+        "full_kv_kb": 2304.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 8192,
+        "full_kv_kb": 4608.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 16384,
+        "full_kv_kb": 9216.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 32768,
+        "full_kv_kb": 18432.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 65536,
+        "full_kv_kb": 36864.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 131072,
+        "full_kv_kb": 73728.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 262144,
+        "full_kv_kb": 147456.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 524288,
+        "full_kv_kb": 294912.0,
+        "window_kv_kb": 216.0
+      },
+      {
+        "context_length": 1048576,
+        "full_kv_kb": 589824.0,
+        "window_kv_kb": 216.0
+      }
+    ]
+  }
+}

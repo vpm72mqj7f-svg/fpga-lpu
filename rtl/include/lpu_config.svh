@@ -37,6 +37,8 @@ package lpu_config_pkg;
     parameter int LPU_NUM_EXPERTS     = 384;     // total MoE experts
     parameter int LPU_TOP_K           = 6;       // routed experts per token
     parameter int LPU_EXPERTS_PER_FPGA = 12;     // experts per chip
+    parameter int LPU_MAX_SEQ_LEN     = 4096;    // maximum sequence length (positions)
+    parameter int LPU_SLIDING_WINDOW  = 128;     // sliding window attention size
     parameter int LPU_NUM_LAYERS      = 61;      // transformer layers
     parameter int LPU_VOCAB_SIZE      = 129280;  // vocabulary size
 
@@ -71,6 +73,8 @@ package lpu_config_pkg;
     parameter int LPU_NUM_EXPERTS     = 4;
     parameter int LPU_TOP_K           = 2;
     parameter int LPU_EXPERTS_PER_FPGA = 4;
+    parameter int LPU_MAX_SEQ_LEN     = 64;       // maximum sequence length (positions)
+    parameter int LPU_SLIDING_WINDOW  = 128;     // sliding window size (>=NUM_SLOTS→full attention)
     parameter int LPU_NUM_LAYERS      = 12;
     parameter int LPU_VOCAB_SIZE      = 16;
 
