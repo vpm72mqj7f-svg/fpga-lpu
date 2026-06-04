@@ -69,20 +69,25 @@ DSP 78% 空闲, 在等 HBM 搬运专家权重
 ## 1. 优化阶段总览
 
 ```
-Phase 2A [P0, 4-6 周]: 滑动窗口注意力 + Batch 调度
-  → 目标: 消除 KV 带宽瓶颈, 保证 B≥6 突破权重墙
-  → TTFT 不变 (仍用 CPU Prefill), Decode 延迟降低 5.6×
+Phase 2A [已完成]: 滑动窗口注意力 + Batch 累积调度 + decode_pipeline wrapper
+  → 滑动窗口: KV 读取 O(1), 消除 O(P) 注意力计算瓶颈
+  → 批累积: B≥6 摊销专家权重加载, OI 2.8→14.9 MACs/byte
+  → decode_pipeline: accumulator→transformer 串联, 权重自然复用
 
-Phase 2B [P1, 4-6 周]: FPGA Prefill 引擎 + 专家权重预取
-  → 目标: TTFT 6s→150ms, DSP 利用率 22%→60%+
-  → token/kWh 从 16.5× → 25×+ H200
+Phase 2B [P0, 3-4 周]: 热专家副本 (Expert Replication)
+  → 目标: P(0 local) 从 82.7%→≈0%, DSP 利用率 22%→95%+
+  → 手段: top-8 热专家全芯片复制, HBM 代价仅 8.2GB
+  → token/kWh 从 16.5× → 30×+ H200
 
-Phase 2C [P2, 4-6 周]: KV Host Offload + 跨会话复用
+Phase 2C [P1, 4-6 周]: KV Host Offload + 跨会话复用
   → 目标: 1M context 从 15→250+ 会话
   → Agent 场景 token/kWh 再提升 3-5×
 
-Phase 3  [P3, 6-8 周]: 可观测性 + 硬件实测 + 稳定性
+Phase 3  [P2, 6-8 周]: 可观测性 + 硬件实测 + 稳定性
   → 目标: 生产可运维
+
+NOT IN PLAN (架构决策):
+  → FPGA Prefill: 不放在 FPGA 上。CPU/GPU 处理 Prefill, FPGA 100% 打满 Decode
 ```
 
 ---
@@ -169,74 +174,104 @@ S_BATCH_ACCUMULATE  // 等待累积到 B>=6 或超时
 
 ---
 
-## 3. Phase 2B: FPGA Prefill 引擎 + 专家权重预取
+## 3. Phase 2B: 热专家副本 (Expert Replication)
 
-### 3B.1 目标
+### 3B.0 为什么这是正确解法
+
+当前专家权重加载是 Decode 的带宽瓶颈：
+```
+P(0 local expert) = 82.7% → 大多数 token 在某芯片上无本地专家
+→ 需要从 HBM 加载 165MB 专家权重 → 205μs/layer (82% 总时间)
+```
+
+三种解决方案对比：
+
+| 方案 | 效果 | 代价 | 可行性 |
+|------|------|------|:---:|
+| 堆 SRAM (198MB 缓存 6 专家) | P(0)→0% | 硬件不支持 (32.5MB max) | ❌ |
+| Batch≥6 (摊销权重) | OI 2.8→14.9 | 延迟增加 | ⚠️ 部分解决 |
+| **热专家全芯片副本** | **P(0)→0%** | **HBM 8.2GB (可接受)** | **✅** |
+
+热专家副本直接消除权重加载需求——权重永远在本地, HBM 带宽完全释放给 KV cache。
+
+### 3B.1 数学模型
+
+```
+Top-8 热专家覆盖 55% token mass (Zipf 分布)
+热专家全芯片副本 (32x):
+  → avg 本地专家 = 6 × 0.55 × 1.0 + 6 × 0.45 × 12/376 = 3.39 experts/token
+  → P(0 local expert) ≈ 0%
+  → 等同于 SRAM 无限大
+
+HBM 代价:
+  8 个热专家 × (32-1) 个额外副本 × 33MB/expert = 8.2 GB
+  当前 HBM 空闲 (扣除 KV + 基础权重) = 31.3 GB
+  → 8.2 GB << 31.3 GB ✓
+```
+
+### 3B.2 目标
 
 | 指标 | 当前 | 目标 | 手段 |
 |------|:---:|:---:|------|
-| TTFT @ P=512 | 6,000 ms (CPU) | 150 ms | FPGA fp4 Prefill |
-| DSP 利用率 (Decode) | 22% | 60%+ | 专家权重预取流水线 |
-| 每层 Decode 时间 | 250 μs | 80 μs | 隐藏权重加载延迟 |
+| P(0 local expert) | 82.7% | ≈0% | Top-8 热专家全芯片副本 |
+| avg local experts/token | 0.09 | 3.39 | 副本 × 权重本地化 |
+| DSP 利用率 (Decode) | 22% | 95%+ | 消除 HBM 权重加载 |
+| 每层 Decode 时间 | 250 μs | 45 μs | 无权重加载等待 |
+| token/kWh vs H200 | 16.5× | 30×+ | 综合优化 |
 
-### 3B.2 仿真模型 (仿真实体: SW-ENG2)
+### 3B.3 仿真模型 (仿真实体: SW-ENG1)
 
-**任务**: 建立 FPGA Prefill 的周期精确模型，验证 multi-pass weight reload。
+**任务**: 更新 expert_popularity.py，模拟热专家副本对芯片负载的影响。
 
 ```
 关键参数:
-- PREFILL_CHUNK_SIZE = 128 (每次处理 128 tokens)
-- M_ROWS = 32 (systolic array 输出并行度)
-- K_TOTAL = 7168 (生产 hidden dim)
-- 每个 expert 权重需 multi-pass 加载 (33MB > 可用 SRAM)
+- Zipf α sweep (0.5-2.0) → 确定 "热专家" 阈值
+- 副本因子 sweep (1x-32x) → P(0 local) 曲线
+- HBM 权重占用 vs 副本因子 → 容量约束
+- 芯片间负载均衡 (热点芯片识别)
 
 输出:
-- Prefill 延迟 vs prompt length 曲线
-- 权重 reload 次数 vs chunk_size
-- Prefill/Decode 调度冲突分析 (资源共享)
+- 最优副本配置 (哪些专家, 几副本, 放哪些芯片)
+- P(0 local) vs 副本因子
+- 期望 DSP 利用率 vs 副本因子
+- HBM 容量预算表
 ```
 
-**文件**: `scripts/simulation/phase2b_prefill_engine_model.py`
+**文件**: `scripts/simulation/phase2b_expert_replication_model.py`
 
-### 3B.3 RTL 实现 (RTL 实体: RTL-ENG1 + RTL-ENG3)
+### 3B.4 RTL 实现 (RTL 实体: RTL-ENG3)
 
-#### 3B.3a: fp4_prefill_engine 完善
+#### 3B.4a: chip_top 专家权重复制加载
 
-**当前状态**: 框架存在 (`rtl/dsp/fp4_prefill_engine.sv`), 但 multi-pass weight reload 未实现。
-
-**改动**:
 ```systemverilog
-// 新增 FSM 状态
-S_WEIGHT_RELOAD,  // 加载下一批 expert 权重
-S_CHUNK_NEXT,     // 处理下一个 chunk
+// chip_top.sv 修改: 支持加载复制专家的权重
+// 当前: 每个芯片只加载自己的 12 个专家
+// 目标: 额外加载 8 个热专家副本 (从全局权重表)
 ```
 
 **约束**:
-- Prefill 和 Decode 分时共享 DSP 阵列（不可同时运行）
-- Prefill 优先级 > Decode（TTFT SLA）
-- Weight reload 期间 Decode 流水线暂停（需反压机制）
+- 副本权重在初始化时从 Host 加载（一次加载, 常驻 HBM）
+- 不改变 `expert_ffn_engine_fp4_down` 的 INSTANTIATED 专家数量
+- 副本专家的 `expert_sel` 映射到本地专家 ID（软件可配置）
 
-#### 3B.3b: 专家权重预取控制器
+#### 3B.4b: Router 全局调度（可选, 延后到 Phase 2C）
 
 ```systemverilog
-// 新模块: expert_weight_prefetcher.sv
-// 功能: 根据 Router 输出, 提前从 HBM 预取下一个 token 可能需要的专家权重
-// 策略: 预取 top-6 专家（router 已计算），与当前计算流水线并行
+// 当前: Router 选择 top-6 专家, 由 C2C dispatch 到对应芯片
+// 优化: Router 知道每个芯片的专家副本分布
+//       → 优先选择本地有副本的专家
+//       → 减少跨芯片 C2C 通信
 ```
 
-**约束**:
-- 预取不阻塞当前计算（独立 HBM 读端口仲裁）
-- 预取命中率目标 >80%
-- 预取失败时回退到同步加载（不丢正确性）
+**约束**: Router LUT 可动态更新（专家副本分布变化时重配置）
 
-### 3B.4 回归测试 (测试实体: VERIF-ENG1 + VERIF-ENG3)
+### 3B.5 回归测试 (测试实体: VERIF-ENG3)
 
 | 测试 | 内容 | 负责人 |
 |------|------|------|
-| `tb_fp4_prefill_multipass` | Multi-pass weight reload 正确性 | VERIF-ENG1 |
-| `tb_prefill_decode_arb` | Prefill/Decode 仲裁, 优先级 | VERIF-ENG3 |
-| `tb_weight_prefetcher` | 预取命中率统计, 回退路径 | VERIF-ENG1 |
-| `tb_e2e_prefill_decode` | Prefill→Decode 全流程, 确定性 | VERIF-ENG3 |
+| `tb_expert_replication_load` | 副本权重加载正确性 (gate/up/down) | VERIF-ENG3 |
+| `tb_expert_replication_infer` | 副本专家 FFN 推理 vs 原始专家 (bit-exact) | VERIF-ENG3 |
+| `tb_chip_12layer_replicated` | 全芯片流水线, 副本权重, 确定性 | VERIF-ENG3 |
 
 ---
 
@@ -389,15 +424,15 @@ Roofline 约束:
 □ token/kWh: ≥ 20× H200 (从 16.5× 提升)
 ```
 
-### Gate 2B (FPGA Prefill + 权重预取通过)
+### Gate 2B (热专家副本通过)
 
 ```
-□ TTFT @ P=512: ≤ 200 ms (从 6,000ms 降低 30×)
-□ Prefill/Decode 仲裁: Prefill 不丢 token, Decode 不停滞
-□ 专家权重预取命中率: ≥ 80%
-□ DSP Decode 利用率: ≥ 60% (从 22% 提升)
-□ E2E Prefill→Decode 全流程: 确定性验证通过
-□ token/kWh: ≥ 25× H200
+□ P(0 local expert): ≤ 5% (从 82.7% 降低 16×)
+□ 专家权重 HBM 加载量: ≤ 33MB/layer (仅 1 冷专家, 从 165MB 降低 5×)
+□ DSP Decode 利用率: ≥ 90% (从 22% 提升 4×)
+□ 每层 Decode 时间: ≤ 50 μs (从 250 μs 降低 5×)
+□ 副本权重 bit-exact vs 原始专家: 100% 验证通过
+□ token/kWh: ≥ 30× H200 (从 16.5× 提升)
 ```
 
 ### Gate 2C (KV Offload + 会话复用通过)
@@ -440,11 +475,11 @@ Roofline 约束:
 | **B=1 延迟** | 1.51 ms | 0.30 ms | 0.30 ms | 0.30 ms |
 | **TTFT @ P=512** | 6,000 ms | 6,000 ms | **150 ms** | 150 ms |
 | **并发 @ 1M ctx** | 15 | 15 | 15 | **250** |
-| **DSP 利用率** | 22% | **85%** | 60% | 60% |
-| **每层时间** | 250 μs | **45 μs** | 80 μs | 80 μs |
-| **token/kWh (vs H200)** | 16.5× | **20×** | **25×** | **30×** |
-| **KV 读取/step** | 1M tokens | **384** | 384 | 384 |
-| **权重预取命中** | 0% | 0% | **80%** | 80% |
+| **DSP 利用率** | 22% | **85%** | **95%+** | 95%+ |
+| **每层时间** | 250 μs | **45 μs** | **45 μs** | 45 μs |
+| **token/kWh (vs H200)** | 16.5× | **20×** | **30×** | **35×** |
+| **P(0 local expert)** | 82.7% | 82.7% | **≈0%** | ≈0% |
+| **HBM 权重加载** | 165MB | 165MB | **≤33MB** | ≤33MB |
 | **Agent KV 复用** | 0% | 0% | 0% | **60%** |
 
 ---
