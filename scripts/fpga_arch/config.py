@@ -70,11 +70,12 @@ PREFILL_USE_SPARSE_ATTN = False    # RESERVED: P1 router-guided sparse attention
 PREFILL_CHUNK_SIZE     = 128      # tokens per chunk (reserved)
 PREFILL_USE_CHUNKED    = False    # RESERVED: enable chunked FPGA prefill
 
-# Heterogeneous Prefill: Flash model on CPU (primary) or GPU (fallback).
+# Heterogeneous Prefill: Flash model on CPU (primary, dual-socket + chunked) or GPU (fallback).
 # Flash model (285B, 27 layers) shares identical HIDDEN=7168, K_LATENT=512
 # with Full model (671B, 61 layers). KV cache is directly compatible.
-#   Primary: AMD EPYC Turin 192C — Flash TTFT ~1.0s @ P=512
-#   Fallback: L20 GPU — Flash TTFT ~40ms @ P=512 (low-latency SLA)
+#   Primary: Dual EPYC 9755 (32 TFLOPS) + Chunked (128 tok/chunk)
+#            → First token ~112ms, Total P=512 ~0.5s
+#   Fallback: L20 GPU → ~40ms first token (sub-100ms SLA only)
 CPU_PREFILL            = True     # CPU prefill is the primary prefill path
 GPU_PREFILL_FALLBACK   = True     # GPU prefill available as low-latency fallback
 
@@ -83,12 +84,13 @@ FLASH_MODEL_LAYERS     = 27       # Flash model layers (vs 61 full)
 FLASH_MODEL_PARAMS_B   = 285      # Flash model total params (vs 671B full)
 FLASH_PREFILL_FACTOR   = 27 / 61  # ~0.44 — compute reduction vs full model
 
-# CPU Prefill hardware options
-# AMD EPYC 9755 (Turin 192C): 8.0 TFLOPS FP8, 12ch DDR5-6400 (~600 GB/s)
-# AMD EPYC 9965 (Turin 128C): 6.0 TFLOPS FP8, 12ch DDR5-6000 (~500 GB/s)
-# Intel Xeon 6980P (MR-AMX):  5.0 TFLOPS FP8, 12ch DDR5-6400 (~500 GB/s)
-# Intel Xeon 8592+ (AMX):     3.0 TFLOPS FP8, 8ch DDR5-5600 (~350 GB/s)
-CPU_FP8_TFLOPS         = 8.0      # AMD EPYC 9755 (primary CPU target)
+# CPU Prefill (Dual-Socket AMD EPYC 9755)
+# Single socket: 8.0 TFLOPS FP8, 12ch DDR5-6400 (~600 GB/s)
+# Dual socket:   16.0 TFLOPS FP8, 24ch DDR5 (~1.2 TB/s)
+CPU_FP8_TFLOPS         = 16.0     # Dual EPYC 9755 (primary)
+CPU_NUM_SOCKETS        = 2        # dual-socket server
+PREFILL_CHUNK_SIZE     = 128      # tokens per chunk
+PREFILL_USE_CHUNKED    = True     # chunked prefill enabled
 # PCIe round-trip: KV tensors → FPGA HBM
 CPU_PCIE_LATENCY_US    = 5.0      # fixed PCIe latency (DMA setup + transfer)
 
