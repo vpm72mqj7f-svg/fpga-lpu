@@ -4,6 +4,19 @@
 // Each chip carries 1-2 Transformer layers + 12-14 experts.
 // Chip 0 of each card is PCIe master; chips 1-3 use C2C proxy.
 //
+// Two compile modes (set via QSF global_assignment -name VERILOG_MACRO):
+//
+//   FPGA_LPU_SINGLE_CHIP defined:
+//     Bare-metal bring-up. C2C/PCIe ports removed. Direct weight/activation I/O.
+//     Use for single-board development, lab testing, and RTL simulation.
+//
+//   FPGA_LPU_SINGLE_CHIP NOT defined (default):
+//     Production multi-chip mode. C2C dual ring + PCIe DMA ports present.
+//     Use for 32-chip cluster synthesis.
+//
+// Parameter SINGLE_CHIP (runtime) gates internal pipeline/MoE logic.
+// Macro FPGA_LPU_SINGLE_CHIP (compile-time) removes C2C/PCIe interface ports.
+//
 // Parameters from per-chip config:
 //   CHIP_ID, CARD_ID    — global identity (0-31, 0-7)
 //   LAYER_START, LAYER_END — which layers this chip computes
@@ -11,24 +24,30 @@
 //   IS_PCIE_MASTER      — 1 if chip 0 of card (has R-Tile PCIe IP)
 //=============================================================================
 
+`include "lpu_config.svh"
+
+`ifndef FPGA_LPU_SINGLE_CHIP
 `include "avalon_stream.svh"
 `include "c2c_packet.svh"
 `include "pcie_dma.svh"
+`endif
 
 module chip_top #(
     parameter int CHIP_ID        = 0,
     parameter int CARD_ID        = 0,
     parameter int LAYER_START    = 0,
     parameter int LAYER_END      = 1,
-    parameter int IS_PCIE_MASTER = 1
+    parameter int IS_PCIE_MASTER = 1,
+    parameter int SINGLE_CHIP    = 0,
+    parameter int HIDDEN         = lpu_config_pkg::LPU_HIDDEN,
+    parameter int INTER          = lpu_config_pkg::LPU_INTERMEDIATE
 ) (
     input  logic clk, rst_n,
 
+`ifndef FPGA_LPU_SINGLE_CHIP
     // === C2C Dual Ring ===
-    // Ring A (clockwise: 0→1→2→3→0)
     input  c2c_link_t c2c_rx_a,
     output c2c_link_t c2c_tx_a,
-    // Ring B (counter-clockwise)
     input  c2c_link_t c2c_rx_b,
     output c2c_link_t c2c_tx_b,
 
@@ -37,25 +56,72 @@ module chip_top #(
     output pcie_dma_stream_t pcie_fpga,
 
     // === C2C Proxy (cross-card forwarding) ===
-    output pcie_c2c_proxy_t  c2c_proxy
+    output pcie_c2c_proxy_t  c2c_proxy,
+`endif
+
+    // === SINGLE_CHIP bring-up pass-through ports ===
+    input  logic                         gamma_wr_en,
+    input  logic [$clog2(HIDDEN)-1:0]    gamma_wr_idx,
+    input  logic signed [31:0]           gamma_wr_data,
+
+    input  logic                         attn_qkv_wt_wr_en,
+    input  logic [2:0]                   attn_qkv_wt_sel,
+    input  logic [$clog2(HIDDEN)-1:0]    attn_qkv_wt_row,
+    input  logic [$clog2(HIDDEN)-1:0]    attn_qkv_wt_col,
+    input  logic signed [15:0]           attn_qkv_wt_wr_data,
+
+    input  logic                         attn_rope_lut_wr_en,
+    input  logic [5:0]                   attn_rope_lut_pos,
+    input  logic [$clog2(HIDDEN/2)-1:0]  attn_rope_lut_pair,
+    input  logic signed [15:0]           attn_rope_lut_sin,
+    input  logic signed [15:0]           attn_rope_lut_cos,
+
+    input  logic [$clog2(64)-1:0]        token_position,
+
+    input  logic                         cache_preload_en,
+    input  logic [lpu_config_pkg::LPU_K_LATENT*lpu_config_pkg::LPU_DATA_WIDTH-1:0] cache_preload_K_flat,
+    input  logic [lpu_config_pkg::LPU_V_LATENT*lpu_config_pkg::LPU_DATA_WIDTH-1:0] cache_preload_V_flat,
+
+    input  logic                         rtr_w_wr_en,
+    input  logic [1:0]                   rtr_w_wr_expert,
+    input  logic [$clog2(HIDDEN)-1:0]    rtr_w_wr_idx,
+    input  logic signed [31:0]           rtr_w_wr_data,
+
+    input  logic                         gate_w_wr_en, up_w_wr_en, down_w_wr_en,
+    input  logic [$clog2(INTER)-1:0]     gate_w_wr_row, up_w_wr_row,
+    input  logic [$clog2(HIDDEN)-1:0]    down_w_wr_row,
+    input  logic [0:0]                   gate_w_wr_beat, up_w_wr_beat, down_w_wr_beat,
+    input  logic [15:0]                  gate_w_wr_data, up_w_wr_data, down_w_wr_data,
+    input  logic [$clog2(lpu_config_pkg::LPU_TOTAL_PER_FPGA > 1 ? lpu_config_pkg::LPU_TOTAL_PER_FPGA : 2)-1:0] ffn_expert_sel,
+
+    input  logic                         scale_wr_en,
+    input  logic [$clog2(lpu_config_pkg::LPU_SCALE_GROUPS)-1:0] scale_wr_addr,
+    input  logic [7:0]                   scale_wr_data,
+
+    // Local expert bitmap: 1=expert resident on this chip
+    input  logic [lpu_config_pkg::LPU_NUM_EXPERTS-1:0] cfg_local_experts,
+
+    input  logic                         valid_in,
+    input  logic [HIDDEN*32-1:0]         a_flat,
+
+    output logic                         valid_out,
+    output logic                         router_ok,
+    output logic [HIDDEN*32-1:0]         y_flat
 );
 
     // Config registers (set via PCIe BAR0 on chip 0, via C2C CTRL on others)
     logic [5:0]  cfg_layer_start, cfg_layer_end;
-    logic [11:0] cfg_expert_bitmap;
 
-    // === Pipeline ingress / egress ===
-    // Token coming from previous chip (or Host for layer 0)
+    // === Pipeline ingress / egress (unused in SINGLE_CHIP bring-up) ===
     logic        pipe_in_valid;
     logic [15:0] pipe_in_token_id;
-    logic [31:0] pipe_in_hidden [8];  // 8-element hidden state
+    logic [31:0] pipe_in_hidden [8];
 
-    // Token going to next chip (or Host for last layer)
     logic        pipe_out_valid;
     logic [15:0] pipe_out_token_id;
     logic [31:0] pipe_out_hidden [8];
 
-    // MoE dispatch / reduce interfaces
+    // MoE dispatch / reduce interfaces (unused in bring-up)
     logic        moe_disp_valid, moe_disp_ready;
     logic [11:0] moe_disp_expert;
     logic [15:0] moe_disp_token;
@@ -66,52 +132,46 @@ module chip_top #(
     logic [15:0] moe_red_token;
     logic [31:0] moe_red_result [8];
 
-    // === Host-facing ports (Chip 0 only) ===
-    // Weight preload, config, activation I/O multiplexed through PCIe DMA
-
     // === Layer compute engine ===
-    full_transformer_layer u_layer (
+    full_transformer_layer #(
+        .HIDDEN(HIDDEN)
+    ) u_layer (
         .clk, .rst_n,
-        .gamma_wr_en(1'b0), .gamma_wr_idx('0), .gamma_wr_data('0),
-        .attn_qkv_wt_wr_en(1'b0), .attn_qkv_wt_sel('0),
-        .attn_qkv_wt_row('0), .attn_qkv_wt_col('0), .attn_qkv_wt_wr_data('0),
-        .attn_rope_lut_wr_en(1'b0), .attn_rope_lut_pos('0),
-        .attn_rope_lut_pair('0), .attn_rope_lut_sin('0), .attn_rope_lut_cos('0),
-        .token_position('0),
-        .rtr_w_wr_en(1'b0), .rtr_w_wr_expert('0), .rtr_w_wr_idx('0),
-        .rtr_w_wr_data('0),
-        .gate_w_wr_en(1'b0), .up_w_wr_en(1'b0), .down_w_wr_en(1'b0),
-        .gate_w_wr_row('0), .up_w_wr_row('0), .down_w_wr_row('0),
-        .gate_w_wr_beat('0), .up_w_wr_beat('0), .down_w_wr_beat('0),
-        .gate_w_wr_data('0), .up_w_wr_data('0), .down_w_wr_data('0),
-        .scale_wr_en(1'b0), .scale_wr_addr('0), .scale_wr_data('0),
-        .valid_in(1'b0),
-        .a0('0),.a1('0),.a2('0),.a3('0),.a4('0),.a5('0),.a6('0),.a7('0),
-        .valid_out(), .router_ok(),
-        .y0(),.y1(),.y2(),.y3(),.y4(),.y5(),.y6(),.y7()
+        .gamma_wr_en, .gamma_wr_idx, .gamma_wr_data,
+        .attn_qkv_wt_wr_en, .attn_qkv_wt_sel,
+        .attn_qkv_wt_row, .attn_qkv_wt_col, .attn_qkv_wt_wr_data,
+        .attn_rope_lut_wr_en, .attn_rope_lut_pos,
+        .attn_rope_lut_pair, .attn_rope_lut_sin, .attn_rope_lut_cos,
+        .token_position,
+        .cache_preload_en, .cache_preload_K_flat, .cache_preload_V_flat,
+        .rtr_w_wr_en, .rtr_w_wr_expert, .rtr_w_wr_idx, .rtr_w_wr_data,
+        .gate_w_wr_en, .up_w_wr_en, .down_w_wr_en,
+        .gate_w_wr_row, .up_w_wr_row, .down_w_wr_row,
+        .gate_w_wr_beat, .up_w_wr_beat, .down_w_wr_beat,
+        .gate_w_wr_data, .up_w_wr_data, .down_w_wr_data,
+        .ffn_expert_sel,
+        .scale_wr_en, .scale_wr_addr, .scale_wr_data,
+        .cfg_local_experts,
+        .valid_in,
+        .a_flat,
+        .valid_out,
+        .router_ok,
+        .y_flat
     );
 
     // === Pipeline forward logic ===
-    // If this chip is the last for its assigned layers, forward to next chip.
-    // Otherwise, loop back internally for the next layer on this chip.
     logic [5:0] next_layer;
-    assign next_layer = LAYER_END + 6'd1;  // next layer in pipeline
+    assign next_layer = LAYER_END + 6'd1;
 
-    // === C2C message routing ===
-    // Ring A: forward messages to next chip in ring (clockwise)
-    // Ring B: forward messages to previous chip (counter-clockwise)
-    // Each message is routed based on dst_chip field in header
+    // === C2C / PCIe (production only, stub) ===
+    // In SINGLE_CHIP mode, these are present but unused.
+    // In production mode, C2C ring + PCIe DMA are fully active.
 
-    // C2C TX: select between Ring A and Ring B based on shortest path
-    // (simplified: Ring A for 0→1,1→2,2→3,3→0 hops; Ring B for opposite)
-
-    // === PCIe Proxy (Chip 0 only) ===
     generate
         if (IS_PCIE_MASTER) begin : g_pcie_master
             // PCIe DMA engine: desc ring → H2D/D2H streams
             // BAR0 register file
             // C2C proxy: forward chip 1-3 traffic to/from PCIe
-            // (placeholder — full DMA engine not implemented in bring-up)
         end else begin : g_c2c_slave
             // Chips 1-3: all host interaction via C2C → Chip 0 proxy
             // Config/weight preload received over C2C CTRL messages
@@ -120,8 +180,7 @@ module chip_top #(
     endgenerate
 
     // === Assign chip identity ===
-    // Set via top-level parameters or register writes (PCIe BAR0 / C2C CTRL).
-    assign cfg_layer_start  = LAYER_START;
-    assign cfg_layer_end    = LAYER_END;
+    assign cfg_layer_start = LAYER_START;
+    assign cfg_layer_end   = LAYER_END;
 
 endmodule

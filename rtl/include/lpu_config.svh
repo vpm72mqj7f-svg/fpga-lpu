@@ -36,11 +36,16 @@ package lpu_config_pkg;
     parameter int LPU_V_HEAD_DIM      = 128;     // V head dimension
     parameter int LPU_NUM_EXPERTS     = 384;     // total MoE experts
     parameter int LPU_TOP_K           = 6;       // routed experts per token
-    parameter int LPU_EXPERTS_PER_FPGA = 12;     // experts per chip
+    parameter int LPU_EXPERTS_PER_FPGA = 12;     // base experts per chip (unique)
+    parameter int LPU_HOT_EXPERTS     = 12;      // hot experts to replicate
+    parameter int LPU_HOT_REPLICAS    = 16;      // replicas per hot expert (1=no rep)
     parameter int LPU_MAX_SEQ_LEN     = 4096;    // maximum sequence length (positions)
     parameter int LPU_SLIDING_WINDOW  = 128;     // sliding window attention size
     parameter int LPU_NUM_LAYERS      = 61;      // transformer layers
     parameter int LPU_VOCAB_SIZE      = 129280;  // vocabulary size
+
+    // Total experts per chip (base + replicas)
+    parameter int LPU_TOTAL_PER_FPGA  = LPU_EXPERTS_PER_FPGA + LPU_HOT_EXPERTS;
 
     // Systolic array sizing (per chip)
     parameter int LPU_ARRAY_LANES     = 128;     // K-direction parallelism
@@ -72,10 +77,13 @@ package lpu_config_pkg;
     parameter int LPU_V_HEAD_DIM      = 8;
     parameter int LPU_NUM_EXPERTS     = 4;
     parameter int LPU_TOP_K           = 2;
-    parameter int LPU_EXPERTS_PER_FPGA = 4;
+    parameter int LPU_EXPERTS_PER_FPGA = 4;       // base experts per chip
+    parameter int LPU_HOT_EXPERTS     = 0;        // no replication in bring-up
+    parameter int LPU_HOT_REPLICAS    = 1;        // (unused when HOT_EXPERTS=0)
     parameter int LPU_MAX_SEQ_LEN     = 64;       // maximum sequence length (positions)
     parameter int LPU_SLIDING_WINDOW  = 128;     // sliding window size (>=NUM_SLOTS→full attention)
     parameter int LPU_NUM_LAYERS      = 12;
+    parameter int LPU_TOTAL_PER_FPGA  = LPU_EXPERTS_PER_FPGA + LPU_HOT_EXPERTS;
     parameter int LPU_VOCAB_SIZE      = 16;
 
     // Systolic array sizing (small, for iverilog)

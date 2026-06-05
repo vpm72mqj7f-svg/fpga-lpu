@@ -18,7 +18,7 @@ module full_transformer_layer #(
     localparam int INTER_L  = lpu_config_pkg::LPU_INTERMEDIATE,
     localparam int NUM_EXPERTS = lpu_config_pkg::LPU_NUM_EXPERTS,
     localparam int TOP_K    = lpu_config_pkg::LPU_TOP_K,
-    localparam int FFN_EXPERTS = lpu_config_pkg::LPU_EXPERTS_PER_FPGA,
+    localparam int FFN_EXPERTS = lpu_config_pkg::LPU_TOTAL_PER_FPGA,  // base + replicas
     localparam int BEAT_W   = $clog2(((HIDDEN + 3) / 4) > 1 ? ((HIDDEN + 3) / 4) : 2)
 ) (
     input  logic clk, rst_n,
