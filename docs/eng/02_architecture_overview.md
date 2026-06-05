@@ -33,24 +33,34 @@ We are building an FPGA-based inference accelerator cluster that serves a **Deep
 The cluster achieves:
 - **B=1 decode:** approximately 660 tokens/second
 - **Saturated batch decode:** approximately 14,000-17,500 tokens/second
-- **Flash Prefill (L20 GPU):** small model (285B, 27 layers) handles prompt processing in ~40ms; FPGA dedicated to full-quality decode
-- **TTFT @ P=512:** 40ms (Flash GPU) vs 6,000ms (CPU full prefill) — **150× improvement**
+- **Primary Prefill: AMD EPYC Turin + Flash model** — 192-core CPU delivers ~1s TTFT @ P=512
+- **Fallback Prefill: L20 GPU + Flash model** — ~40ms TTFT for latency-critical deployments
 - **High-concurrency agent serving:** approximately 5,800-8,500 tokens/second (post-optimizations)
 
 ### Heterogeneous Prefill/Decode Architecture
 
 ```
-Token → [L20 GPU: Flash Prefill 40ms] → KV Cache (27 layers)
-           ↓ PCIe DMA (174μs) + KV Layer Mapping (27→61)
-        [FPGA LPU: Full Decode 17,445 TPS] → Output tokens
+Primary (CPU):
+  Token → [AMD EPYC 9755: Flash Prefill ~1.0s] → KV Cache (27 layers)
+             ↓ PCIe DMA (174μs) + KV Layer Mapping (27→61)
+          [FPGA LPU: Full Decode 17,445 TPS] → Output tokens
+
+Fallback (GPU, low-latency):
+  Token → [L20 GPU: Flash Prefill ~40ms] → KV Cache (27 layers)
+             ↓ PCIe DMA
+          [FPGA LPU: Full Decode 17,445 TPS] → Output tokens
 ```
 
 The Flash model (285B, ~27 layers) and Full model (671B, 61 layers) share identical
-hidden dimensions (HIDDEN=7168, K_LATENT=512, V_LATENT=512). This means Flash-generated
-KV cache is directly compatible with Full model decode — each Flash layer's KV maps
-to ~2.3 Full layers with >90% similarity between adjacent layers. No trainable adapter
-needed for the common-dimension case; a lightweight 14MB projection layer handles
-dimension mismatches when present.
+hidden dimensions (HIDDEN=7168, K_LATENT=512, V_LATENT=512). Flash model prefill
+compute is only 44% of full model (7.9T vs 17.9T MACs @ P=512).
+
+| Prefill Hardware | FP8 TFLOPS | Flash TTFT @ P=512 | Cost | Use Case |
+|------|:---:|:---:|:---:|------|
+| AMD EPYC 9755 (192C) | 8.0 | ~1.0s | ~15万 RMB | **Primary** — best CPU throughput |
+| AMD EPYC 9965 (128C) | 6.0 | ~1.3s | ~10万 RMB | Balanced |
+| Intel Xeon 6980P (MR-AMX) | 5.0 | ~1.6s | ~12万 RMB | Alternative |
+| NVIDIA L20 GPU (Fallback) | 200 | ~40ms | ~5万 RMB | Low-latency SLA
 
 ### 1.2 Why This Exists
 

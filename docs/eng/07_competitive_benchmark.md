@@ -104,23 +104,22 @@
 
 ### 3.2 TTFT（Time-To-First-Token，首Token延迟）
 
-FPGA LPU 采用 **Flash GPU Prefill + FPGA Full Decode** 异构架构：
-- Prefill: DeepSeek V4 Flash (285B, 27 layers) 在 L20 GPU 上运行，~40ms @ P=512
+FPGA LPU 采用 **Flash 模型 Prefill (CPU 主力 + GPU 备选) + FPGA Full Decode** 异构架构：
+- Prefill: DeepSeek V4 Flash (285B, 27 layers) — 仅 44% Full 模型的 MACs
+- Primary: AMD EPYC Turin 192C → ~1.0s TTFT @ P=512
+- Fallback: L20 GPU → ~40ms TTFT (低延迟 SLA 场景)
 - KV 适配: Flash KV 直接映射到 Full 层（相同 HIDDEN=7168, K_LATENT=512）
-- Decode: FPGA LPU 全质量 61 层 Decode
 
-| Prompt长度 | FPGA LPU (Flash GPU Prefill) | H200 | B300 | 950PR |
-|------|:---:|:---:|:---:|:---:|
-| **P=128** | **~10 ms** | ~25 ms | ~15 ms | ~40 ms |
-| **P=512** | **~40 ms** | ~120 ms | ~65 ms | ~160 ms |
-| **P=2048** | **~160 ms** | ~500 ms | ~250 ms | ~650 ms |
-| **P=8192** | **~650 ms** | ~2.0 s | ~1.0 s | ~2.6 s |
-| **P=128K** | **~10 s** | ~32 s | ~16 s | ~42 s |
+| Prompt长度 | FPGA LPU Primary (EPYC CPU) | FPGA LPU Fallback (L20 GPU) | H200 | B300 | 950PR |
+|------|:---:|:---:|:---:|:---:|:---:|
+| **P=128** | ~250 ms | **~10 ms** | ~25 ms | ~15 ms | ~40 ms |
+| **P=512** | ~1.0 s | **~40 ms** | ~120 ms | ~65 ms | ~160 ms |
+| **P=2048** | ~4.0 s | **~160 ms** | ~500 ms | ~250 ms | ~650 ms |
+| **P=8192** | ~16 s | **~650 ms** | ~2.0 s | ~1.0 s | ~2.6 s |
 
 > **架构优势**: Flash 模型层数仅 27（vs Full 61），Prefill MACs 降至 44%。
 > 相同 hidden/KV 维度 → KV Cache 直接兼容，零适配成本。
-> 1× L20 GPU (200W, ~5万 RMB) 替代 8× H200 做 Prefill。
-> TTFT 从 6s→40ms (**150×**), 消除了 FPGA LPU 架构的最后短板。
+> CPU 主力方案成本极低（EPYC ~15万 RMB），GPU 备选覆盖低延迟 SLA。
 
 ### 3.3 吞吐-延迟曲线
 

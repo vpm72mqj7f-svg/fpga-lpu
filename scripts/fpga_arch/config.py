@@ -16,7 +16,7 @@ DSP_TMACS             = DSP_COUNT * DSP_FREQ_MHZ * DSP_MAC_PER_CYCLE / 1e6  # 11
 
 HBM_SIZE_GB           = 32
 HBM_BW_GBPS           = 920
-HBM_BW_EFF            = 1.0             # effective utilization
+HBM_BW_EFF            = 0.916           # RTL-measured: tb_axi4_hbm_bw_bench, streaming read, 256-beat bursts (2026-05-30)
 
 SRAM_M20K_MB          = 29.2            # usable M20K (75% of 38.9 MB)
 SRAM_MLAB_MB          = 3.3             # usable MLAB
@@ -60,20 +60,36 @@ PREFILL_ATTN_SPARSITY       = 1.0 - PREFILL_ATTN_DENSITY  # 0.8880
 # False negative rate (missed relevant KV): density_ideal*(1-overlap²) ≈ 1.7% → negligible.
 
 # Prefill optimization toggles
-PREFILL_USE_FP4_ATTN   = True     # P0: fp4 K/V for prefill attention
-PREFILL_USE_SPARSE_ATTN = True    # P1: router-guided sparse attention mask
+# P0+P1 (FPGA-side prefill via fp4 attention + router-guided sparse): RESERVED FOR FUTURE.
+# Current architecture: CPU handles all prefill, FPGA handles decode only.
+PREFILL_USE_FP4_ATTN   = False    # RESERVED: P0 fp4 K/V for FPGA-side prefill attention
+PREFILL_USE_SPARSE_ATTN = False    # RESERVED: P1 router-guided sparse attention mask
 
-# Chunked prefill: split long prompts into chunks to reduce TTFT.
-# Standard vLLM approach — first chunk latency = TTFT, chunks pipelined across chips.
-PREFILL_CHUNK_SIZE     = 128      # tokens per chunk (vLLM default)
-PREFILL_USE_CHUNKED    = True     # enable chunked prefill
+# Chunked prefill: RESERVED for future FPGA-side prefill.
+# Current architecture: CPU prefill runs unchunked (full prompt on CPU).
+PREFILL_CHUNK_SIZE     = 128      # tokens per chunk (reserved)
+PREFILL_USE_CHUNKED    = False    # RESERVED: enable chunked FPGA prefill
 
-# P2: CPU-FPGA hybrid prefill — CPU handles attention (Q·K^T, A·V) via AMX,
-# FPGA handles projections + FFN. Enables parallel compute across CPU/FPGA.
-# CPU AMX (Xeon 6 / EPYC Turin): 2-4 TFLOPS FP8/BF16 for dense matmul.
-CPU_FP8_TFLOPS         = 3.0      # configurable CPU FP8 throughput
-CPU_OFFLOAD_ATTN       = False    # toggle: offload attention to CPU
-# PCIe round-trip: Q,K tensors → CPU, attn output → FPGA
+# Heterogeneous Prefill: Flash model on CPU (primary) or GPU (fallback).
+# Flash model (285B, 27 layers) shares identical HIDDEN=7168, K_LATENT=512
+# with Full model (671B, 61 layers). KV cache is directly compatible.
+#   Primary: AMD EPYC Turin 192C — Flash TTFT ~1.0s @ P=512
+#   Fallback: L20 GPU — Flash TTFT ~40ms @ P=512 (low-latency SLA)
+CPU_PREFILL            = True     # CPU prefill is the primary prefill path
+GPU_PREFILL_FALLBACK   = True     # GPU prefill available as low-latency fallback
+
+# Flash model parameters (prefill-only, not loaded on FPGA)
+FLASH_MODEL_LAYERS     = 27       # Flash model layers (vs 61 full)
+FLASH_MODEL_PARAMS_B   = 285      # Flash model total params (vs 671B full)
+FLASH_PREFILL_FACTOR   = 27 / 61  # ~0.44 — compute reduction vs full model
+
+# CPU Prefill hardware options
+# AMD EPYC 9755 (Turin 192C): 8.0 TFLOPS FP8, 12ch DDR5-6400 (~600 GB/s)
+# AMD EPYC 9965 (Turin 128C): 6.0 TFLOPS FP8, 12ch DDR5-6000 (~500 GB/s)
+# Intel Xeon 6980P (MR-AMX):  5.0 TFLOPS FP8, 12ch DDR5-6400 (~500 GB/s)
+# Intel Xeon 8592+ (AMX):     3.0 TFLOPS FP8, 8ch DDR5-5600 (~350 GB/s)
+CPU_FP8_TFLOPS         = 8.0      # AMD EPYC 9755 (primary CPU target)
+# PCIe round-trip: KV tensors → FPGA HBM
 CPU_PCIE_LATENCY_US    = 5.0      # fixed PCIe latency (DMA setup + transfer)
 
 # ============================================================================
@@ -103,6 +119,16 @@ V_HEAD_DIM            = 128
 NUM_EXPERTS_PER_TOK   = 6
 SLIDING_WINDOW        = 128
 MLA_KV_BYTES          = KV_LORA_RANK + QK_ROPE_HEAD_DIM  # 576 bytes FP8
+
+# RTL-compatible aliases (kept in sync with lpu_config.svh)
+K_LATENT              = KV_LORA_RANK   # LPU_K_LATENT: MLA K low-rank dim
+V_LATENT              = KV_LORA_RANK   # LPU_V_LATENT: MLA V low-rank dim
+MAX_SEQ_LEN           = 4096           # LPU_MAX_SEQ_LEN: max sequence positions
+VOCAB_SIZE            = 129280         # LPU_VOCAB_SIZE: token vocabulary size
+KV_CACHE_SLOTS        = 4096           # LPU_KV_CACHE_SLOTS: KV cache entries per chip
+SCALE_GROUPS          = 448            # LPU_SCALE_GROUPS: fp4 scale groups (HIDDEN/16)
+ARRAY_LANES           = 128            # LPU_ARRAY_LANES: systolic K-direction parallelism
+ARRAY_M_ROWS          = 32             # LPU_ARRAY_M_ROWS: systolic M-direction parallelism
 
 # ============================================================================
 # Weight sizes (fp4, per layer where applicable)
@@ -197,6 +223,18 @@ SRAM_FREE_MB         = SRAM_TOTAL_MB - SRAM_USED_MB  # 11.5
 
 # ============================================================================
 # Pipeline performance (calibrated from fpga_4chip_pipeline.py)
+#
+# Derivation (CR-3 fix, 2026-05-30):
+#   PIPELINE_TPS ≈ 17,445 — saturation decode throughput at batch=32,
+#     from simulate_pipeline() bottleneck analysis (32-chip, 61-layer pipeline).
+#     Original untraceable constant: 23,104 / V4_ACTIVE_SCALE (V3 calibration).
+#   BATCH1_TPS  ≈    660 — single-token decode throughput at batch=1.
+#     Original untraceable constant:    875 / V4_ACTIVE_SCALE.
+#   K_PIPELINE  ≈   25.4 — pipeline fill overhead factor.
+#     K = PIPELINE_TPS / BATCH1_TPS - 1.
+#     Re-derivable via derive_k_pipeline(cluster) in pipeline.py.
+#
+#   TPS(B) = PIPELINE_TPS * B / (B + K_PIPELINE)
 # ============================================================================
 V4_ACTIVE_SCALE      = 49.0 / 37.0    # V4 Pro 49B active vs V3 37B
 PIPELINE_TPS         = int(23_104 / V4_ACTIVE_SCALE)  # ~17,445
@@ -244,53 +282,35 @@ ASCEND_TTFT_P50_MS    = 160         # estimated
 ASCEND_SESS_256K      = 10
 HCCS_COST_PER_SRV     = 200_000
 
-# FPGA A7 32-chip: prefill with P0 (fp4 K/V attention) + P1 (router-guided sparse)
-# P0: attention uses fp4 → 2× compute vs fp8×fp8 Q·K^T
-# P1: router-guided sparse attention, using layer N-1 router scores for layer N
-#     (carry-forward, 90% adjacent overlap → 88.8% effective sparsity)
-# All numbers P=512 unless noted.
-
-# Baseline (corrected physics: attention fp8×fp8=5.54T, FFN fp8×fp4=11.07T)
-FPGA_PREFILL_TPS_BASE   = 679     # no P0, no P1: 23.00s TTFT
-FPGA_TTFT_MS_BASE       = 22_990
-
-# P0 only (fp4 K/V → attention goes from 5.54→11.07 TMACS)
-FPGA_PREFILL_TPS_P0     = 1_284   # P0 only: 12.16s TTFT
-FPGA_TTFT_MS_P0         = 12_160
-
-# P1 only (carry-fwd router, 88.8% sparse, fp8 attention)
-FPGA_PREFILL_TPS_P1     = 4_149   # P1 only: 3.76s TTFT
-FPGA_TTFT_MS_P1         = 3_760
-
-# P0 + P1 (fp4 attention + carry-fwd router)
-FPGA_PREFILL_TPS        = 6_122   # P0+P1: 2.55s TTFT
-FPGA_TTFT_P50_MS        = 2_550
-
-# Ideal P0+P1 (same-layer router, 90.9% sparse — needs pipeline reorder)
-FPGA_PREFILL_TPS_IDEAL  = 6_730   # P0+P1 ideal: 2.32s TTFT
-FPGA_TTFT_MS_IDEAL      = 2_320
-
-# Short-prompt (P=128) with P0+P1 carry-fwd
-FPGA_PREFILL_TPS_P128   = 9_496   # P0+P1, P=128: 0.41s TTFT
-FPGA_TTFT_MS_P128       = 411
-
-# Decode (unchanged)
+# FPGA decode-only throughput (prefill runs on CPU)
 FPGA_DECODE_TPS         = PIPELINE_TPS  # 17,445 (decode-only, saturated batch)
 FPGA_DECODE_TPS_HW      = 14_000        # raw hardware decode (~flat across B, from simulate_pipeline)
 
-# ── Chunked Prefill (PREFILL_CHUNK_SIZE=128, P0+P1 carry-fwd) ──
-# Splits prompt into 128-token chunks.
-# Real TTFT = all chunks + first decode (attention needs full KV cache).
-# "First chunk" number is streaming prefill only (partial context, approximate).
-FPGA_TTFT_FIRST_CHUNK_MS = 411     # P=128, first chunk completion (NOT full TTFT)
-FPGA_PREFILL_TOTAL_MS    = 481     # P=512, all 4 chunks (pipelined) — true TTFT ≈ this + 1.5ms decode
-FPGA_TTFT_CHUNKED_MS     = 483     # P=512, true TTFT = total prefill + first decode (481 + 1.5)
-FPGA_PREFILL_TPS_CHUNKED = 1_064   # P=512, effective prefill TPS with chunking
-# Chunked prefill vs non-chunked P=512:
-#   First chunk:  2,551ms → 411ms (6.2×, partial context only)
-#   True TTFT:    2,551ms → 483ms (5.3×, full KV cache ready)
-#   Prefill TPS:  679 → 1,064 (1.6×, pipeline parallelism)
 
-# Note: carry-forward overhead vs ideal is only 9.9% TPS loss (6,122 vs 6,730).
-# Pipeline reorder (Router → Attention) would recover this but requires HW changes.
-# With chunked prefill + P0+P1, TTFT gap to Ascend closes from 15.9× to 2.6×.
+def validate_derived_constants(verbose: bool = False) -> dict:
+    """Check derived constants for internal consistency and staleness.
+
+    Returns dict with keys: 'consistent' (bool), 'warnings' (list[str]).
+    """
+    warnings = []
+
+    # 1. HBM_BW_EFF should be < 1.0 (would indicate unmeasured value)
+    if HBM_BW_EFF >= 0.99:
+        warnings.append("HBM_BW_EFF >= 0.99: likely unmeasured default. Run tb_axi4_hbm_bw_bench.")
+
+    # 2. K_PIPELINE should be derivable from PIPELINE_TPS/BATCH1_TPS
+    k_implied = PIPELINE_TPS / BATCH1_TPS - 1 if BATCH1_TPS > 0 else 0
+    if abs(k_implied - K_PIPELINE) > 0.5:
+        warnings.append(
+            f"K_PIPELINE={K_PIPELINE:.1f} inconsistent with "
+            f"PIPELINE_TPS/BATCH1_TPS-1={k_implied:.1f}"
+        )
+
+    if verbose and not warnings:
+        print("config.py: All derived constants consistent.")
+    elif verbose:
+        print(f"config.py: {len(warnings)} derived constant warning(s):")
+        for w in warnings:
+            print(f"  [!] {w}")
+
+    return {'consistent': len(warnings) == 0, 'warnings': warnings}
