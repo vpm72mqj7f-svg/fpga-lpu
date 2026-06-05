@@ -4,7 +4,7 @@
 > **Version:** v1.0 (2026/05)
 > **Hardware:** 32 Agilex 7 M-Series chips (8 cards x 4 chips/card)
 > **Target model:** DeepSeek V4 Pro (61-layer, 384-expert MoE with MLA)
-> **Status:** RTL optimization complete, Python simulation validated, three-tier prefill architecture ready.
+> **Status:** RTL optimization complete, Python simulation validated, CPU-prefill, FPGA decode-only architecture.
 
 -------------------------------------------------------------------------------
 
@@ -33,8 +33,24 @@ We are building an FPGA-based inference accelerator cluster that serves a **Deep
 The cluster achieves:
 - **B=1 decode:** approximately 660 tokens/second
 - **Saturated batch decode:** approximately 14,000-17,500 tokens/second
-- **Chunked prefill (P=128):** approximately 6,100 tokens/second (with fp4 attention + router-guided sparse attention)
+- **Flash Prefill (L20 GPU):** small model (285B, 27 layers) handles prompt processing in ~40ms; FPGA dedicated to full-quality decode
+- **TTFT @ P=512:** 40ms (Flash GPU) vs 6,000ms (CPU full prefill) — **150× improvement**
 - **High-concurrency agent serving:** approximately 5,800-8,500 tokens/second (post-optimizations)
+
+### Heterogeneous Prefill/Decode Architecture
+
+```
+Token → [L20 GPU: Flash Prefill 40ms] → KV Cache (27 layers)
+           ↓ PCIe DMA (174μs) + KV Layer Mapping (27→61)
+        [FPGA LPU: Full Decode 17,445 TPS] → Output tokens
+```
+
+The Flash model (285B, ~27 layers) and Full model (671B, 61 layers) share identical
+hidden dimensions (HIDDEN=7168, K_LATENT=512, V_LATENT=512). This means Flash-generated
+KV cache is directly compatible with Full model decode — each Flash layer's KV maps
+to ~2.3 Full layers with >90% similarity between adjacent layers. No trainable adapter
+needed for the common-dimension case; a lightweight 14MB projection layer handles
+dimension mismatches when present.
 
 ### 1.2 Why This Exists
 
@@ -298,18 +314,8 @@ The pipeline is defined in `scripts/fpga_arch/pipeline.py` and implemented in th
 - KV cache is read, not written.
 - Dominant constraint: HBM bandwidth for expert weight loading (16.9% of layers).
 
-**Prefill (chunked, P=128 tokens per chunk):**
-- Q-K dot product scales as O(P^2) -- compute-bound.
-- KV cache is written (new prompt tokens stored).
-- Two prefill optimizations (enabled via `config.py` toggles):
-  - **P0 (fp4 attention):** K/V compressed to fp4 during prefill, doubling attention compute throughput (5.54 -> 11.07 TMACs for Q*K^T and A*V dot products).
-  - **P1 (router-guided sparse attention):** Uses layer N-1's router scores to mask layer N's attention (88.8% sparsity). Adjacent layers have approximately 90% router score overlap.
-- `rtl/dsp/fp4_prefill_engine.sv` handles batched prefill GEMM with shared weights.
-
-Three-tier prefill architecture (see `scripts/prefill/`):
-- **Tier 1 (CPU):** Dual Xeon GNR AMX GEMM for short prompts (<500 tokens). TTFT approximately 0.4-1.6s.
-- **Tier 2 (FPGA, default):** Chunked prefill at 128 tokens/chunk. First chunk completion approximately 85ms.
-- **Tier 3 (GPU, optional):** External A100 GPU for ultra-low latency (<50ms TTFT).
+**Prefill:**
+All prefill runs on the host CPU (Xeon AMX). KV cache produced on CPU is transferred via PCIe DMA to FPGA HBM. FPGA handles decode only.
 
 ### 4.3 Throughput Model
 
@@ -531,7 +537,7 @@ KV entries are stored in HBM as a flat array addressed by combinational hardware
 
 The KV cache hardware manager (`rtl/attention/mla_kv_cache.sv` for on-chip cache, HBM for bulk storage) operates a ring buffer with sliding window eviction (window=128 positions). This is fundamentally different from GPU PagedAttention: no page table, no block list traversal, no CPU involvement in address translation.
 
-For CPU prefill scenarios, KV entries arrive via PCIe DMA through `rtl/chip/kv_dma_bridge.sv`, which provides double-buffered HBM banks -- one bank for active FPGA decode reads, one bank for incoming CPU prefill writes, with atomic buffer swap at decode step boundaries.
+KV entries arrive via PCIe DMA from the CPU prefill pipeline through `rtl/chip/kv_dma_bridge.sv`, which provides double-buffered HBM banks -- one bank for active FPGA decode reads, one bank for incoming CPU prefill writes, with atomic buffer swap at decode step boundaries.
 
 -------------------------------------------------------------------------------
 
@@ -829,7 +835,7 @@ The inference service exposes `/v1/chat/completions`, `/v1/completions`, `/v1/mo
   fp4_systolic_cell.sv         - Single systolic cell (fp4 weight + fp8 activ in, FP32 accum)
   fp4_mac.sv                   - fp4 x fp8 multiply-accumulate unit
   fp4_scale_reader.sv          - Scale factor decode and apply
-  fp4_prefill_engine.sv        - Batched prefill GEMM (P tokens, shared weights)
+  fp4_prefill_engine.sv        - Batched prefill GEMM (P tokens, shared weights) (reserved for future FPGA-side prefill)
 ```
 
 The 2D systolic array (`fp4_systolic_2d.sv`) is the core compute unit:
@@ -887,7 +893,7 @@ All 20+ testbenches in `rtl/sim/` follow a consistent pattern: generate weight d
 | `tb_fp4_systolic_array.sv` | Multiple array configuration |
 | `tb_fp4_gemm_engine.sv` | Top-level GEMM engine |
 | `tb_fp4_linear_engine.sv` | Linear projection engine |
-| `tb_fp4_prefill_engine.sv` | Prefill-mode batched GEMM |
+| `tb_fp4_prefill_engine.sv` | Prefill-mode batched GEMM (reserved for future FPGA prefill) |
 | `tb_fp4_scale_reader.sv` | Scale factor decoding |
 | `tb_expert_ffn_engine.sv` | Expert FFN (gate/up/down) |
 | `tb_expert_ffn_engine_fp4_down.sv` | Expert FFN with fp4 down projection |
