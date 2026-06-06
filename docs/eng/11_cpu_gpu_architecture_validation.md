@@ -65,9 +65,39 @@ inline llama_model_tensor_buft_override llm_ffn_exps_gpu_override() {
 
 PR candidate for upstream llama.cpp.
 
+## Root Cause: GPU Backend Not Used for Compute
+
+After enabling KleidiAI + SVE2, TPS dropped to 1.4 tok/s (worse than baseline 8 tok/s).
+Investigation revealed GPU utilization = 0% despite 8GB VRAM allocated for MoE weights.
+
+**Root cause in llama.cpp** (`ggml/src/ggml-backend.cpp`):
+
+```cpp
+// Line ~920: backend scheduler assigns ops to backends
+// "operations with weights are preferably run on the same backend as the weights"
+if (src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
+    return src_backend_id;  // returns GPU if weight on GPU
+}
+```
+
+The scheduler DOES assign MoE ops to GPU backend when weights are on GPU.
+But the hidden state activation is on CPU (from previous CPU attention layer).
+The GPU backend should auto-copy the activation → GPU, compute, copy back → CPU.
+**This auto-copy is not happening.** The op gets assigned to GPU but the execution
+falls back to CPU when the activation buffer is on CPU.
+
+**Fix needed**: In `ggml_backend_sched_split_graph`, when an op is assigned to GPU
+due to weight placement, ensure activation tensors are also moved/copied to GPU
+for that op's execution. This is a ~50 line change to the scheduler.
+
+**NV Spark comparison**: NVIDIA's unified memory architecture avoids this entirely
+because CPU and GPU share the same physical memory pool. llama.cpp on discrete
+GPU requires explicit memory copies that the scheduler doesn't handle correctly
+for this mixed-device case.
+
 ## Next Steps
 
-1. SVE2-optimized build for CPU attention (improve CPU-attn TPS)
-2. Test with DeepSeek V4 Flash (284B) when GGUF available
-3. Submit --gpu-moe PR to llama.cpp
+1. Submit --gpu-moe PR to llama.cpp with scheduler fix (activation auto-copy)
+2. SVE2-optimized build for CPU attention (secondary, architecture doesn't depend on it)
+3. Test with DeepSeek V4 Flash (284B) when GGUF available
 4. Replace GPU FFN with FPGA FFN (direct swap)
