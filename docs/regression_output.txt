@@ -1,0 +1,66 @@
+
+========================================================================
+  FPGA LPU ¡ª Unified Regression Suite
+========================================================================
+  Root: D:\workspace\fpgalpu
+  Python: C:\Users\liyan\AppData\Local\Python\pythoncore-3.14-64\python.exe
+  Time: 2026-05-29 21:38:51
+
+[RUN ] Module Smoke Tests (10)
+
+======================================================================
+  FPGA Cloud Serving Simulation
+======================================================================
+  Architecture: 8 cards x 4 chips = 32 AGM 039-F
+  Deployment:   Monolithic (1 servers) + PipelineCloning x2
+  Agent mode:   3 turns/session, 500ms think, P_delta=256, O=64
+  Expert repl:  Hot replication (Zipf ¦Á=1.0)
+                K_pipeline: 23.1 (was 25.4)
+  Scheduler:    Microbatch (token-level injection, release=57us) (max decode batch=256)
+  Duration:     10s
+  Arrival rate: 2 req/s (Poisson)
+  Seed:         42
+
+[PASS] Module Smoke Tests (10) (0.5s)
+Passed: 10/10
+  chip_resources: PASS | dsp_1G_mac_us=90.334, ...
+  interconnect: PASS | c2c_7KB_us=0.551, ...
+  cluster_replication: PASS | baseline_experts_chip0=12, ...
+  expert_popularity: PASS | top20_mass=0.551, ...
+  pipeline_models: PASS | k_pipeline=23.08, ...
+  weight_layout: PASS | max_used_gb=23.29, ...
+  kv_cache: PASS | prefill_blocks=40, ...
+  scheduler: PASS | num_batches=1, ...
+  api_server: PASS | generated=6, ...
+  serving_short: PASS | requests=49, ...
+
+[SKIP] Functional Experiments (3)
+[RUN ] Quick Serving Simulation (10s)
+[PASS] Quick Serving Simulation (10s) (0.9s)
+  Finished:              20
+  Accept rate:        87.0%
+  Output TPS:         635.0 tok/s
+  TTFT P50:           411.1 ms  (target: 450 ms, SLA: 500 ms)
+  TTFT P95:           459.7 ms
+  TPOT P50:             1.2 ms  (target: 10 ms, SLA: 30 ms)
+  TPOT P95:            10.8 ms
+
+
+========================================================================
+  REGRESSION SUMMARY
+========================================================================
+
+  Section                                    Status   Wall Time
+  ---------------------------------------- --------  ----------
+  Module Smoke Tests (10)                      PASS        0.5s
+  Functional Experiments (3)                SKIPPED        0.0s
+  Quick Serving Simulation (10s)               PASS        0.9s
+  ---------------------------------------- --------  ----------
+  TOTAL                                                    1.3s
+
+  Sections: 2 pass, 0 fail, 1 skipped
+  Suite wall-clock: 1.3s
+
+  OVERALL: [PASS] ¡ª all sections passed.
+========================================================================
+

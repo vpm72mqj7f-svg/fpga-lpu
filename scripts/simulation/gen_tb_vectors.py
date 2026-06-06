@@ -244,6 +244,144 @@ def gen_golden_pkg():
         "expected_accum": compute_accum(w, a, s),
     })
 
+    # --- Test 15: fp8 subnorm activations x varied fp4 x non-unity scales ---
+    w = [0x2, 0x3, 0xC, 0xA, 0x6, 0x4, 0x2, 0x1]
+    a = [0x01, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01]
+    s = [0x38, 0x30, 0x40, 0x40, 0x30, 0x30, 0x40, 0x40]
+    tests.append({
+        "name": "T15_FP8_SUBNORM_SCALED",
+        "desc": "fp8 subnormals x varied fp4 x non-unity scale",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- Test 16: scale=0 zeroes all products ---
+    w = [0xC, 0x7, 0x6, 0x4]  # -1.0, +3.0, +2.0, +1.0
+    a = [0x38, 0x50, 0x48, 0x38]  # +1.0, +8.0(sat), +4.0, +1.0
+    s = [0x00, 0x00, 0x00, 0x00]  # all scale=0
+    tests.append({
+        "name": "T16_SCALE_ZERO",
+        "desc": "scale=0 zeroes all products",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- Test 17: scale=0 in middle of accumulation ---
+    w = [0x4, 0x6, 0x4, 0x4]  # +1.0, +2.0, +1.0, +1.0
+    a = [0x38, 0x38, 0x38, 0x38]  # all +1.0
+    s = [0x38, 0x38, 0x00, 0x38]  # third term has scale=0
+    tests.append({
+        "name": "T17_SCALE_ZERO_MID",
+        "desc": "scale=0 in middle of accumulation",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- Test 18: fp8 activations near/at decode saturation ---
+    w = [0x4, 0x4, 0x6, 0x7, 0x7]  # +1.0, +1.0, +2.0, +3.0, +3.0
+    a = [0x58, 0x57, 0x50, 0x4F, 0x48]  # saturated, near-sat, saturated, near, normal
+    s = [0x38, 0x38, 0x38, 0x38, 0x38]  # unity scale
+    tests.append({
+        "name": "T18_FP8_NEAR_SAT",
+        "desc": "fp8 activations near/at decode saturation",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- Test 19: fp8 subnormals x mixed-sign fp4 weights ---
+    w = [0x4, 0x6, 0xA, 0xC, 0xC]  # +1.0, +2.0, -0.25, -1.0, -1.0
+    a = [0x07, 0x05, 0x01, 0x03, 0x07]  # subnorm activations
+    s = [0x38, 0x38, 0x38, 0x38, 0x38]  # unity scale
+    tests.append({
+        "name": "T19_FP8_SUBNORM_SIGNED",
+        "desc": "fp8 subnormals x mixed-sign fp4 weights",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- GAP: Test 20: fp8 scale subnormal ---
+    # scale uses the same fp8 decode as activation; test subnormal scales
+    # scale 0x01=1/512, 0x07=3.5/512 — tiny scale multiplies
+    w = [0x6, 0x6, 0x7, 0x7]  # +2.0, +2.0, +3.0, +3.0
+    a = [0x38, 0x38, 0x38, 0x38]  # +1.0
+    s = [0x01, 0x07, 0x01, 0x07]  # subnormal scales
+    tests.append({
+        "name": "T20_SCALE_SUBNORM",
+        "desc": "fp8 subnormal scale values (exp=0)",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- GAP: Test 21: fp8 scale at e=1 transitional edge ---
+    # scale e=1 performs >>1; test boundary mantissa values
+    w = [0x4, 0x4, 0x4, 0x4]  # +1.0
+    a = [0x38, 0x38, 0x38, 0x38]  # +1.0
+    s = [0x08, 0x09, 0x0E, 0x0F]  # e=1 scales: m=0,1,6,7
+    tests.append({
+        "name": "T21_SCALE_E1_EDGE",
+        "desc": "fp8 scale at e=1 right-shift boundary",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- GAP: Test 22: fp8 scale near saturation (safe exp range: 9-10) ---
+    # Scale predecode uses 16-bit signed shift; exp >= 13 causes overflow.
+    # Use exp=9 (near clamp) and exp=10 (at clamp) to safely test saturation.
+    # 0x48=e9,m0→1024; 0x50=e10,m0→2047(clamp); 0x57=e10,m7→2047(clamp); 0xD0=e10,m0,neg→-2047
+    w = [0x4, 0x4, 0x4, 0x4]  # +1.0
+    a = [0x38, 0x38, 0x38, 0x38]  # +1.0
+    s = [0x48, 0x50, 0x57, 0xD0]  # near-clamp, at-clamp, at-clamp(m7), neg-clamp
+    tests.append({
+        "name": "T22_SCALE_SAT",
+        "desc": "fp8 scale near/at saturation clamping (safe exp)",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- GAP: Test 23: Negative fp8 scale values ---
+    # Negative scales flip product sign; verify cancellation
+    w = [0x6, 0x6, 0x6, 0x6]  # +2.0
+    a = [0x38, 0x38, 0x38, 0x38]  # +1.0
+    s = [0xB8, 0xC0, 0x38, 0xC0]  # -1.0, -2.0, +1.0, -2.0
+    tests.append({
+        "name": "T23_NEG_SCALE",
+        "desc": "negative fp8 scale values",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
+    # --- GAP: Test 24: activation=0 (exp=0,m=0) with nonzero weight/scale ---
+    # Product should be zero regardless of weight and scale
+    w = [0x7, 0x7, 0x7]  # +3.0
+    a = [0x00, 0x00, 0x00]  # fp8 zero
+    s = [0x38, 0x40, 0x7E]  # various scales
+    tests.append({
+        "name": "T24_ACT_ZERO",
+        "desc": "activation fp8 zero with nonzero weight/scale",
+        "weights": w,
+        "activs": a,
+        "scales": s,
+        "expected_accum": compute_accum(w, a, s),
+    })
+
     return tests
 
 

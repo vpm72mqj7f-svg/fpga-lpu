@@ -785,6 +785,38 @@ def print_pipeline_result(result: PipelineSimResult):
 # ============================================================================
 
 class PipelineEngine:
+    """Pipeline performance models for FPGA decode and CPU prefill."""
+
+def derive_k_pipeline(cluster: FPGACluster, num_tokens: int = 50,
+                       sat_batch: int = 32, seed: int = 42) -> float:
+    """Derive K_PIPELINE from first-principles pipeline simulation.
+
+    K = PIPELINE_TPS / BATCH1_TPS - 1
+
+    where PIPELINE_TPS is the saturation throughput (batch=sat_batch) and
+    BATCH1_TPS is the single-token throughput (batch=1), both measured from
+    the detailed pipeline simulation (bottleneck analysis, 32-chip pipeline).
+
+    This replaces the untraceable 23,104/875 magic numbers previously used.
+    K captures pipeline fill overhead: at small batches, the pipeline has
+    ~K "virtual tokens" of idle bubble between successive tokens.
+    """
+    sim_sat = simulate_pipeline(cluster, num_tokens=num_tokens,
+                                 batch_size=sat_batch, is_prefill=False, seed=seed)
+    sim_b1 = simulate_pipeline(cluster, num_tokens=num_tokens,
+                                batch_size=1, is_prefill=False, seed=seed)
+
+    tps_sat = sim_sat.throughput_tps
+    tps_b1  = sim_b1.throughput_tps
+
+    if tps_b1 <= 0:
+        return 0.0
+
+    k = tps_sat / tps_b1 - 1.0
+    return max(0.0, k)
+
+
+class PipelineEngine:
     """Orchestrates token processing with dual-path timing.
 
     Fast path:   throughput_model(B) for scheduler O(1) queries.

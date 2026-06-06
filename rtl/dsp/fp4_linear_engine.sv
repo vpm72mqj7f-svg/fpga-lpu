@@ -13,7 +13,10 @@ module fp4_linear_engine #(
     parameter int NUM_GROUPS  = 8,
     parameter int ADDR_WIDTH  = $clog2(NUM_GROUPS),
     parameter int ACCUM_WIDTH = 32,
-    parameter int K_BEATS     = (K_TOTAL + LANES - 1) / LANES
+    parameter int K_BEATS     = (K_TOTAL + LANES - 1) / LANES,
+    parameter int BEAT_W      = $clog2(K_BEATS > 1 ? K_BEATS : 2),
+    parameter int NUM_EXPERTS = 1,
+    parameter string NAME     = "le"  // debug: instance name
 ) (
     input  logic                         clk,
     input  logic                         rst_n,
@@ -21,11 +24,14 @@ module fp4_linear_engine #(
     // Preload ports
     input  logic                         weight_wr_en,
     input  logic [$clog2(M_OUT)-1:0]     weight_wr_row,
-    input  logic [$clog2(K_BEATS)-1:0]   weight_wr_beat,
+    input  logic [BEAT_W-1:0]            weight_wr_beat,
     input  logic [LANES*4-1:0]           weight_wr_data,
 
+    // Expert select (0 when NUM_EXPERTS=1)
+    input  logic [$clog2(NUM_EXPERTS > 1 ? NUM_EXPERTS : 2)-1:0] expert_sel,
+
     input  logic                         activ_wr_en,
-    input  logic [$clog2(K_BEATS)-1:0]   activ_wr_beat,
+    input  logic [BEAT_W-1:0]            activ_wr_beat,
     input  logic [LANES*8-1:0]           activ_wr_data,
 
     input  logic                         scale_wr_en,
@@ -54,12 +60,42 @@ module fp4_linear_engine #(
     } state_t;
 
     state_t state;
-    logic [$clog2(M_OUT)-1:0] row_idx;
-    logic [$clog2(K_BEATS)-1:0] beat_idx;
+    logic [$clog2(M_OUT>1 ? M_OUT : 2)-1:0] row_idx;
+    logic [BEAT_W-1:0] beat_idx;
 
-    // Weight/activation preload memories (MLAB for small, M20K for large)
-    (* ramstyle = "M20K" *) logic [LANES*4-1:0] weight_mem [M_OUT*K_BEATS];
-    (* ramstyle = "MLAB" *) logic [LANES*8-1:0] activ_mem  [K_BEATS];
+    // Weight/activation preload — Altera syncram IP
+    // Multi-expert: weight RAM depth multiplied by NUM_EXPERTS, expert_sel offsets
+    localparam int WT_DEPTH = M_OUT * K_BEATS * NUM_EXPERTS;
+    localparam int EXPERT_STRIDE = M_OUT * K_BEATS;
+
+    logic [LANES*4-1:0] weight_q;
+    logic [LANES*8-1:0] activ_q;
+    logic [$clog2(WT_DEPTH > 1 ? WT_DEPTH : 2)-1:0] wt_wr_addr, wt_rd_addr;
+
+    assign wt_wr_addr = expert_sel * EXPERT_STRIDE + weight_wr_row * K_BEATS + weight_wr_beat;
+    assign wt_rd_addr = expert_sel * EXPERT_STRIDE + row_idx * K_BEATS + beat_idx;
+
+`ifdef DBG_PIPELINE
+    // Capture preload signals at posedge for debug
+    int le_dbg_cycle;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) le_dbg_cycle <= 0;
+        else le_dbg_cycle <= le_dbg_cycle + 1;
+    end
+    always_ff @(posedge clk) begin
+        if (weight_wr_en)
+            $display("  [LE_PRE] %s wt_wr: cyc=%0d row=%0d beat=%0d addr=%0d data=0x%04x",
+                     NAME, le_dbg_cycle, weight_wr_row, weight_wr_beat, wt_wr_addr, weight_wr_data);
+    end
+`endif
+
+    altera_syncram #(.WIDTH(LANES*4), .DEPTH(WT_DEPTH), .RAM_BLOCK_TYPE("M20K"))
+    u_weight (.clock(clk), .wren(weight_wr_en), .wraddress(wt_wr_addr),
+              .data(weight_wr_data), .rdaddress(wt_rd_addr), .q(weight_q));
+
+    altera_syncram #(.WIDTH(LANES*8), .DEPTH(K_BEATS), .RAM_BLOCK_TYPE("MLAB"))
+    u_activ (.clock(clk), .wren(activ_wr_en), .wraddress(activ_wr_beat),
+             .data(activ_wr_data), .rdaddress(beat_idx), .q(activ_q));
 
     logic array_start;
     logic array_k_valid;
@@ -73,20 +109,7 @@ module fp4_linear_engine #(
     logic [ACCUM_WIDTH-1:0] array_sum;
     logic [LANES*ACCUM_WIDTH-1:0] array_lanes;
 
-    function automatic int mem_index(input int row, input int beat);
-        mem_index = row * K_BEATS + beat;
-    endfunction
-
     assign busy = (state != S_IDLE) && (state != S_DONE);
-
-    always_ff @(posedge clk) begin
-        if (weight_wr_en) begin
-            weight_mem[mem_index(weight_wr_row, weight_wr_beat)] <= weight_wr_data;
-        end
-        if (activ_wr_en) begin
-            activ_mem[activ_wr_beat] <= activ_wr_data;
-        end
-    end
 
     fp4_systolic_array #(
         .LANES(LANES),
@@ -124,9 +147,9 @@ module fp4_linear_engine #(
     // add cases to the always_comb below.
     //=========================================================================
     always_comb begin
-        // Default: current row/beat from memory
-        array_weight_flat   = weight_mem[mem_index(row_idx, beat_idx)];
-        array_activ_flat    = activ_mem[beat_idx];
+        // Default: current row/beat from Altera syncram
+        array_weight_flat   = weight_q;
+        array_activ_flat    = activ_q;
         array_elem_idx_base = beat_idx * LANES;
     end
 
@@ -160,24 +183,40 @@ module fp4_linear_engine #(
                 end
 
                 S_ARRAY_START: begin
+                    // Assert k_valid here so systolic array captures beat_idx=0 data
+                    // on the next cycle (one cycle before S_FEED updates beat_idx).
+                    // This fixes the beat-ordering race where k_valid and beat_idx
+                    // were both updated in the same NBA cycle.
+`ifdef DBG_PIPELINE
+                    $display("  [LE_DBG] row=%0d beat=%0d wt_q=0x%04x act_q=0x%08x rdaddr=%0d",
+                             row_idx, beat_idx, weight_q, activ_q,
+                             row_idx * K_BEATS + beat_idx);
+`endif
+                    array_k_valid <= 1'b1;
+                    array_k_last  <= (K_BEATS == 1);
                     state <= S_FEED;
                 end
 
                 S_FEED: begin
                     if (array_k_ready) begin
-                        array_k_valid <= 1'b1;
-                        array_k_last <= (beat_idx == K_BEATS-1);
+                        // Previous beat consumed; prepare next beat (or finish)
                         if (beat_idx == K_BEATS-1) begin
                             beat_idx <= '0;
                             state <= S_WAIT;
                         end else begin
                             beat_idx <= beat_idx + 1'b1;
+                            array_k_valid <= 1'b1;
+                            array_k_last  <= (beat_idx + 1 == K_BEATS-1);
                         end
                     end
                 end
 
                 S_WAIT: begin
                     if (array_done) begin
+`ifdef DBG_PIPELINE
+                        $display("  [LE_DBG] M_OUT=%0d row=%0d array_sum=0x%08h (%0d)",
+                                 M_OUT, row_idx, array_sum, array_sum);
+`endif
                         result_valid <= 1'b1;
                         result_row <= row_idx;
                         result_data <= array_sum;

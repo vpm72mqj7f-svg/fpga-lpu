@@ -38,8 +38,11 @@ module fp4_systolic_cell #(
     logic [3:0]  weight;
     logic [11:0] scale;
 
-    always_ff @(posedge clk) begin
-        if (wt_wr_en) begin
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            weight <= 4'd0;
+            scale  <= 12'd0;
+        end else if (wt_wr_en) begin
             weight <= wt_wr_data;
             scale  <= sc_wr_data;
         end

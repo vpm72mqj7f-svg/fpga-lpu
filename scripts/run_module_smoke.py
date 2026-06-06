@@ -160,6 +160,137 @@ def test_serving_short():
             'ttft_p95_ms': round(m.ttft_p95_ms, 1)}
 
 
+# ── S3.7: Additional smoke tests ──
+
+def test_concurrent_prefill_decode():
+    """Verify the pipeline model handles concurrent prefill+decode workloads.
+
+    The concurrent_pipeline_model computes throughput when prefill and decode
+    run simultaneously on the same set of chips. Prefill is DSP-bound (MLA QK^T)
+    while decode is HBM-bound (expert weight streaming). Because DSP and HBM
+    are independent hardware units, the overall slowdown (contention factor)
+    should be modest (< 1.2 for typical batch sizes).
+
+    PASS if: contention_factor < 1.20 and combined_tps > 0.
+    """
+    from fpga_arch.pipeline import PipelineEngine
+    r = PipelineEngine.concurrent_pipeline_model(
+        prefill_tokens=128, decode_batch=8,
+        use_fp4_attn=True, attn_sparsity=0.888,
+    )
+    contention = r['contention_factor']
+    combined = r['combined_tps']
+    passed = contention < 1.20 and combined > 0
+    return {
+        'contention_factor': round(contention, 3),
+        'combined_tps': round(combined, 0),
+        'prefill_tps': round(r['prefill_tps'], 0),
+        'decode_tps': round(r['decode_tps'], 0),
+        'status': 'PASS' if passed else 'FAIL',
+    }
+
+
+def test_pipeline_backpressure():
+    """Verify chip-0 admission control prevents overload.
+
+    Chip 0 is the pipeline entry point. It processes the first few layers of
+    every token (prefill and decode). In superscalar mode, multiple prefills
+    can be interleaved through chip 0, but admission must be rate-limited to
+    prevent DSP saturation.
+
+    The admission model reports how many requests per second chip 0 can handle.
+    With chip0_parallelism=1 (single pipeline), the rate should be finite and
+    < total DSP throughput.
+
+    PASS if: admission_reqs_s is finite and > 0 and < 1000.
+    """
+    from fpga_arch.pipeline import PipelineEngine
+    # Single pipeline clone (no parallelism) — bottleneck is real
+    r1 = PipelineEngine.chip0_admission_rate(
+        chunk_size=128, chip0_parallelism=1,
+        use_fp4_attn=True, attn_sparsity=0.888,
+    )
+    # Dual pipeline clone — roughly 2× admission rate
+    r2 = PipelineEngine.chip0_admission_rate(
+        chunk_size=128, chip0_parallelism=2,
+        use_fp4_attn=True, attn_sparsity=0.888,
+    )
+
+    rate1 = r1['admission_reqs_s']
+    rate2 = r2['admission_reqs_s']
+    ratio = rate2 / max(rate1, 0.01)
+
+    # Check: single pipeline rate is finite, positive, reasonable
+    # Check: dual pipeline is roughly 2× (within 10%)
+    passed = (0 < rate1 < 1000 and 1.8 < ratio < 2.2)
+    return {
+        'admit_rate_p1_req_s': round(rate1, 1),
+        'admit_rate_p2_req_s': round(rate2, 1),
+        'p2_p1_ratio': round(ratio, 2),
+        'per_chunk_us': round(r1['per_chunk_us'], 1),
+        'status': 'PASS' if passed else 'FAIL',
+    }
+
+
+def test_disaggregated_kv_transfer():
+    """Verify the prefill-to-decode KV transfer model in disaggregated mode.
+
+    In disaggregated deployments, KV cache computed during prefill on dedicated
+    prefill servers must be transferred to decode servers via C2C + PCIe P2P.
+    The transfer latency depends on:
+      - Number of KV tokens being transferred
+      - KV bytes per token (compressed MLA format: conservative 1152 bytes)
+      - Interconnect bandwidth (PCIe P2P cross-server ~54.4 GB/s effective)
+
+    This test exercises kv_disaggregated_transfer_time_us() and
+    kv_transfer_us_per_token() and verifies reasonable latencies.
+
+    PASS if: transfer time for P=512 batch is < 1000 us (1ms),
+             and per-token cost decreases with larger batches (amortization).
+    """
+    from fpga_arch.interconnect import (
+        kv_disaggregated_transfer_time_us, kv_transfer_us_per_token,
+    )
+
+    # Conservative KV bytes per token (K: 512+64 + V: 512 = 1088, rounded to 1152)
+    kv_bytes_per_token = 1152
+
+    # Small batch transfer (P=128)
+    t_small = kv_disaggregated_transfer_time_us(
+        num_tokens=128, kv_bytes_per_token=kv_bytes_per_token,
+    )
+
+    # Typical batch transfer (P=512)
+    t_typical = kv_disaggregated_transfer_time_us(
+        num_tokens=512, kv_bytes_per_token=kv_bytes_per_token,
+    )
+
+    # Large batch transfer (P=2048)
+    t_large = kv_disaggregated_transfer_time_us(
+        num_tokens=2048, kv_bytes_per_token=kv_bytes_per_token,
+    )
+
+    # Per-token cost at different batch sizes
+    us_per_tok_small = kv_transfer_us_per_token(128, kv_bytes_per_token)
+    us_per_tok_typical = kv_transfer_us_per_token(512, kv_bytes_per_token)
+    us_per_tok_large = kv_transfer_us_per_token(2048, kv_bytes_per_token)
+
+    # Check: typical transfer < 1ms, monotonic scaling, per-token cost amortizes
+    passed = (t_typical < 1000.0 and
+              t_small < t_typical < t_large and
+              us_per_tok_small > us_per_tok_large)  # amortization effect
+    return {
+        'transfer_P128_us': round(t_small, 1),
+        'transfer_P512_us': round(t_typical, 1),
+        'transfer_P2048_us': round(t_large, 1),
+        'us_per_tok_P128': round(us_per_tok_small, 4),
+        'us_per_tok_P512': round(us_per_tok_typical, 4),
+        'us_per_tok_P2048': round(us_per_tok_large, 4),
+        'kv_bytes_per_token': kv_bytes_per_token,
+        'status': 'PASS' if passed else 'FAIL',
+    }
+
+
 TESTS = [
     ('chip_resources', test_chip_resources),
     ('interconnect', test_interconnect),
@@ -171,6 +302,9 @@ TESTS = [
     ('scheduler', test_scheduler),
     ('api_server', test_api_server),
     ('serving_short', test_serving_short),
+    ('concurrent_prefill_decode', test_concurrent_prefill_decode),
+    ('pipeline_backpressure', test_pipeline_backpressure),
+    ('disaggregated_kv_transfer', test_disaggregated_kv_transfer),
 ]
 
 

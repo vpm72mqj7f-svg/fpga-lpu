@@ -9,17 +9,14 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import numpy as np
 
-from .types import Request, Batch, BatchType
+from .types import Request, RequestState, Batch, BatchType
 from .config import (
     BLOCK_SIZE, KV_BLOCK_TOKENS, KV_BYTES_PER_TOKEN,
     MAX_PREFILL_TOKENS,
 )
 from fpga_arch.pipeline import PipelineEngine
 from fpga_arch.cluster import FPGACluster
-from fpga_arch.config import (
-    PREFILL_USE_FP4_ATTN, PREFILL_USE_SPARSE_ATTN, PREFILL_ATTN_SPARSITY,
-    PREFILL_CHUNK_SIZE, PREFILL_USE_CHUNKED,
-)
+from fpga_arch.config import CPU_PREFILL, CPU_FP8_TFLOPS, CPU_PCIE_LATENCY_US
 
 
 @dataclass
@@ -53,10 +50,9 @@ class ModelRunner:
     """
 
     def __init__(self, cluster: FPGACluster, pipeline: PipelineEngine,
-                 cpu_hybrid: bool = False, cpu_tflops: float = 3.0):
+                 cpu_tflops: float = CPU_FP8_TFLOPS):
         self.cluster = cluster
         self.pipeline = pipeline
-        self.cpu_hybrid = cpu_hybrid
         self.cpu_tflops = cpu_tflops
 
     def execute_batch(self, batch: Batch, kv_manager,
@@ -76,6 +72,8 @@ class ModelRunner:
         try:
             if batch.batch_type == BatchType.PREFILL:
                 duration_us, total_duration_us = self._execute_prefill(batch, kv_manager, current_time_us)
+            elif batch.batch_type == BatchType.MIXED:
+                duration_us, total_duration_us = self._execute_mixed(batch, kv_manager, current_time_us)
             else:
                 duration_us = self._execute_decode(batch, kv_manager, current_time_us)
                 total_duration_us = duration_us
@@ -89,7 +87,7 @@ class ModelRunner:
                 throughput_tps=tps,
                 dsp_util_pct=60.0,  # from fpga_cloud_serving analysis
                 total_duration_us=total_duration_us,
-                ttft_us=duration_us if batch.batch_type == BatchType.PREFILL else 0.0,
+                ttft_us=duration_us if batch.batch_type in (BatchType.PREFILL, BatchType.MIXED) else 0.0,
                 success=True,
             )
         except RuntimeError as e:
@@ -100,16 +98,12 @@ class ModelRunner:
 
     def _execute_prefill(self, batch: Batch, kv_manager,
                          current_time_us: float) -> float:
-        """Execute prefill: process all prompt tokens, allocate KV blocks.
+        """Execute prefill on CPU: process all prompt tokens, allocate KV blocks.
 
-        With chunked prefill: splits prompt into PREFILL_CHUNK_SIZE chunks.
-        First chunk determines TTFT (decode can start after first chunk).
-        Subsequent chunks are pipelined across chips (overlap with decode).
+        All prefill runs on host CPU (Xeon AMX / EPYC Turin). KV cache produced
+        on CPU → PCIe DMA → FPGA HBM for decode. FPGA handles decode only.
 
-        P2 CPU-FPGA hybrid: CPU offloads Q·K^T + A·V attention via PCIe,
-        FPGA handles Q/K/V projections + FFN. Reduces FPGA DSP bottleneck.
-
-        Returns TTFT in microseconds (first chunk latency).
+        Returns TTFT in microseconds.
         """
         total_prompt_tokens = batch.batch_size_tokens
 
@@ -125,41 +119,78 @@ class ModelRunner:
             except RuntimeError:
                 raise
 
-        use_fp4 = PREFILL_USE_FP4_ATTN
-        sparsity = PREFILL_ATTN_SPARSITY if PREFILL_USE_SPARSE_ATTN else 0.0
-
         n_req = len(batch.requests)
+        chunk_result = PipelineEngine.cpu_hybrid_prefill_model(
+            total_prompt_tokens,
+            cpu_tflops=self.cpu_tflops,
+            use_fp4_attn=False,
+            attn_sparsity=0.0,
+            chunk_size=128,
+            n_requests=n_req,
+        )
+        ttft_us = chunk_result['ttft_ms'] * 1000.0
+        total_us = chunk_result['total_prefill_ms'] * 1000.0
+        return ttft_us, total_us
 
-        if self.cpu_hybrid:
-            # P2: CPU-FPGA hybrid prefill — CPU handles attention, FPGA handles FFN
+    def _execute_mixed(self, batch: Batch, kv_manager,
+                       current_time_us: float):
+        """Execute MIXED batch: prefill + decode in same pipeline pass.
+
+        Prefill portion determines TTFT; decode portion runs one token per
+        request for all requests (including just-prefilled ones).
+
+        Returns (ttft_us, total_duration_us).
+        """
+        # Split requests by phase
+        prefill_reqs = [r for r in batch.requests if r.state == RequestState.PREFILL]
+        decode_reqs = [r for r in batch.requests if r.state == RequestState.DECODE]
+
+        # Execute prefill for prefill-phase requests
+        prefill_tokens = sum(r.prompt_len for r in prefill_reqs)
+        # Allocate KV blocks for prefill requests
+        chip_ids = [c.global_id for c in self.cluster.chips[:8]]
+        for req in prefill_reqs:
+            try:
+                blocks = kv_manager.allocate_prefill(
+                    req.request_id, req.prompt_len,
+                    chip_ids, current_time_us,
+                )
+                req.kv_block_ids = blocks
+            except RuntimeError:
+                raise
+
+        n_prefill = len(prefill_reqs)
+
+        if prefill_tokens > 0:
             chunk_result = PipelineEngine.cpu_hybrid_prefill_model(
-                total_prompt_tokens,
-                cpu_tflops=self.cpu_tflops,
-                use_fp4_attn=use_fp4,
-                attn_sparsity=sparsity,
-                chunk_size=PREFILL_CHUNK_SIZE,
-                n_requests=n_req,
+                prefill_tokens, cpu_tflops=self.cpu_tflops,
+                use_fp4_attn=False, attn_sparsity=0.0,
+                chunk_size=128, n_requests=n_prefill,
             )
             ttft_us = chunk_result['ttft_ms'] * 1000.0
             total_us = chunk_result['total_prefill_ms'] * 1000.0
-            return ttft_us, total_us
-        elif PREFILL_USE_CHUNKED and total_prompt_tokens > PREFILL_CHUNK_SIZE:
-            chunk_result = PipelineEngine.chunked_prefill_model(
-                total_prompt_tokens, chunk_size=PREFILL_CHUNK_SIZE,
-                use_fp4_attn=use_fp4, attn_sparsity=sparsity,
-                n_requests=n_req,
-            )
-            ttft_us = chunk_result['ttft_ms'] * 1000.0
-            total_us = chunk_result['total_prefill_ms'] * 1000.0
-            return ttft_us, total_us
         else:
-            lat = PipelineEngine.prefill_latency_model(
-                total_prompt_tokens,
-                use_fp4_attn=use_fp4,
-                attn_sparsity=sparsity,
-                n_requests=n_req,
-            )
-            return lat, lat
+            ttft_us = 0.0
+            total_us = 0.0
+
+        # Execute decode for decode-phase requests (KV allocation + latency)
+        if decode_reqs:
+            for req in decode_reqs:
+                try:
+                    new_blocks = kv_manager.allocate_decode(
+                        req.request_id, req.tokens_generated,
+                        [c.global_id for c in self.cluster.chips[:8]],
+                        current_time_us,
+                    )
+                    req.kv_block_ids.extend(new_blocks)
+                except RuntimeError:
+                    raise
+            decode_us = PipelineEngine.decode_latency_model(len(decode_reqs))
+        else:
+            decode_us = 0.0
+
+        # Total = prefill (dominates) + decode overhead
+        return ttft_us, total_us + decode_us
 
     def _execute_decode(self, batch: Batch, kv_manager,
                         current_time_us: float) -> float:

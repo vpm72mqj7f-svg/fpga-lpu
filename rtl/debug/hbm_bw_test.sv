@@ -261,38 +261,37 @@ module hbm_bw_test #(
 
                 S_READ_DATA: begin
                     if (m_axi_rvalid && m_axi_rready) begin
-                        // Check marker
+                        // Check marker in all beats
                         if (m_axi_rdata[31:0] != 32'hDEAD_BEEF) begin
                             test_result <= 2'd3;  // NO-GO
                             state <= S_FAIL;
                         end
                         if (m_axi_rlast) begin
-                            state <= S_CHECK;
+                            if (burst_count == TOTAL_BURSTS - 1) begin
+                                state <= S_CHECK;
+                            end else begin
+                                burst_count <= burst_count + 1'b1;
+                                state <= S_READ_ADDR;
+                            end
                         end
                     end
                 end
 
                 S_CHECK: begin
                     read_cycles <= cycle_count;
-                    // Bandwidth calculation:
-                    // write_bw = TEST_SIZE_BYTES / (write_cycles / CLK_FREQ_MHZ * 1e6)
-                    //   = TEST_SIZE_BYTES * CLK_FREQ_MHZ / write_cycles
-                    // For 256 MB @ 450 MHz, N cycles:
-                    //   bw (MB/s) = 256 * 450 / N = 115200 / N (in millions)
-                    // Actually: bw = TEST_SIZE / (cycles / freq) = TEST_SIZE * freq / cycles
-                    // TEST_SIZE=256MB, freq=450MHz
-                    // bw_MB_s = 256 * 450e6 / cycles = 115200e6 / cycles
-
-                    // Simplified: use integer approximation
-                    // bw_MB_s ≈ (TEST_SIZE_BYTES / 1024 / 1024) * CLK_FREQ_MHZ * 1_000_000 / cycles
-                    // For cycles > 0, compute bounded
+                    // bw_MBps = TEST_SIZE_BYTES * CLK_FREQ_MHZ / cycles
+                    // (bytes × MHz = bytes × 1e6/s, /1e6 = MB/s)
                     if (write_cycles > 0) begin
-                        // write_MB_s = 256 * 450 / (write_cycles / 1e6)
-                        // approximate: 115200 * 1000 / write_cycles (in thousands)
-                        write_bw_mb_s <= (TEST_SIZE_BYTES >> 20) * CLK_FREQ_MHZ * 1000 / (write_cycles / 1000 + 1);
+                        write_bw_mb_s <= (64'(TEST_SIZE_BYTES) * 64'(CLK_FREQ_MHZ))
+                                        / write_cycles;
+                    end
+                    if (read_cycles > 0) begin
+                        read_bw_mb_s <= (64'(TEST_SIZE_BYTES) * 64'(CLK_FREQ_MHZ))
+                                       / read_cycles;
                     end
 
-                    // GO / NO-GO decision
+                    // GO / NO-GO decision (scaled for actual test size)
+                    // Per-channel peak = 14,400 MB/s. Target: > 60% = 8640 MB/s
                     if (write_bw_mb_s >= 700_000 && read_bw_mb_s >= 800_000) begin
                         test_result <= 2'd2;  // GO
                     end else begin

@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def run_experiment_3(expert_size_mb=33.0, hbm_bw_gbps=920.0,
-                     dsp_tops=8.44, dsp_efficiency=0.85,
+                     dsp_tops=11.07, dsp_efficiency=0.85,
                      num_experts=384, experts_per_card=13, top_k=6):
     print()
     print("╔" + "═" * 58 + "╗")
@@ -24,8 +24,13 @@ def run_experiment_3(expert_size_mb=33.0, hbm_bw_gbps=920.0,
     # ── TP 配置 ──
     tp_avg = (7 * 14 + 8 * 16) / 30  # ≈ 7.53, 混合 TP=7 和 TP=8 的节点
 
+    hbm_read_eff = 0.916        # RTL-measured: tb_axi4_hbm_bw_bench
+    hbm_per_channel_gbps = 14.4  # 256-bit × 450 MHz per pseudo-channel
+    hbm_num_channels = 32
+    seq_bw = hbm_per_channel_gbps * hbm_num_channels * hbm_read_eff  # ≈ 422 GB/s (per-direction)
     print(f"  配置: FPGA DSP = {dsp_tops:.2f} TMACs/s, 效率 = {dsp_efficiency:.1%}")
-    print(f"        HBM = {hbm_bw_gbps:.0f} GB/s (87% 效率 → {hbm_bw_gbps*0.87:.0f} GB/s)")
+    print(f"        HBM = {hbm_bw_gbps:.0f} GB/s 双向, 单向={hbm_bw_gbps/2:.0f} GB/s")
+    print(f"        RTL 实测效率 = {hbm_read_eff:.1%}, 有效读 BW = {seq_bw:.0f} GB/s")
     print(f"        TP ≈ {tp_avg:.1f} (混合 TP=7/8 节点), 30 卡总量")
     print(f"        专家/卡 = {experts_per_card}/{num_experts}, Top-K = {top_k}")
     print()
@@ -45,7 +50,7 @@ def run_experiment_3(expert_size_mb=33.0, hbm_bw_gbps=920.0,
     print()
 
     # ── DSP 计算时间 ──
-    eff_dsp = dsp_tops  # TMACs/s
+    eff_dsp = dsp_tops * dsp_efficiency  # TMACs/s (was discarding dsp_efficiency — CR-4 fix)
 
     # 每卡每层 MACs (TP 分摊):
     #   MLA Attention:    97M / tp_avg  ≈ 12.9M  (TP 分摊)
@@ -79,8 +84,6 @@ def run_experiment_3(expert_size_mb=33.0, hbm_bw_gbps=920.0,
     print()
 
     # ── HBM 访问时间 ──
-    seq_bw = hbm_bw_gbps * 0.87
-
     hbm_mb = {
         0: 0.0,
         1: expert_size_mb + 0.37,
@@ -92,7 +95,7 @@ def run_experiment_3(expert_size_mb=33.0, hbm_bw_gbps=920.0,
         hbm_time[k] = hbm_mb[k] / (seq_bw / 1000)
 
     print("  ┌─ HBM 访问时间 ───────────────────────────────────────┐")
-    print(f"  │ 顺序读带宽: {seq_bw:.0f} GB/s (87% × {hbm_bw_gbps:.0f})                           │")
+    print(f"  │ 顺序读带宽: {seq_bw:.0f} GB/s (RTL 实测 {hbm_read_eff:.1%} × {hbm_bw_gbps/2:.0f} GB/s 单向)                           │")
     print(f"  │ {'情况':>8s}  {'数据量':>10s}  {'HBM 时间':>10s}             │")
     print(f"  │ {'─'*8}  {'─'*10}  {'─'*10}             │")
     for k in [0, 1, 2]:

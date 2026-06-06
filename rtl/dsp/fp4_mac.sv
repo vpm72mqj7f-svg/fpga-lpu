@@ -84,26 +84,34 @@ module fp4_mac #(
     assign a_exp  = s0_activ[6:3];
     assign a_mant = s0_activ[2:0];
 
+    // Extract bit-fields outside always_comb to avoid Icarus constant-select
+    // limitation in always_* processes.
+    wire [1:0] a_mant_21 = a_mant[2:1];
+
     // --- Pre-decoded scale (12-bit signed, decoded at load time) ---
     // s0_scale is already decoded by fp4_scale_reader — no decode needed here.
     // This removes ~4 LUT levels from the MAC critical path at 450 MHz.
     logic signed [11:0] sc_scaled;
     assign sc_scaled = $signed(s0_scale);
 
+    // Move a_full outside always_comb so the bit-select a_full[11:0] is
+    // resolved in a continuous assignment.
+    logic [4:0]        a_shift;
+    logic signed [15:0] a_full;
+    assign a_shift = a_exp - 4'd2;
+    assign a_full  = $signed({8'd0, 1'b1, a_mant}) << a_shift;
+    wire signed [11:0] a_full_lo = a_full[11:0];
+
     logic signed [11:0] a_scaled;
     always_comb begin
         if (a_exp == 4'd0) begin
-            a_scaled = $signed({1'b0, {8'd0, a_mant[2:1]}});
+            a_scaled = $signed({1'b0, {8'd0, a_mant_21}});
         end else if (a_exp < 4'd2) begin
             a_scaled = $signed({1'b0, 1'b1, a_mant}) >>> 1;
         end else begin
-            logic [4:0]  shift;
-            logic signed [15:0] a_full;
-            shift  = a_exp - 4'd2;
-            a_full = $signed({8'd0, 1'b1, a_mant}) << shift;
             if (a_full > 16'sd2047)      a_scaled = 12'sd2047;
             else if (a_full < -16'sd2048) a_scaled = -12'sd2048;
-            else                          a_scaled = a_full[11:0];
+            else                          a_scaled = a_full_lo;
         end
         if (a_sign) a_scaled = -a_scaled;
     end
@@ -130,11 +138,17 @@ module fp4_mac #(
 
     //=========================================================================
     // Stage 2: Base Multiply — 8b fp4 × 12b activation → 20b product
-    //   Single DSP 18×19 multiply. The scale multiply moves to Stage 3.
+    //   altera_mult_add DSP IP (combinational); output registered in always_ff
     //=========================================================================
     logic signed [19:0] s2_base_product;
     logic [11:0]        s2_sc_scaled;
     logic               s2_valid;
+    wire  signed [19:0] base_product_full;
+
+    altera_mult_add #(.A_WIDTH(8), .B_WIDTH(12), .PIPE_STAGES(0))
+    u_dsp_base (
+        .clock(clk), .a(s1_w_signed), .b(s1_a_scaled), .result(base_product_full)
+    );
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -142,7 +156,7 @@ module fp4_mac #(
             s2_sc_scaled    <= 12'd0;
             s2_valid        <= 1'b0;
         end else begin
-            s2_base_product <= $signed(s1_w_signed) * $signed(s1_a_scaled);
+            s2_base_product <= base_product_full[19:0];
             s2_sc_scaled    <= s1_sc_scaled;
             s2_valid        <= s1_valid;
         end
@@ -150,17 +164,24 @@ module fp4_mac #(
 
     //=========================================================================
     // Stage 3: Scale Multiply — 20b base × 12b scale → 32b product
-    //   Second DSP 18×19 multiply. Rescale by >>>8 to match fixed-point.
+    //   altera_mult_add DSP IP (combinational); output registered in always_ff
+    //   Rescale by >>>8 to match fixed-point.
     //=========================================================================
     logic signed [31:0] s3_product;
     logic               s3_valid;
+    wire  signed [31:0] scale_product_full;
+
+    altera_mult_add #(.A_WIDTH(20), .B_WIDTH(12), .PIPE_STAGES(0))
+    u_dsp_scale (
+        .clock(clk), .a(s2_base_product), .b(s2_sc_scaled), .result(scale_product_full)
+    );
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             s3_product <= 32'sd0;
             s3_valid   <= 1'b0;
         end else begin
-            s3_product <= $signed(s2_base_product) * $signed(s2_sc_scaled) >>> 8;
+            s3_product <= scale_product_full >>> 8;
             s3_valid   <= s2_valid;
         end
     end

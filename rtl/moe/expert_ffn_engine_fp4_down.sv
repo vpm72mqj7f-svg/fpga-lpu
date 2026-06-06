@@ -6,20 +6,30 @@ module expert_ffn_engine_fp4_down #(
     parameter int HIDDEN = 8,
     parameter int INTER  = 4,
     parameter int LANES  = 4,
+    parameter int GROUP_SIZE = 2,
     parameter int K_BEATS_H = (HIDDEN + LANES - 1) / LANES,
     parameter int K_BEATS_I = (INTER + LANES - 1) / LANES,
     parameter int BEAT_W_H  = $clog2(K_BEATS_H > 1 ? K_BEATS_H : 2),
-    parameter int BEAT_W_I  = $clog2(K_BEATS_I > 1 ? K_BEATS_I : 2)
+    parameter int BEAT_W_I  = $clog2(K_BEATS_I > 1 ? K_BEATS_I : 2),
+    parameter int NUM_EXPERTS = 1,
+    localparam int EXPERT_W = $clog2(NUM_EXPERTS > 1 ? NUM_EXPERTS : 2),
+    localparam int NUM_GROUPS_H = (HIDDEN + GROUP_SIZE - 1) / GROUP_SIZE,
+    localparam int NUM_GROUPS_I = (INTER  + GROUP_SIZE - 1) / GROUP_SIZE,
+    localparam int MAX_NUM_GROUPS = NUM_GROUPS_H > NUM_GROUPS_I ? NUM_GROUPS_H : NUM_GROUPS_I,
+    localparam int SCALE_ADDR_W = $clog2(MAX_NUM_GROUPS > 1 ? MAX_NUM_GROUPS : 2)
 ) (
     input  logic clk,
     input  logic rst_n,
+
+    // Expert select (0 when NUM_EXPERTS=1)
+    input  logic [EXPERT_W-1:0] expert_sel,
 
     input  logic activ_wr_en,
     input  logic [BEAT_W_H-1:0] activ_wr_beat,
     input  logic [LANES*8-1:0] activ_wr_data,
 
     input  logic scale_wr_en,
-    input  logic [1:0] scale_wr_addr,
+    input  logic [SCALE_ADDR_W-1:0] scale_wr_addr,
     input  logic [7:0] scale_wr_data,
 
     input  logic gate_w_wr_en,
@@ -80,27 +90,30 @@ module expert_ffn_engine_fp4_down #(
         end
     endgenerate
 
-    fp4_linear_engine #(.M_OUT(INTER), .K_TOTAL(HIDDEN), .LANES(LANES), .GROUP_SIZE(4), .NUM_GROUPS(4), .ADDR_WIDTH(2)) u_gate (
+    fp4_linear_engine #(.M_OUT(INTER), .K_TOTAL(HIDDEN), .LANES(LANES), .GROUP_SIZE(GROUP_SIZE), .NUM_GROUPS(NUM_GROUPS_H), .ADDR_WIDTH(SCALE_ADDR_W), .NUM_EXPERTS(NUM_EXPERTS), .NAME("gate")) u_gate (
         .clk(clk), .rst_n(rst_n), .weight_wr_en(gate_w_wr_en), .weight_wr_row(gate_w_wr_row),
         .weight_wr_beat(gate_w_wr_beat), .weight_wr_data(gate_w_wr_data),
+        .expert_sel(expert_sel),
         .activ_wr_en(activ_wr_en), .activ_wr_beat(activ_wr_beat), .activ_wr_data(activ_wr_data),
         .scale_wr_en(scale_wr_en), .scale_wr_addr(scale_wr_addr), .scale_wr_data(scale_wr_data),
         .start(gate_start), .busy(), .done(gate_done), .result_valid(gate_rv), .result_row(gate_rr), .result_data(gate_rd),
         .result_ready(1'b1)
     );
 
-    fp4_linear_engine #(.M_OUT(INTER), .K_TOTAL(HIDDEN), .LANES(LANES), .GROUP_SIZE(4), .NUM_GROUPS(4), .ADDR_WIDTH(2)) u_up (
+    fp4_linear_engine #(.M_OUT(INTER), .K_TOTAL(HIDDEN), .LANES(LANES), .GROUP_SIZE(GROUP_SIZE), .NUM_GROUPS(NUM_GROUPS_H), .ADDR_WIDTH(SCALE_ADDR_W), .NUM_EXPERTS(NUM_EXPERTS), .NAME("up")) u_up (
         .clk(clk), .rst_n(rst_n), .weight_wr_en(up_w_wr_en), .weight_wr_row(up_w_wr_row),
         .weight_wr_beat(up_w_wr_beat), .weight_wr_data(up_w_wr_data),
+        .expert_sel(expert_sel),
         .activ_wr_en(activ_wr_en), .activ_wr_beat(activ_wr_beat), .activ_wr_data(activ_wr_data),
         .scale_wr_en(scale_wr_en), .scale_wr_addr(scale_wr_addr), .scale_wr_data(scale_wr_data),
         .start(up_start), .busy(), .done(up_done), .result_valid(up_rv), .result_row(up_rr), .result_data(up_rd),
         .result_ready(1'b1)
     );
 
-    fp4_linear_engine #(.M_OUT(HIDDEN), .K_TOTAL(INTER), .LANES(LANES), .GROUP_SIZE(4), .NUM_GROUPS(4), .ADDR_WIDTH(2)) u_down (
+    fp4_linear_engine #(.M_OUT(HIDDEN), .K_TOTAL(INTER), .LANES(LANES), .GROUP_SIZE(GROUP_SIZE), .NUM_GROUPS(NUM_GROUPS_I), .ADDR_WIDTH(SCALE_ADDR_W), .NUM_EXPERTS(NUM_EXPERTS), .NAME("down")) u_down (
         .clk(clk), .rst_n(rst_n), .weight_wr_en(down_w_wr_en), .weight_wr_row(down_w_wr_row),
         .weight_wr_beat(down_w_wr_beat), .weight_wr_data(down_w_wr_data),
+        .expert_sel(expert_sel),
         .activ_wr_en(down_activ_wr_en), .activ_wr_beat(down_beat_cnt), .activ_wr_data(down_activ_slice),
         .scale_wr_en(scale_wr_en), .scale_wr_addr(scale_wr_addr), .scale_wr_data(scale_wr_data),
         .start(down_start), .busy(), .done(down_done), .result_valid(down_rv), .result_row(down_rr), .result_data(down_rd),
@@ -124,8 +137,18 @@ module expert_ffn_engine_fp4_down #(
             for (int i=0; i<INTER; i++) begin gate_vec[i] <= 0; up_vec[i] <= 0; mid_vec[i] <= 0; end
         end else begin
             gate_start <= 0; up_start <= 0; down_start <= 0; done <= 0; down_activ_wr_en <= 0;
-            if (gate_rv) gate_vec[gate_rr] <= gate_rd;
-            if (up_rv)   up_vec[up_rr] <= up_rd;
+            if (gate_rv) begin
+                gate_vec[gate_rr] <= gate_rd;
+`ifdef DBG_PIPELINE
+                $display("  [FFN_DBG] gate_vec[%0d] <= 0x%08h (%0d)", gate_rr, gate_rd, gate_rd);
+`endif
+            end
+            if (up_rv) begin
+                up_vec[up_rr] <= up_rd;
+`ifdef DBG_PIPELINE
+                $display("  [FFN_DBG] up_vec[%0d]   <= 0x%08h (%0d)", up_rr, up_rd, up_rd);
+`endif
+            end
             case (state)
                 S_IDLE: if (start) begin
                     gate_start <= 1; up_start <= 1; state <= S_RUN_GU;
@@ -133,10 +156,26 @@ module expert_ffn_engine_fp4_down #(
                 S_RUN_GU: if (gate_done && up_done) state <= S_MID;
                 S_MID: begin
                     for (int i=0; i<INTER; i++) mid_vec[i] <= gate_up_prod[i] >>> 12;
+`ifdef DBG_PIPELINE
+                    for (int i=0; i<INTER; i++)
+                        $display("  [FFN_DBG] S_MID i=%0d gate=0x%08h(%0d) up=0x%08h(%0d) silu=0x%08h(%0d) prod=0x%016h(%0d) mid=0x%016h(%0d)",
+                                 i, gate_vec[i], gate_vec[i], up_vec[i], up_vec[i],
+                                 silu_vec[i], silu_vec[i], gate_up_prod[i], gate_up_prod[i],
+                                 gate_up_prod[i] >>> 12, gate_up_prod[i] >>> 12);
+`endif
                     state <= S_LOAD_DOWN;
                 end
                 S_LOAD_DOWN: begin
                     down_activ_wr_en <= 1;
+`ifdef DBG_PIPELINE
+                    $display("  [FFN_DBG] S_LOAD_DOWN beat=%0d K_BEATS_I=%0d activ_slice=0x%08h fp8[0]=0x%02x fp8[1]=0x%02x fp8[2]=0x%02x fp8[3]=0x%02x",
+                             down_beat_cnt, K_BEATS_I, down_activ_slice,
+                             down_activ_pack[7:0], down_activ_pack[15:8],
+                             down_activ_pack[23:16], down_activ_pack[31:24]);
+                    for (int i=0; i<INTER; i++)
+                        $display("  [FFN_DBG]   mid[%0d]=0x%08h(%0d) fp8=0x%02x",
+                                 i, mid_vec[i], mid_vec[i], down_activ_pack[i*8 +: 8]);
+`endif
                     if (down_beat_cnt == K_BEATS_I - 1) begin
                         down_beat_cnt <= '0;
                         down_started <= 0;

@@ -37,11 +37,27 @@ module mla_rope #(
     output logic [HIDDEN*DATA_W-1:0]     rot_flat
 );
 
-    localparam int N_PAIRS = HIDDEN / 2;
+    localparam int N_PAIRS     = HIDDEN / 2;
+    localparam int LUT_DEPTH   = MAX_POS * N_PAIRS;
+    localparam int LUT_AW      = $clog2(LUT_DEPTH);
 
-    // LUT storage
-    logic signed [COEFF_W-1:0] sin_lut [MAX_POS][N_PAIRS];
-    logic signed [COEFF_W-1:0] cos_lut [MAX_POS][N_PAIRS];
+    // Flattened LUT addresses
+    logic [LUT_AW-1:0]          lut_wr_addr;
+    logic [LUT_AW-1:0]          lut_rd_addr;
+    logic signed [COEFF_W-1:0]  sin_q, cos_q;
+
+    assign lut_wr_addr = lut_pos * N_PAIRS + lut_pair;
+    assign lut_rd_addr = pos_r  * N_PAIRS + pair_idx;
+
+    // Altera syncram IP for sin/cos LUTs (ROM-style, MLAB for low latency)
+    altera_syncram #(.WIDTH(COEFF_W), .DEPTH(LUT_DEPTH), .RAM_BLOCK_TYPE("MLAB"))
+    u_sin_lut (.clock(clk), .wren(lut_wr_en), .wraddress(lut_wr_addr),
+               .data(lut_sin_data), .rdaddress(lut_rd_addr), .q(sin_q));
+
+    altera_syncram #(.WIDTH(COEFF_W), .DEPTH(LUT_DEPTH), .RAM_BLOCK_TYPE("MLAB"),
+                      .INIT_VALUE(16'd4096))  // cos(0) = 1.0 in Q12
+    u_cos_lut (.clock(clk), .wren(lut_wr_en), .wraddress(lut_wr_addr),
+               .data(lut_cos_data), .rdaddress(lut_rd_addr), .q(cos_q));
 
     // Registered inputs
     logic signed [DATA_W-1:0] vec_r [HIDDEN];
@@ -56,19 +72,24 @@ module mla_rope #(
 
     assign in_ready = !pipe_active;
 
-    // LUT write
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            for (int p = 0; p < MAX_POS; p++)
-                for (int i = 0; i < N_PAIRS; i++) begin
-                    sin_lut[p][i] <= '0;
-                    cos_lut[p][i] <= 16'd4096;  // cos(0) = 1.0 in Q12
-                end
-        end else if (lut_wr_en) begin
-            sin_lut[lut_pos][lut_pair] <= lut_sin_data;
-            cos_lut[lut_pos][lut_pair] <= lut_cos_data;
-        end
-    end
+    // ── DSP: altera_mult_add IP instances (4 multipliers for RoPE) ──
+    wire signed [DATA_W+COEFF_W-1:0] mul_x_cos, mul_x_sin, mul_y_cos, mul_y_sin;
+    wire signed [DATA_W-1:0]         vec_even, vec_odd;
+
+    assign vec_even = vec_r[pair_idx*2];
+    assign vec_odd  = vec_r[pair_idx*2+1];
+
+    altera_mult_add #(.A_WIDTH(DATA_W), .B_WIDTH(COEFF_W), .PIPE_STAGES(0))
+    u_mul_x_cos (.clock(clk), .a(vec_even), .b(cos_q), .result(mul_x_cos));
+
+    altera_mult_add #(.A_WIDTH(DATA_W), .B_WIDTH(COEFF_W), .PIPE_STAGES(0))
+    u_mul_x_sin (.clock(clk), .a(vec_even), .b(sin_q), .result(mul_x_sin));
+
+    altera_mult_add #(.A_WIDTH(DATA_W), .B_WIDTH(COEFF_W), .PIPE_STAGES(0))
+    u_mul_y_cos (.clock(clk), .a(vec_odd),  .b(cos_q), .result(mul_y_cos));
+
+    altera_mult_add #(.A_WIDTH(DATA_W), .B_WIDTH(COEFF_W), .PIPE_STAGES(0))
+    u_mul_y_sin (.clock(clk), .a(vec_odd),  .b(sin_q), .result(mul_y_sin));
 
     // Main pipeline — processes one pair per cycle
     logic [$clog2(N_PAIRS)-1:0] pair_idx;
@@ -98,11 +119,11 @@ module mla_rope #(
             end
 
             if (pipe_active && !stage2) begin
-                // Stage 1: read LUT, multiply
-                x_cos <= vec_r[pair_idx*2]   * cos_lut[pos_r][pair_idx] >>> 12;
-                x_sin <= vec_r[pair_idx*2]   * sin_lut[pos_r][pair_idx] >>> 12;
-                y_cos <= vec_r[pair_idx*2+1] * cos_lut[pos_r][pair_idx] >>> 12;
-                y_sin <= vec_r[pair_idx*2+1] * sin_lut[pos_r][pair_idx] >>> 12;
+                // Stage 1: altera_mult_add computes products, register results
+                x_cos <= mul_x_cos >>> 12;
+                x_sin <= mul_x_sin >>> 12;
+                y_cos <= mul_y_cos >>> 12;
+                y_sin <= mul_y_sin >>> 12;
                 stage2 <= 1'b1;
             end
 

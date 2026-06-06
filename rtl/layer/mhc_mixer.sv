@@ -50,22 +50,63 @@ module mhc_mixer #(
     logic [HIDDEN*DATA_W-1:0] layer_r;
     logic [HIDDEN*DATA_W-1:0] resid_r;
 
-    // Registered products (from previous cycle's multiply)
-    logic signed [DATA_W+COEFF_W-1:0] prod_l [HIDDEN];
-    logic signed [DATA_W+COEFF_W-1:0] prod_r [HIDDEN];
-
     // Current highway index
     logic [HW_BITS-1:0] hw_idx;
     logic               last_hw;
 
-    // Combinational: sum = (prod_l >> 12) + (prod_r >> 12) for output write
-    logic signed [DATA_W-1:0] sum_c [HIDDEN];
-
     assign in_ready = (state == S_IDLE);
     assign last_hw  = (hw_idx == (N_HW - 1));
 
-    // Combinational sum from registered products
-    for (genvar d = 0; d < HIDDEN; d++) begin : gen_sum
+    // ── DSP: altera_mult_add IP instances (2 × HIDDEN multipliers) ──
+    // Coefficient mux: select mix_a/mix_b[hw_idx+1] or [0] based on state
+    logic signed [COEFF_W-1:0] coeff_a_sel;
+    logic signed [COEFF_W-1:0] coeff_b_sel;
+    logic [HW_BITS-1:0]        next_hw_idx;
+
+    assign next_hw_idx = hw_idx + 1'b1;
+
+    always_comb begin
+        if (state == S_WARMUP) begin
+            coeff_a_sel = mix_a[0];
+            coeff_b_sel = mix_b[0];
+        end else if (last_hw) begin
+            // Hold current coefficients; next_hw_idx would wrap and select mix[0]
+            coeff_a_sel = mix_a[hw_idx];
+            coeff_b_sel = mix_b[hw_idx];
+        end else begin
+            coeff_a_sel = mix_a[next_hw_idx];
+            coeff_b_sel = mix_b[next_hw_idx];
+        end
+    end
+
+    // Registered products and their sum (combinational from registered products)
+    logic signed [DATA_W+COEFF_W-1:0] prod_l [HIDDEN];
+    logic signed [DATA_W+COEFF_W-1:0] prod_r [HIDDEN];
+    logic signed [DATA_W-1:0]        sum_c    [HIDDEN];
+
+    for (genvar d = 0; d < HIDDEN; d++) begin : gen_dsp
+        wire signed [DATA_W+COEFF_W-1:0] mul_l, mul_r;
+
+        altera_mult_add #(.A_WIDTH(DATA_W), .B_WIDTH(COEFF_W), .PIPE_STAGES(0))
+        u_mul_l (.clock(clk),
+            .a($signed(layer_r[d*DATA_W +: DATA_W])),
+            .b(coeff_a_sel), .result(mul_l));
+
+        altera_mult_add #(.A_WIDTH(DATA_W), .B_WIDTH(COEFF_W), .PIPE_STAGES(0))
+        u_mul_r (.clock(clk),
+            .a($signed(resid_r[d*DATA_W +: DATA_W])),
+            .b(coeff_b_sel), .result(mul_r));
+
+        always_ff @(posedge clk or negedge rst_n) begin
+            if (!rst_n) begin
+                prod_l[d] <= '0;
+                prod_r[d] <= '0;
+            end else if (state == S_WARMUP || state == S_RUN) begin
+                prod_l[d] <= mul_l;
+                prod_r[d] <= mul_r;
+            end
+        end
+
         assign sum_c[d] = (prod_l[d] >>> 12) + (prod_r[d] >>> 12);
     end
 
@@ -93,10 +134,6 @@ module mhc_mixer #(
             resid_r     <= '0;
             out_valid   <= 1'b0;
             highway_flat <= '0;
-            for (int d = 0; d < HIDDEN; d++) begin
-                prod_l[d] <= '0;
-                prod_r[d] <= '0;
-            end
         end else begin
             out_valid <= 1'b0;
 
@@ -111,11 +148,7 @@ module mhc_mixer #(
                 end
 
                 S_WARMUP: begin
-                    // Compute products for highway 0 (registered, used in S_RUN)
-                    for (int d = 0; d < HIDDEN; d++) begin
-                        prod_l[d] <= $signed(layer_r[d*DATA_W +: DATA_W]) * mix_a[0];
-                        prod_r[d] <= $signed(resid_r[d*DATA_W +: DATA_W]) * mix_b[0];
-                    end
+                    // Products computed by altera_mult_add + registered above
                     hw_idx <= '0;
                     state  <= S_RUN;
                 end
@@ -129,20 +162,14 @@ module mhc_mixer #(
                     if (last_hw) begin
                         state <= S_DONE;
                     end else begin
-                        // Compute products for next highway
                         hw_idx <= hw_idx + 1'b1;
-                        for (int d = 0; d < HIDDEN; d++) begin
-                            prod_l[d] <= $signed(layer_r[d*DATA_W +: DATA_W]) * mix_a[hw_idx + 1'b1];
-                            prod_r[d] <= $signed(resid_r[d*DATA_W +: DATA_W]) * mix_b[hw_idx + 1'b1];
-                        end
                     end
                 end
 
                 S_DONE: begin
-                    // Write last highway result (from products computed in final S_RUN)
-                    for (int d = 0; d < HIDDEN; d++) begin
-                        highway_flat[(hw_idx*HIDDEN + d)*DATA_W +: DATA_W] <= sum_c[d];
-                    end
+                    // Last highway was already written in final S_RUN cycle.
+                    // (Writing again here would use stale products from the
+                    //  coefficient-wrap bug — removed to avoid overwrite.)
                     out_valid <= 1'b1;
                     state     <= S_IDLE;
                 end

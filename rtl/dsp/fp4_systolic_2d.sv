@@ -97,6 +97,19 @@ module fp4_systolic_2d #(
     //=========================================================================
     localparam int RED_WIDTH = ACCUM_WIDTH + $clog2(LANES);  // guard bits
 
+    // Extract MSB sign bits outside always_comb to avoid Icarus
+    // "constant selects in always_* processes" limitation.
+    wire cell_sign [M_ROWS-1:0][LANES-1:0];
+    wire [RED_WIDTH-1:0] row_sum_comb_lo [M_ROWS-1:0];
+    genvar sr, sc;
+    generate
+        for (sr = 0; sr < M_ROWS; sr++) begin : g_sign_row
+            for (sc = 0; sc < LANES; sc++) begin : g_sign_col
+                assign cell_sign[sr][sc] = cell_accum[sr][sc][ACCUM_WIDTH-1];
+            end
+        end
+    endgenerate
+
     // Combinational per-row sum
     logic [RED_WIDTH-1:0] row_sum_comb [M_ROWS-1:0];
 
@@ -105,18 +118,28 @@ module fp4_systolic_2d #(
             row_sum_comb[rr] = '0;
             for (int cc = 0; cc < LANES; cc++) begin
                 row_sum_comb[rr] = row_sum_comb[rr] +
-                    {{(RED_WIDTH-ACCUM_WIDTH){cell_accum[rr][cc][ACCUM_WIDTH-1]}},
+                    {{(RED_WIDTH-ACCUM_WIDTH){cell_sign[rr][cc]}},
                      cell_accum[rr][cc]};
             end
         end
     end
 
+    // Expose truncated row sums as wires to avoid constant-select in always_ff
+    generate
+        for (sr = 0; sr < M_ROWS; sr++) begin : g_sum_lo
+            assign row_sum_comb_lo[sr] = row_sum_comb[sr][ACCUM_WIDTH-1:0];
+        end
+    endgenerate
+
     // Register the reduction result (holds reduce_done for 2 cycles)
-    always_ff @(posedge clk) begin
-        if (reduce_start) begin
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            result_flat <= '0;
+            reduce_done <= 1'b0;
+        end else if (reduce_start) begin
             for (int rr = 0; rr < M_ROWS; rr++) begin
                 result_flat[rr*ACCUM_WIDTH +: ACCUM_WIDTH] <=
-                    row_sum_comb[rr][ACCUM_WIDTH-1:0];
+                    row_sum_comb_lo[rr];
             end
             reduce_done <= 1'b1;
         end else if (reduce_done) begin

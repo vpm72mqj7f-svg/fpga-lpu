@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-vllm_prefill.py — vLLM Scheduler Integration with FPGA Prefill (P2)
+vllm_prefill.py — vLLM Scheduler Integration with CPU Prefill
 
-Extends vLLM's scheduler to route prefill to CPU/FPGA based on prompt length.
+Extends vLLM's scheduler to route prefill to CPU.
 Drop-in module — no changes to vLLM core needed.
 
 Usage:
-    from vllm_prefill import FP GAPrefillRouter
+    from vllm_prefill import FPGAPrefillRouter
     router = FPGAPrefillRouter(cfg)
     router.route(seq_group)  → tier decision
 
@@ -22,9 +22,7 @@ Architecture:
          ▼
     FPGAPrefillRouter.route(seq)
          │
-         ├─ Tier 1 (CPU):  short→CPU prefill worker thread
-         ├─ Tier 2 (FPGA): med/long→FPGA chunked prefill
-         └─ Tier 3 (GPU):  (disabled)
+         └─ CPU prefill worker thread
          │
          ▼
     KV Cache Coordinator
@@ -50,8 +48,6 @@ from collections import deque
 
 class PrefillTier(Enum):
     CPU = auto()
-    FPGA = auto()
-    GPU = auto()  # disabled
 
 
 @dataclass
@@ -84,16 +80,10 @@ class RouterConfig:
     cpu_short_threshold: int = 512
     cpu_max_total_s: float = 10.0       # max total CPU prefill time
 
-    # FPGA prefill
-    fpga_chunk_size: int = 512
-    fpga_chunk_lat_ms: float = 85.0
-
     # TTFT targets
     ttft_target_ms: float = 500.0
     ttft_acceptable_ms: float = 2000.0
 
-    # GPU
-    gpu_available: bool = False
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -130,64 +120,26 @@ class FPGAPrefillRouter:
 
     def __init__(self, cfg: RouterConfig):
         self.cfg = cfg
-        self.stats: Dict[str, int] = {"cpu": 0, "fpga": 0, "gpu": 0}
+        self.stats: Dict[str, int] = {"cpu": 0}
 
     def route(self, req: PrefillRequest) -> PrefillRequest:
-        """Assign prefill tier to a request."""
-        cfg = self.cfg
+        """Always route to CPU prefill. FPGA prefill reserved for future."""
         new_tokens = req.prompt_tokens - req.cached_prefix_tokens
 
         if new_tokens <= 0:
-            # All cached — no prefill needed
             req.tier = PrefillTier.CPU
             req.chunk_size = 0
             req.num_chunks = 0
             req.ttft_estimate_ms = 0
-            self.stats["cpu"] += 1
-            return req
-
-        # ── Tier 1: CPU ──
-        cpu_lat = cpu_prefill_latency_ms(new_tokens, cfg)
-
-        if new_tokens <= cfg.cpu_short_threshold:
+        else:
+            num = math.ceil(new_tokens / self.cfg.cpu_chunk_size)
+            chunk_ms = cpu_prefill_latency_ms(self.cfg.cpu_chunk_size, self.cfg)
             req.tier = PrefillTier.CPU
-            req.chunk_size = new_tokens
-            req.num_chunks = 1
-            req.ttft_estimate_ms = cpu_lat
-            req.total_estimate_ms = cpu_lat
-            self.stats["cpu"] += 1
-            return req
-
-        # CPU chunked
-        chunk_ms = cpu_prefill_latency_ms(cfg.cpu_chunk_size, cfg)
-        num = math.ceil(new_tokens / cfg.cpu_chunk_size)
-        total_ms = chunk_ms * num
-
-        if chunk_ms < cfg.ttft_target_ms and total_ms < cfg.cpu_max_total_s * 1000:
-            req.tier = PrefillTier.CPU
-            req.chunk_size = cfg.cpu_chunk_size
+            req.chunk_size = self.cfg.cpu_chunk_size
             req.num_chunks = num
             req.ttft_estimate_ms = chunk_ms
-            req.total_estimate_ms = total_ms
-            self.stats["cpu"] += 1
-            return req
+            req.total_estimate_ms = chunk_ms * num
 
-        # ── Tier 2: FPGA ──
-        if cfg.fpga_chunk_lat_ms < cfg.ttft_acceptable_ms:
-            req.tier = PrefillTier.FPGA
-            req.chunk_size = cfg.fpga_chunk_size
-            req.num_chunks = math.ceil(new_tokens / cfg.fpga_chunk_size)
-            req.ttft_estimate_ms = cfg.fpga_chunk_lat_ms
-            req.total_estimate_ms = cfg.fpga_chunk_lat_ms * req.num_chunks
-            self.stats["fpga"] += 1
-            return req
-
-        # ── Fallback ──
-        req.tier = PrefillTier.CPU
-        req.chunk_size = cfg.cpu_chunk_size
-        req.num_chunks = num
-        req.ttft_estimate_ms = chunk_ms
-        req.total_estimate_ms = total_ms
         self.stats["cpu"] += 1
         return req
 
@@ -282,9 +234,6 @@ def patch_vllm_scheduler(scheduler, router: FPGAPrefillRouter,
 
             if req.tier == PrefillTier.CPU:
                 cpu_worker.submit(req)
-            elif req.tier == PrefillTier.FPGA:
-                # FPGA prefill handled by driver
-                pass
 
         return result
 
@@ -314,8 +263,6 @@ if __name__ == "__main__":
     print(" FPGA Prefill Router — vLLM Integration Test")
     print(f" CPU: {cfg.cpu_effective_tflops} TFLOPS, "
           f"chunk={cfg.cpu_chunk_size}")
-    print(f" FPGA: chunk={cfg.fpga_chunk_size}, "
-          f"{cfg.fpga_chunk_lat_ms}ms/chunk")
     print("=" * 80)
 
     for name, prompt, cached in test_requests:

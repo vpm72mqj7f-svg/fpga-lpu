@@ -32,35 +32,44 @@ module sram_cache #(
     logic [TAG_WIDTH-1:0]    lookup_tag;
     logic [INDEX_WIDTH-1:0]  fill_idx;
 
-    // Cache storage — M20K BRAM for data/tag, MLAB for valid bits
-    // M20K: 20 Kbit blocks, true dual-port, 512×40 max per block
-    (* ramstyle = "MLAB" *) logic                    entry_valid  [NUM_ENTRIES];
-    (* ramstyle = "M20K" *) logic [TAG_WIDTH-1:0]    entry_tag    [NUM_ENTRIES];
-    (* ramstyle = "M20K" *) logic [DATA_WIDTH-1:0]   entry_data   [NUM_ENTRIES];
-
     assign lookup_idx = lookup_hash[INDEX_WIDTH-1:0];
     assign lookup_tag = lookup_hash[31:INDEX_WIDTH];
     assign fill_idx   = fill_hash[INDEX_WIDTH-1:0];
+
+    // Altera syncram IP: 3 independent simple-dual-port RAMs
+    // M20K for tag/data (high density), MLAB for valid bits (low latency)
+    logic          valid_q;
+    logic [TAG_WIDTH-1:0]  tag_q;
+    logic [DATA_WIDTH-1:0] data_q;
+
+    altera_syncram #(.WIDTH(1), .DEPTH(NUM_ENTRIES), .RAM_BLOCK_TYPE("MLAB"))
+    u_valid (
+        .clock(clk), .wren(fill_valid), .wraddress(fill_idx), .data(1'b1),
+        .rdaddress(lookup_idx), .q(valid_q)
+    );
+
+    altera_syncram #(.WIDTH(TAG_WIDTH), .DEPTH(NUM_ENTRIES), .RAM_BLOCK_TYPE("M20K"))
+    u_tag (
+        .clock(clk), .wren(fill_valid), .wraddress(fill_idx),
+        .data(fill_hash[31:INDEX_WIDTH]), .rdaddress(lookup_idx), .q(tag_q)
+    );
+
+    altera_syncram #(.WIDTH(DATA_WIDTH), .DEPTH(NUM_ENTRIES), .RAM_BLOCK_TYPE("M20K"))
+    u_data (
+        .clock(clk), .wren(fill_valid), .wraddress(fill_idx),
+        .data(fill_data), .rdaddress(lookup_idx), .q(data_q)
+    );
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             lookup_hit  <= 1'b0;
             lookup_data <= '0;
         end else begin
-            // Read: check valid and tag match
             if (lookup_valid) begin
-                lookup_hit  <= entry_valid[lookup_idx] &&
-                              (entry_tag[lookup_idx] == lookup_tag);
-                lookup_data <= entry_data[lookup_idx];
+                lookup_hit  <= valid_q && (tag_q == lookup_tag);
+                lookup_data <= data_q;
             end else begin
                 lookup_hit  <= 1'b0;
-            end
-
-            // Write: fill on miss
-            if (fill_valid) begin
-                entry_valid[fill_idx] <= 1'b1;
-                entry_tag[fill_idx]   <= fill_hash[31:INDEX_WIDTH];
-                entry_data[fill_idx]  <= fill_data;
             end
         end
     end

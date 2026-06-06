@@ -57,8 +57,8 @@ module mla_qkv_proj #(
     logic signed [WEIGHT_W-1:0] W_Vu [V_LATENT][HIDDEN];
 
     // Pipeline
-    typedef enum logic [2:0] {
-        S_IDLE, S_Q, S_K, S_V, S_K_UP, S_V_UP, S_OUTPUT
+    typedef enum logic [3:0] {
+        S_IDLE, S_Q, S_K, S_V, S_K_UP, S_V_UP, S_FLAT, S_OUTPUT
     } state_t;
     state_t state;
 
@@ -75,72 +75,44 @@ module mla_qkv_proj #(
     logic signed [DATA_W-1:0] K_r [HIDDEN];
     logic signed [DATA_W-1:0] V_r [HIDDEN];
 
-    // Combinational dot product for current out_idx
+    // Combinational dot product for current out_idx — parameterized for-loop
     logic signed [DATA_W-1:0] dot_product;
     always_comb begin
+        dot_product = '0;
         case (state)
-            S_Q: dot_product =
-                ($signed(hidden_r[0]) * W_Q[0][out_idx] >>> 12) +
-                ($signed(hidden_r[1]) * W_Q[1][out_idx] >>> 12) +
-                ($signed(hidden_r[2]) * W_Q[2][out_idx] >>> 12) +
-                ($signed(hidden_r[3]) * W_Q[3][out_idx] >>> 12) +
-                ($signed(hidden_r[4]) * W_Q[4][out_idx] >>> 12) +
-                ($signed(hidden_r[5]) * W_Q[5][out_idx] >>> 12) +
-                ($signed(hidden_r[6]) * W_Q[6][out_idx] >>> 12) +
-                ($signed(hidden_r[7]) * W_Q[7][out_idx] >>> 12);
-            S_K: dot_product =
-                ($signed(hidden_r[0]) * W_K[0][out_idx] >>> 12) +
-                ($signed(hidden_r[1]) * W_K[1][out_idx] >>> 12) +
-                ($signed(hidden_r[2]) * W_K[2][out_idx] >>> 12) +
-                ($signed(hidden_r[3]) * W_K[3][out_idx] >>> 12) +
-                ($signed(hidden_r[4]) * W_K[4][out_idx] >>> 12) +
-                ($signed(hidden_r[5]) * W_K[5][out_idx] >>> 12) +
-                ($signed(hidden_r[6]) * W_K[6][out_idx] >>> 12) +
-                ($signed(hidden_r[7]) * W_K[7][out_idx] >>> 12);
-            S_V: dot_product =
-                ($signed(hidden_r[0]) * W_V[0][out_idx] >>> 12) +
-                ($signed(hidden_r[1]) * W_V[1][out_idx] >>> 12) +
-                ($signed(hidden_r[2]) * W_V[2][out_idx] >>> 12) +
-                ($signed(hidden_r[3]) * W_V[3][out_idx] >>> 12) +
-                ($signed(hidden_r[4]) * W_V[4][out_idx] >>> 12) +
-                ($signed(hidden_r[5]) * W_V[5][out_idx] >>> 12) +
-                ($signed(hidden_r[6]) * W_V[6][out_idx] >>> 12) +
-                ($signed(hidden_r[7]) * W_V[7][out_idx] >>> 12);
-            S_K_UP: dot_product =
-                ($signed(K_lat_r[0]) * W_Ku[0][out_idx] >>> 12) +
-                ($signed(K_lat_r[1]) * W_Ku[1][out_idx] >>> 12) +
-                ($signed(K_lat_r[2]) * W_Ku[2][out_idx] >>> 12) +
-                ($signed(K_lat_r[3]) * W_Ku[3][out_idx] >>> 12);
-            S_V_UP: dot_product =
-                ($signed(V_lat_r[0]) * W_Vu[0][out_idx] >>> 12) +
-                ($signed(V_lat_r[1]) * W_Vu[1][out_idx] >>> 12) +
-                ($signed(V_lat_r[2]) * W_Vu[2][out_idx] >>> 12) +
-                ($signed(V_lat_r[3]) * W_Vu[3][out_idx] >>> 12);
+            S_Q: for (int i = 0; i < HIDDEN; i++)
+                     dot_product += ($signed(hidden_r[i]) * $signed(W_Q[i][out_idx]) >>> 12);
+            S_K: for (int i = 0; i < HIDDEN; i++)
+                     dot_product += ($signed(hidden_r[i]) * $signed(W_K[i][out_idx]) >>> 12);
+            S_V: for (int i = 0; i < HIDDEN; i++)
+                     dot_product += ($signed(hidden_r[i]) * $signed(W_V[i][out_idx]) >>> 12);
+            S_K_UP: for (int i = 0; i < K_LATENT; i++)
+                         dot_product += ($signed(K_lat_r[i]) * $signed(W_Ku[i][out_idx]) >>> 12);
+            S_V_UP: for (int i = 0; i < V_LATENT; i++)
+                         dot_product += ($signed(V_lat_r[i]) * $signed(W_Vu[i][out_idx]) >>> 12);
             default: dot_product = '0;
         endcase
     end
 
     assign in_ready = (state == S_IDLE);
 
-    // Weight write
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            for (int r = 0; r < HIDDEN; r++)
-                for (int c = 0; c < HIDDEN; c++)
-                    W_Q[r][c] <= '0;
-            for (int r = 0; r < HIDDEN; r++)
-                for (int c = 0; c < K_LATENT; c++)
-                    W_K[r][c] <= '0;
-            for (int r = 0; r < K_LATENT; r++)
-                for (int c = 0; c < HIDDEN; c++)
-                    W_Ku[r][c] <= '0;
-            for (int r = 0; r < HIDDEN; r++)
-                for (int c = 0; c < V_LATENT; c++)
-                    W_V[r][c] <= '0;
-            for (int r = 0; r < V_LATENT; r++)
-                for (int c = 0; c < HIDDEN; c++)
-                    W_Vu[r][c] <= '0;
-        end else if (wt_wr_en) begin
+    // Weight storage — survives reset (production: altera_syncram BRAM)
+    // synthesis translate_off
+    initial begin
+        for (int r = 0; r < HIDDEN; r++) begin
+            for (int c = 0; c < HIDDEN; c++)     W_Q[r][c]  = '0;
+            for (int c = 0; c < K_LATENT; c++)   W_K[r][c]  = '0;
+            for (int c = 0; c < V_LATENT; c++)   W_V[r][c]  = '0;
+        end
+        for (int r = 0; r < K_LATENT; r++)
+            for (int c = 0; c < HIDDEN; c++)     W_Ku[r][c] = '0;
+        for (int r = 0; r < V_LATENT; r++)
+            for (int c = 0; c < HIDDEN; c++)     W_Vu[r][c] = '0;
+    end
+    // synthesis translate_on
+
+    always_ff @(posedge clk) begin
+        if (wt_wr_en) begin
             case (wt_sel)
                 0: W_Q [wt_row][wt_col] <= wt_wr_data;
                 1: W_K [wt_row][wt_col] <= wt_wr_data;
@@ -221,21 +193,24 @@ module mla_qkv_proj #(
                 S_V_UP: begin
                     V_r[out_idx] <= dot_product;
                     if (out_idx == (HIDDEN - 1)) begin
-                        // Flatten outputs
-                        for (int d = 0; d < HIDDEN; d++) begin
-                            Q_flat[d*DATA_W +: DATA_W] <= Q_r[d];
-                            K_flat[d*DATA_W +: DATA_W] <= K_r[d];
-                            V_flat[d*DATA_W +: DATA_W] <= V_r[d];
-                        end
-                        for (int d = 0; d < K_LATENT; d++)
-                            K_latent_flat[d*DATA_W +: DATA_W] <= K_lat_r[d];
-                        for (int d = 0; d < V_LATENT; d++)
-                            V_latent_flat[d*DATA_W +: DATA_W] <= V_lat_r[d];
-                        out_valid <= 1'b1;
-                        state <= S_OUTPUT;
+                        state <= S_FLAT;
                     end else begin
                         out_idx <= out_idx + 1'b1;
                     end
+                end
+
+                S_FLAT: begin
+                    for (int d = 0; d < HIDDEN; d++) begin
+                        Q_flat[d*DATA_W +: DATA_W] <= Q_r[d];
+                        K_flat[d*DATA_W +: DATA_W] <= K_r[d];
+                        V_flat[d*DATA_W +: DATA_W] <= V_r[d];
+                    end
+                    for (int d = 0; d < K_LATENT; d++)
+                        K_latent_flat[d*DATA_W +: DATA_W] <= K_lat_r[d];
+                    for (int d = 0; d < V_LATENT; d++)
+                        V_latent_flat[d*DATA_W +: DATA_W] <= V_lat_r[d];
+                    out_valid <= 1'b1;
+                    state <= S_OUTPUT;
                 end
 
                 S_OUTPUT: begin

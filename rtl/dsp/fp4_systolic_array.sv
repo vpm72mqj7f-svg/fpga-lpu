@@ -61,11 +61,26 @@ module fp4_systolic_array #(
     logic [5:0] beat_count;              // beats processed in current dot product
     logic [31:0] sparse_estimate;         // rough running score (no scale, for early check)
 
+    // DSP instances for sparse_estimate: weight_fp4 × activ_fp8 per lane
+    logic signed [3:0]  sp_weight [LANES];
+    logic signed [7:0]  sp_activ  [LANES];
+    wire  signed [11:0] sp_prod   [LANES];
+
     assign k_ready = (state == S_RUN);
     assign busy = (state != S_IDLE) && (state != S_DONE);
     assign sum_result = tile_sum;
     assign lane_result_flat = tile_lanes;
     assign result_valid = (state == S_OUTPUT);
+
+    genvar si;
+    generate
+        for (si = 0; si < LANES; si++) begin : g_sp_dsp
+            assign sp_weight[si] = weight_fp4_flat[si*4 +: 4];
+            assign sp_activ[si]  = activ_fp8_flat[si*8 +: 8];
+            altera_mult_add #(.A_WIDTH(4), .B_WIDTH(8), .PIPE_STAGES(0))
+            u_sp (.clock(clk), .a(sp_weight[si]), .b(sp_activ[si]), .result(sp_prod[si]));
+        end
+    endgenerate
 
     fp4_scaled_tile #(
         .LANES(LANES),
@@ -103,6 +118,9 @@ module fp4_systolic_array #(
             case (state)
                 S_IDLE: begin
                     if (start) begin
+`ifdef DBG_PIPELINE
+                        $display("  [ARR_DBG] S_IDLE→S_RUN, accum_clr=1");
+`endif
                         accum_clr <= 1'b1;
                         beat_count <= '0;
                         sparse_estimate <= '0;
@@ -113,14 +131,15 @@ module fp4_systolic_array #(
                 S_RUN: begin
                     if (k_valid && k_ready) begin
                         beat_count <= beat_count + 1'b1;
-                        // Rough score estimate (weight × activation, no scale, fast)
                         sparse_estimate <= sparse_estimate +
-                            (($signed(weight_fp4_flat[0*4+:4]) * $signed(activ_fp8_flat[0*8+:8])) +
-                             ($signed(weight_fp4_flat[1*4+:4]) * $signed(activ_fp8_flat[1*8+:8])) +
-                             ($signed(weight_fp4_flat[2*4+:4]) * $signed(activ_fp8_flat[2*8+:8])) +
-                             ($signed(weight_fp4_flat[3*4+:4]) * $signed(activ_fp8_flat[3*8+:8])));
-                        // Sparse early termination: if estimate below threshold after
-                        // enough beats, skip remaining beats for this dot product.
+                            $signed(sp_prod[0]) + $signed(sp_prod[1]) +
+                            $signed(sp_prod[2]) + $signed(sp_prod[3]);
+`ifdef DBG_PIPELINE
+                        $display("  [ARR_DBG] beat=%0d k_last=%0d elem_base=%0d wt[0]=%0d act[0]=%0d sum=%0d",
+                                 beat_count, k_last, elem_idx_base,
+                                 $signed(weight_fp4_flat[3:0]), $signed(activ_fp8_flat[7:0]),
+                                 tile_sum);
+`endif
                         if (SPARSE_EN && beat_count >= SPARSE_MIN_BEATS) begin
                             if (sparse_estimate < SPARSE_THRESHOLD_Q12 &&
                                 sparse_estimate > -SPARSE_THRESHOLD_Q12) begin
@@ -130,6 +149,10 @@ module fp4_systolic_array #(
                         end
                     end
                     if (k_valid && k_ready && k_last) begin
+`ifdef DBG_PIPELINE
+                        $display("  [ARR_DBG] S_RUN→S_DRAIN, beats=%0d, tile_sum=0x%08h",
+                                 beat_count+1, tile_sum);
+`endif
                         drain_count <= DRAIN_CYCLES[$bits(drain_count)-1:0];
                         state <= S_DRAIN;
                     end
@@ -137,6 +160,10 @@ module fp4_systolic_array #(
 
                 S_DRAIN: begin
                     if (drain_count == 0) begin
+`ifdef DBG_PIPELINE
+                        $display("  [ARR_DBG] S_DRAIN→S_OUTPUT, tile_sum=0x%08h (%0d)",
+                                 tile_sum, tile_sum);
+`endif
                         state <= S_OUTPUT;
                     end else begin
                         drain_count <= drain_count - 1'b1;
@@ -145,12 +172,18 @@ module fp4_systolic_array #(
 
                 S_OUTPUT: begin
                     if (result_ready) begin
+`ifdef DBG_PIPELINE
+                        $display("  [ARR_DBG] S_OUTPUT→S_DONE, tile_sum=0x%08h", tile_sum);
+`endif
                         state <= S_DONE;
                     end
                 end
 
                 S_DONE: begin
                     if (!start) begin
+`ifdef DBG_PIPELINE
+                        $display("  [ARR_DBG] S_DONE→S_IDLE");
+`endif
                         state <= S_IDLE;
                     end
                 end

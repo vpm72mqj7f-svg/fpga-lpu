@@ -18,10 +18,10 @@ module rms_norm #(
     input  logic                         clk,
     input  logic                         rst_n,
     input  logic                         valid_in,
-    input  logic signed [31:0]           x0, x1, x2, x3, x4, x5, x6, x7,
-    input  logic signed [31:0]           g0, g1, g2, g3, g4, g5, g6, g7,
+    input  logic [HIDDEN*32-1:0]         x_flat,
+    input  logic [HIDDEN*32-1:0]         g_flat,
     output logic                         valid_out,
-    output logic signed [31:0]           y0, y1, y2, y3, y4, y5, y6, y7
+    output logic [HIDDEN*32-1:0]         y_flat
 );
 
     //=========================================================================
@@ -108,8 +108,38 @@ module rms_norm #(
     logic signed [31:0] s0_x [HIDDEN-1:0];
     logic signed [31:0] s0_g [HIDDEN-1:0];
 
+    // ── Sum-of-squares multiply (combinational, Quartus infers DSP) ──
+    wire signed [63:0] sos_prod [HIDDEN-1:0];    // x[i] * x[i]
+
+    for (genvar d = 0; d < HIDDEN; d++) begin : gen_sos_mul
+        assign sos_prod[d] = $signed(s0_x[d]) * $signed(s0_x[d]);
+    end
+
+    // ── X*G multiply (combinational, Quartus infers DSP) ──
+    wire signed [63:0] xg_prod [HIDDEN-1:0];     // x[i] * g[i]
+
+    for (genvar d = 0; d < HIDDEN; d++) begin : gen_xg_mul
+        assign xg_prod[d] = $signed(s0_x[d]) * $signed(s0_g[d]);
+    end
+
+    // ── RMS output multiply (combinational, Quartus infers DSP) ──
+    wire signed [63:0] rms_prod [HIDDEN-1:0];    // xg[i] * rsqrt
+
+    for (genvar d = 0; d < HIDDEN; d++) begin : gen_rms_mul
+        assign rms_prod[d] = $signed(s3_xg[d]) * $signed(s2_rsqrt);
+    end
+
     // Stage 1→2: pairwise sum-of-squares
-    logic signed [63:0] s1_ss [HIDDEN/2-1:0];  // 4 pairwise sums
+    logic signed [63:0] s1_ss [HIDDEN/2-1:0];
+
+    // Combinational reduction of all s1_ss pairs
+    // TODO(prod): replace with pipelined adder tree for synthesis at HIDDEN=7168
+    logic [63:0] sos_total;
+    always_comb begin
+        sos_total = '0;
+        for (int i = 0; i < HIDDEN/2; i++)
+            sos_total = sos_total + s1_ss[i];
+    end
 
     // Stage 2→3: total sum_sq + rsqrt
     logic [63:0] s2_sumsq;
@@ -134,7 +164,7 @@ module rms_norm #(
             for (int i = 0; i < HIDDEN/2; i++) s1_ss[i] <= '0;
             s2_sumsq <= '0;
             s2_rsqrt <= '0;
-            {y0,y1,y2,y3,y4,y5,y6,y7} <= '0;
+            y_flat <= '0;
         end else begin
             valid_out <= 1'b0;
             pipe_valid <= {pipe_valid[LATENCY-2:0], 1'b0};
@@ -142,36 +172,29 @@ module rms_norm #(
             case (state)
                 S_IDLE: begin
                     if (valid_in) begin
-                        s0_x[0] <= x0; s0_x[1] <= x1; s0_x[2] <= x2; s0_x[3] <= x3;
-                        s0_x[4] <= x4; s0_x[5] <= x5; s0_x[6] <= x6; s0_x[7] <= x7;
-                        s0_g[0] <= g0; s0_g[1] <= g1; s0_g[2] <= g2; s0_g[3] <= g3;
-                        s0_g[4] <= g4; s0_g[5] <= g5; s0_g[6] <= g6; s0_g[7] <= g7;
+                        for (int i = 0; i < HIDDEN; i++) begin
+                            s0_x[i] <= $signed(x_flat[i*32+:32]);
+                            s0_g[i] <= $signed(g_flat[i*32+:32]);
+                        end
                         state <= S_SOS_PAIR;
                     end
                 end
 
-                // Stage 0→1: pairwise sum-of-squares products (4 DSPs)
+                // Stage 0→1: pairwise sum-of-squares (altera_mult_add DSP)
                 S_SOS_PAIR: begin
                     for (int i = 0; i < HIDDEN/2; i++) begin
-                        s1_ss[i] <=
-                            ($signed(s0_x[2*i]) * $signed(s0_x[2*i])) +
-                            ($signed(s0_x[2*i+1]) * $signed(s0_x[2*i+1]));
+                        s1_ss[i] <= sos_prod[2*i] + sos_prod[2*i+1];
                     end
                     state <= S_SOS_REDUCE;
                 end
 
                 // Stage 1→2: reduce pairwise sums, compute rsqrt
                 S_SOS_REDUCE: begin
-                    s2_sumsq <= (s1_ss[0] + s1_ss[1]) + (s1_ss[2] + s1_ss[3]);
-                    // rsqrt computed combinationally, registered here
+                    s2_sumsq <= sos_total;
                     if (SQRT_MODE == 1) begin
-                        s2_rsqrt <= digit_rsqrt(
-                            (s1_ss[0] + s1_ss[1]) + (s1_ss[2] + s1_ss[3]),
-                            HIDDEN);
+                        s2_rsqrt <= digit_rsqrt(sos_total, HIDDEN);
                     end else begin
-                        s2_rsqrt <= 32'd16777216 / isqrt(
-                            ((s1_ss[0] + s1_ss[1]) + (s1_ss[2] + s1_ss[3]))
-                            >> $clog2(HIDDEN));
+                        s2_rsqrt <= 32'd16777216 / isqrt(sos_total >> $clog2(HIDDEN));
                     end
                     state <= S_SQRT;
                 end
@@ -181,25 +204,18 @@ module rms_norm #(
                     state <= S_XG_MUL;
                 end
 
-                // Stage 3→4: x * gamma (Q12 multiply)
+                // Stage 3→4: x * gamma (altera_mult_add DSP)
                 S_XG_MUL: begin
                     for (int i = 0; i < HIDDEN; i++) begin
-                        s3_xg[i] <= ($signed({1'b0, s0_x[i]}) *
-                                     $signed({1'b0, s0_g[i]})) >>> 12;
+                        s3_xg[i] <= xg_prod[i] >>> 12;
                     end
                     state <= S_OUTPUT;
                 end
 
-                // Stage 4→output: x*g * rsqrt
+                // Stage 4→output: x*g * rsqrt (altera_mult_add DSP)
                 S_OUTPUT: begin
-                    y0 <= ($signed(s3_xg[0]) * $signed({1'b0, s2_rsqrt})) >>> 12;
-                    y1 <= ($signed(s3_xg[1]) * $signed({1'b0, s2_rsqrt})) >>> 12;
-                    y2 <= ($signed(s3_xg[2]) * $signed({1'b0, s2_rsqrt})) >>> 12;
-                    y3 <= ($signed(s3_xg[3]) * $signed({1'b0, s2_rsqrt})) >>> 12;
-                    y4 <= ($signed(s3_xg[4]) * $signed({1'b0, s2_rsqrt})) >>> 12;
-                    y5 <= ($signed(s3_xg[5]) * $signed({1'b0, s2_rsqrt})) >>> 12;
-                    y6 <= ($signed(s3_xg[6]) * $signed({1'b0, s2_rsqrt})) >>> 12;
-                    y7 <= ($signed(s3_xg[7]) * $signed({1'b0, s2_rsqrt})) >>> 12;
+                    for (int i = 0; i < HIDDEN; i++)
+                        y_flat[i*32+:32] <= rms_prod[i] >>> 12;
                     valid_out <= 1'b1;
                     state <= S_IDLE;
                 end

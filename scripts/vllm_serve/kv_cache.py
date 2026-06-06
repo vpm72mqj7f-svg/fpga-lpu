@@ -34,6 +34,11 @@ class KVCacheManager:
       - LRU eviction when HBM is full
       - Prefill: allocate all prompt blocks at once
       - Decode: allocate one block per step per sequence
+
+    Session-based isolation (agent mode):
+      - _session_blocks maps session_id -> set of block_ids owned
+      - Blocks allocated for one session are never accessible to another
+      - When a session ends, ALL its blocks are freed atomically
     """
 
     def __init__(self, num_chips: int = 32, max_blocks_per_chip: int = KV_BLOCKS_PER_CHIP):
@@ -52,6 +57,9 @@ class KVCacheManager:
 
         # Per-sequence block lists
         self._seq_blocks: Dict[int, List[int]] = {}  # request_id -> [block_ids]
+
+        # Per-session block ownership (agent mode KV isolation)
+        self._session_blocks: Dict[int, Set[int]] = {}  # session_id -> {block_ids}
 
         # LRU tracking per chip
         self._lru: Dict[int, List[int]] = defaultdict(list)
@@ -159,6 +167,92 @@ class KVCacheManager:
             chip_id = self._blocks[bid].chip_id
             groups[chip_id].append(bid)
         return [(cid, blks) for cid, blks in groups.items()]
+
+    # ── Session-based allocation (agent mode KV isolation) ──
+
+    def register_session(self, session_id: int):
+        """Register a new agent session for KV isolation tracking."""
+        if session_id not in self._session_blocks:
+            self._session_blocks[session_id] = set()
+
+    def track_session_block(self, session_id: int, block_id: int):
+        """Record that a block belongs to a session. Used for isolation checks."""
+        if session_id not in self._session_blocks:
+            self._session_blocks[session_id] = set()
+        self._session_blocks[session_id].add(block_id)
+
+    def get_session_blocks(self, session_id: int) -> Set[int]:
+        """Return the set of block_ids owned by a session."""
+        return self._session_blocks.get(session_id, set())
+
+    def free_session(self, session_id: int):
+        """Release ALL blocks belonging to a session (and associated requests).
+
+        This is the atomic cleanup path — ensures no per-turn request blocks
+        are left behind when a multi-turn agent session ends.
+        """
+        # Free all blocks directly owned by session
+        for bid in list(self._session_blocks.get(session_id, set())):
+            chip_id = self._blocks[bid].chip_id
+            self._free_blocks_chip(chip_id, [bid])
+        if session_id in self._session_blocks:
+            del self._session_blocks[session_id]
+
+    def assert_session_isolation(self) -> bool:
+        """Verify no KV block is shared between different sessions.
+
+        Returns True if isolation is intact. Raises AssertionError if a
+        block is found to belong to more than one session.
+
+        Called at simulation end or periodically to validate correctness.
+        """
+        # Build reverse map: block_id -> set of session_ids
+        block_to_sessions: Dict[int, Set[int]] = defaultdict(set)
+        for sid, bids in self._session_blocks.items():
+            for bid in bids:
+                block_to_sessions[bid].add(sid)
+
+        violations = []
+        for bid, sids in block_to_sessions.items():
+            if len(sids) > 1:
+                violations.append((bid, sids))
+
+        if violations:
+            detail = "; ".join(
+                f"block {bid} shared by sessions {sorted(sids)}"
+                for bid, sids in violations[:10]
+            )
+            raise AssertionError(
+                f"KV cache isolation violated: {len(violations)} blocks "
+                f"shared across sessions. Details: {detail}"
+            )
+        return True
+
+    def verify_no_leaked_blocks(self, active_session_ids: Set[int]) -> bool:
+        """Verify no blocks are allocated to sessions that no longer exist.
+
+        Args:
+            active_session_ids: set of session IDs that are still active
+
+        Returns True if clean. Raises AssertionError if leaked blocks found.
+        """
+        leaked = []
+        for sid in list(self._session_blocks.keys()):
+            if sid not in active_session_ids:
+                blocks = self._session_blocks[sid]
+                if blocks:
+                    leaked.append((sid, len(blocks)))
+
+        if leaked:
+            detail = "; ".join(
+                f"session {sid}: {n} blocks leaked"
+                for sid, n in leaked[:10]
+            )
+            raise AssertionError(
+                f"KV cache block leak detected: {sum(n for _, n in leaked)} "
+                f"blocks in {len(leaked)} orphaned sessions. Details: {detail}"
+            )
+        return True
 
     # ── Free ──
 

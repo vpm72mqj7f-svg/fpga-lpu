@@ -8,4 +8,7 @@ FPGA Layer (硬件栈):  Runtime → DSP Kernels + HBM Manager + SRAM Cache
 所有模块只定义接口和数据流, RTL 实现留空。
 """
 
+import warnings
+warnings.warn("architecture/ is deprecated, use fpga_arch/", DeprecationWarning, stacklevel=2)
+
 from . import config

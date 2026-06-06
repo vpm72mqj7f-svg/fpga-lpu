@@ -4,7 +4,7 @@
     "status": "PASS",
     "value": {
       "dsp_1G_mac_us": 90.334,
-      "hbm_920MB_us": 1024.0,
+      "hbm_920MB_us": 1117.904,
       "chip_weight_gb": 0.565
     }
   },
@@ -89,11 +89,47 @@
     "name": "serving_short",
     "status": "PASS",
     "value": {
-      "requests": 49,
-      "finished": 44,
-      "accept_rate": 89.8,
-      "output_tps": 402.3,
-      "ttft_p95_ms": 523.9
+      "requests": 37,
+      "finished": 37,
+      "accept_rate": 100.0,
+      "output_tps": 248.7,
+      "ttft_p95_ms": 2681.2
+    }
+  },
+  {
+    "name": "concurrent_prefill_decode",
+    "status": "PASS",
+    "value": {
+      "contention_factor": 1.05,
+      "combined_tps": 13319.0,
+      "prefill_tps": 9043.0,
+      "decode_tps": 4276.0,
+      "status": "PASS"
+    }
+  },
+  {
+    "name": "pipeline_backpressure",
+    "status": "PASS",
+    "value": {
+      "admit_rate_p1_req_s": 18.5,
+      "admit_rate_p2_req_s": 37.1,
+      "p2_p1_ratio": 2.0,
+      "per_chunk_us": 13480.3,
+      "status": "PASS"
+    }
+  },
+  {
+    "name": "disaggregated_kv_transfer",
+    "status": "PASS",
+    "value": {
+      "transfer_P128_us": 43.9,
+      "transfer_P512_us": 174.0,
+      "transfer_P2048_us": 694.4,
+      "us_per_tok_P128": 0.3427,
+      "us_per_tok_P512": 0.3398,
+      "us_per_tok_P2048": 0.3391,
+      "kv_bytes_per_token": 1152,
+      "status": "PASS"
     }
   }
 ]

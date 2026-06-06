@@ -21,6 +21,8 @@ from typing import List, Dict, Optional
 from enum import Enum, auto
 
 from fpga_arch import FPGACluster, PipelineEngine
+
+from fpga_arch.interconnect import kv_transfer_us_per_token
 from vllm_serve import (
     ContinuousBatchingScheduler, KVCacheManager,
     ModelRunner, APIServer, BatchExecutionResult,
@@ -30,8 +32,13 @@ from vllm_serve import (
     SIM_TIME_STEP_US, WARMUP_DURATION_S,
     TTFT_TARGET_MS, TTFT_SLA_MS, TPOT_TARGET_MS, TPOT_SLA_MS,
     PROMPT_LEN_MEAN, OUTPUT_LEN_MEAN,
-    KV_BLOCKS_PER_CHIP,
+    KV_BLOCKS_PER_CHIP, KV_BYTES_PER_TOKEN,
     AGENT_TURNS, AGENT_THINK_TIME_MS, AGENT_DELTA_PROMPT, AGENT_OUTPUT_PER_TURN,
+)
+from prefill.coordinator import (
+    PrefillConfig, PrefillTier, PrefillDecision,
+    decide_prefill_tier, KVCacheCoordinator,
+    estimate_cpu_prefill_latency,
 )
 
 
@@ -91,6 +98,12 @@ class SimulationMetrics:
         self.agent_turns_completed: int = 0
         self.agent_total_turns: int = 0
 
+        # Scheduling metrics (S2.5)
+        self.scheduling_latencies_us: List[float] = []     # arrival -> first batch inclusion
+        self.batch_formation_times_us: List[float] = []    # batch assembly duration
+        self.prefill_admission_wait_us: List[float] = []   # arrival -> prefill admission
+        self.decode_queue_depths: List[int] = []           # decode queue depth samples
+
     def percentile(self, data: List[float], p: float) -> float:
         if not data:
             return 0.0
@@ -107,6 +120,8 @@ class SimulationMetrics:
             'kv_util_pct': kv_manager.utilization_pct,
             'kv_used_blocks': kv_manager.total_blocks_allocated,
         })
+        # S2.5: sample decode queue depth
+        self.decode_queue_depths.append(scheduler.active_count)
 
     def finalize(self, scheduler):
         self.total_requests = scheduler.stats.total_requests
@@ -117,6 +132,9 @@ class SimulationMetrics:
         self.ttfts_us = list(scheduler.stats.ttfts)
         self.tpots_us = list(scheduler.stats.tpots)
         self.latencies_us = list(scheduler.stats.latencies)
+        # S2.5: pull scheduling metrics from scheduler stats
+        self.scheduling_latencies_us = list(scheduler.stats.scheduling_latencies)
+        self.prefill_admission_wait_us = list(scheduler.stats.admission_waits)
 
     @property
     def simulation_duration_s(self) -> float:
@@ -190,9 +208,24 @@ class ServingSimulation:
     DECODE_BATCH_WAIT_US = 0     # 0 = greedy (current), 200 = wait for batch fill
 
     # KV transfer: per-token latency for prefill→decode pool transfer.
-    # C2C bandwidth ~512 GB/s (4 links × 128 GB/s). KV bytes per token = 1152 B.
-    # Transfer time ≈ 1152 B / 512 GB/s ≈ 2.25 ns/token. Model conservatively.
-    KV_TRANSFER_US_PER_TOKEN = 0.01  # 10 ns per token (conservative, includes overhead)
+    #
+    # Transfer path: prefill chip → C2C → PCIe bridge → PCIe P2P →
+    #                decode PCIe bridge → C2C → decode chip.
+    #
+    # Bottleneck: PCIe 5.0 P2P at 64 GB/s (x16 link), 85% efficiency = 54.4 GB/s.
+    # Intra-card C2C (128 GB/s per link) is much faster and not the bottleneck.
+    #
+    # Per-token KV = 1152 B (K=576 + V=576, conservative; true MLA is 1088 B).
+    # Bandwidth-limited per-token cost: 1152*8 / 54.4e9 * 1e6 ≈ 0.017 us.
+    # With fixed PCIe overhead (400 ns) amortized over batch (typical P~512):
+    #   effective ≈ 0.022 us/token.
+    #
+    # The detailed model is in fpga_arch.interconnect.kv_disaggregated_transfer_time_us().
+    # We use the computed per-token rate here for the event-driven sim.
+    KV_TRANSFER_US_PER_TOKEN = kv_transfer_us_per_token(
+        batch_size_tokens=MAX_PREFILL_TOKENS // 2,  # typical prefill batch
+        kv_bytes_per_token=KV_BYTES_PER_TOKEN,
+    )  # ~0.022 us/token for PCIe P2P, ~0.011 us/token for C2C-only
 
     def __init__(self, arrival_rate: float = 5.0,
                  duration_s: float = 60.0,
@@ -209,7 +242,6 @@ class ServingSimulation:
                  agent_think_ms: int = AGENT_THINK_TIME_MS,
                  agent_delta_prompt: int = AGENT_DELTA_PROMPT,
                  agent_output_per_turn: int = AGENT_OUTPUT_PER_TURN,
-                 cpu_hybrid: bool = False,
                  cpu_tflops: float = 3.0,
                  microbatch: bool = False,
                  expert_replication: str = 'none',
@@ -263,9 +295,13 @@ class ServingSimulation:
         self._agent_prefill_tokens_total: int = 0  # total prefill tokens across all turns
         self._agent_prefill_tokens_no_reuse: int = 0  # what it would be without KV reuse
 
-        # P2 CPU-FPGA hybrid prefill
-        self.cpu_hybrid = cpu_hybrid
+        # CPU prefill coordinator (CPU_PREFILL-only config)
         self.cpu_tflops = cpu_tflops
+        self._prefill_cfg = PrefillConfig(
+            cpu_effective_tflops=self.cpu_tflops,
+        )
+        self._kv_coord = KVCacheCoordinator()
+        self._prefill_tier_counts = {PrefillTier.CPU: 0}
 
         # 解法 C: Continuous Microbatching (token-level injection)
         # ─────────────────────────────────────────────────────────────────
@@ -294,10 +330,10 @@ class ServingSimulation:
         self.pipeline = PipelineEngine(self.cluster, seed=seed)
         self.kv_manager = KVCacheManager(num_chips=32, max_blocks_per_chip=kv_blocks_per_chip)
         self.scheduler = ContinuousBatchingScheduler(
-            num_chips=32, max_decode_batch=max_decode_batch
+            num_chips=32, max_decode_batch=max_decode_batch,
         )
         self.model_runner = ModelRunner(self.cluster, self.pipeline,
-                                        cpu_hybrid=cpu_hybrid, cpu_tflops=cpu_tflops)
+                                        cpu_tflops=cpu_tflops)
         self.api_server = APIServer(self.scheduler, seed=seed,
                                      prompt_len_mean=prompt_len_mean,
                                      output_len_mean=output_len_mean)
@@ -316,16 +352,6 @@ class ServingSimulation:
         self._concurrent_start_us: float = 0.0 # when both prefill+decode became simultaneously active
         self._concurrent_samples: List[float] = []  # contention factors over time
 
-        # Superscalar prefill interleaving
-        from fpga_arch.config import PREFILL_CHUNK_SIZE, PREFILL_USE_FP4_ATTN, PREFILL_ATTN_SPARSITY
-        self._prefill_bottleneck_us = PipelineEngine.prefill_chip0_bottleneck_us(
-            chunk_size=PREFILL_CHUNK_SIZE,
-            use_fp4_attn=PREFILL_USE_FP4_ATTN,
-            attn_sparsity=PREFILL_ATTN_SPARSITY)
-        # Sustainable admission: chip 0 processes 1/B chunks/s.
-        # Each prefill needs N = ceil(P/chunk_size) chunks on chip 0.
-        # Default N for max prefill tokens ≈ MAX_PREFILL_TOKENS / PREFILL_CHUNK_SIZE.
-        self._prefill_chunks_per_batch = max(1, MAX_PREFILL_TOKENS // PREFILL_CHUNK_SIZE)
         self._next_prefill_admit_us: float = 0.0  # when chip 0 has capacity for next prefill's chunks
         self._prefill_in_flight_count: int = 0     # number of prefill batches currently in-flight
         self._peak_prefill_in_flight: int = 0      # peak concurrent prefill batches
@@ -362,8 +388,7 @@ class ServingSimulation:
             print(f"  Agent mode:   {self.agent_turns} turns/session, "
                   f"{self.agent_think_us/1000:.0f}ms think, "
                   f"P_delta={self.agent_delta_prompt}, O={self.agent_output_per_turn}")
-        if self.cpu_hybrid:
-            print(f"  Prefill:      P2 CPU-FPGA hybrid (CPU={self.cpu_tflops} TFLOPS)")
+        print(f"  Prefill:      CPU-only (CPU={self.cpu_tflops} TFLOPS)")
         if self.cluster.expert_replication == 'hot':
             from fpga_arch.config import K_PIPELINE
             print(f"  Expert repl:  Hot replication (Zipf α={self.cluster.zipf_alpha})")
@@ -433,13 +458,18 @@ class ServingSimulation:
                 for req in batch.requests:
                     self._busy_ids.discard(req.request_id)
                 info = self._in_flight.pop(batch.batch_id, None)
-                if batch.batch_type == BatchType.PREFILL:
+                if batch.batch_type in (BatchType.PREFILL, BatchType.MIXED):
                     self._prefill_in_flight_count = max(0, self._prefill_in_flight_count - 1)
                 if info and info.get('contention', 1.0) > 1.0:
                     self.metrics.contention_factors.append(info['contention'])
                 self._update_concurrent_tracking(sim_time_us)
                 if batch.batch_type == BatchType.DECODE:
                     self.scheduler.on_decode_step(batch, sim_time_us)
+                    for req in batch.requests:
+                        if req.state == RequestState.FINISHED:
+                            self._maybe_finish_agent_turn(req, sim_time_us)
+                elif batch.batch_type == BatchType.MIXED:
+                    self.scheduler.on_mixed_batch_complete(batch, sim_time_us)
                     for req in batch.requests:
                         if req.state == RequestState.FINISHED:
                             self._maybe_finish_agent_turn(req, sim_time_us)
@@ -493,11 +523,16 @@ class ServingSimulation:
                     for req in batch.requests:
                         self._busy_ids.discard(req.request_id)
                     self._in_flight.pop(batch.batch_id, None)
-                    if batch.batch_type == BatchType.PREFILL:
+                    if batch.batch_type in (BatchType.PREFILL, BatchType.MIXED):
                         self._prefill_in_flight_count = max(0, self._prefill_in_flight_count - 1)
                     self._update_concurrent_tracking(ev_time)
                     if batch.batch_type == BatchType.DECODE:
                         self.scheduler.on_decode_step(batch, ev_time)
+                        for req in batch.requests:
+                            if req.state == RequestState.FINISHED:
+                                self._maybe_finish_agent_turn(req, ev_time)
+                    elif batch.batch_type == BatchType.MIXED:
+                        self.scheduler.on_mixed_batch_complete(batch, ev_time)
                         for req in batch.requests:
                             if req.state == RequestState.FINISHED:
                                 self._maybe_finish_agent_turn(req, ev_time)
@@ -513,6 +548,16 @@ class ServingSimulation:
 
         if self.verbose:
             print(f"  Drain: {drain_count} cycles, {self.scheduler.finished_count} finished")
+
+        # ── Agent mode KV cache isolation validation ──
+        if self.agent_mode:
+            active_session_ids = set(self._agent_sessions.keys())
+            try:
+                self.kv_manager.assert_session_isolation()
+                self.kv_manager.verify_no_leaked_blocks(active_session_ids)
+            except AssertionError as e:
+                print(f"\n  *** KV CACHE ISOLATION FAILED: {e} ***\n")
+                raise
 
         self.metrics.finalize(self.scheduler)
         self.metrics.peak_concurrent_prefills = self._peak_prefill_in_flight
@@ -585,18 +630,16 @@ class ServingSimulation:
     def _schedule_prefill(self, sim_time_us: float):
         """Admit waiting requests and form a latency-constrained prefill batch.
 
-        Token cap = MAX_PREFILL_CHUNKS × PREFILL_CHUNK_SIZE limits chip 0 queue
-        depth for typical short requests. For agent workloads with prompts larger
-        than the cap, a single oversized request is admitted alone.
+        Token cap = MAX_PREFILL_TOKENS limits queue depth for typical short
+        requests. For agent workloads with prompts larger than the cap, a
+        single oversized request is admitted alone.
         """
-        from fpga_arch.config import PREFILL_CHUNK_SIZE
-
         # Admit waiting requests (up to capacity)
         admitted = self.scheduler._admit_waiting(sim_time_us, self.kv_manager)
         if not admitted:
             return
 
-        max_tokens = MAX_PREFILL_CHUNKS * PREFILL_CHUNK_SIZE
+        max_tokens = MAX_PREFILL_TOKENS
 
         # Agent workload: if all admitted requests are individually oversized,
         # admit just the first one alone rather than bouncing them forever.
@@ -633,6 +676,10 @@ class ServingSimulation:
         self.scheduler.stats.total_prefill_batches += 1
         self.scheduler._batch_counter = self._batch_counter
 
+        # S2.5: batch formation time (assembly is atomic in event-driven model)
+        formation_time_us = sim_time_us - batch.created_time_us
+        self.metrics.batch_formation_times_us.append(formation_time_us)
+
         self._execute_batch(batch, sim_time_us)
 
     def _schedule_decode(self, sim_time_us: float):
@@ -655,12 +702,21 @@ class ServingSimulation:
         self.scheduler.stats.total_decode_batches += 1
         self._last_decode_schedule_us = sim_time_us
 
+        # S2.5: batch formation time (assembly is atomic in event-driven model)
+        formation_time_us = sim_time_us - batch.created_time_us
+        self.metrics.batch_formation_times_us.append(formation_time_us)
+
         self._execute_batch(batch, sim_time_us)
 
     def _update_concurrent_tracking(self, sim_time_us: float):
-        """Track overlapping intervals where both prefill and decode are in-flight."""
-        has_prefill = any(b['type'] == BatchType.PREFILL for b in self._in_flight.values())
-        has_decode = any(b['type'] == BatchType.DECODE for b in self._in_flight.values())
+        """Track overlapping intervals where both prefill and decode are in-flight.
+
+        MIXED batches satisfy both prefill and decode presence simultaneously.
+        """
+        has_prefill = any(b['type'] in (BatchType.PREFILL, BatchType.MIXED)
+                         for b in self._in_flight.values())
+        has_decode = any(b['type'] in (BatchType.DECODE, BatchType.MIXED)
+                        for b in self._in_flight.values())
         was_concurrent = self._concurrent_start_us > 0
         is_concurrent = has_prefill and has_decode
         if is_concurrent and not was_concurrent:
@@ -695,14 +751,15 @@ class ServingSimulation:
                     self.scheduler.prefilling.remove(req)
                 req.state = RequestState.WAITING
                 self.scheduler.waiting_queue.appendleft(req)
-            if batch.batch_type == BatchType.PREFILL:
+            if batch.batch_type in (BatchType.PREFILL, BatchType.MIXED):
                 self._prefill_in_flight_count = max(0, self._prefill_in_flight_count - 1)
                 # Advance admission window slightly to allow retry
                 self._next_prefill_admit_us = sim_time_us + 50_000  # 50ms backoff
             return
 
-        is_prefill = batch.batch_type == BatchType.PREFILL
+        is_prefill = batch.batch_type in (BatchType.PREFILL, BatchType.MIXED)
         is_decode = batch.batch_type == BatchType.DECODE
+        is_mixed = batch.batch_type == BatchType.MIXED
 
         pipeline_duration = result.total_duration_us if is_prefill else result.duration_us
 
@@ -710,75 +767,46 @@ class ServingSimulation:
         kv_transfer_us = 0.0
 
         if is_prefill:
-            from fpga_arch.config import PREFILL_CHUNK_SIZE, PREFILL_USE_FP4_ATTN, PREFILL_ATTN_SPARSITY
+            # CPU prefill: always use CPU for prefill (CPU_PREFILL-only config).
+            # CPU handles attention + FFN; KV cache produced on CPU → DMA to FPGA HBM.
+            decision = decide_prefill_tier(
+                batch.batch_size_tokens, 0, self._prefill_cfg)
+            self._prefill_tier_counts[PrefillTier.CPU] += 1
+            kv_transfer_us = self._kv_coord.cpu_to_fpga_transfer(
+                0, 0, batch.batch_size_tokens)
+            cpu_ttft_us = decision.ttft_us
+            pipeline_duration = cpu_ttft_us + kv_transfer_us
+            if self.verbose:
+                print(f"  t={sim_time_us/1e6:.4f}s PREFILL CPU "
+                      f"tokens={batch.batch_size_tokens} "
+                      f"TTFT={cpu_ttft_us/1000:.1f}ms "
+                      f"xfer={kv_transfer_us:.0f}us "
+                      f"({decision.reasoning})")
 
-            if self.is_disaggregated:
-                # No prefill-decode contention — separate hardware pools.
-                # KV transfer latency: move KV blocks from prefill → decode server.
-                kv_transfer_us = batch.batch_size_tokens * self.KV_TRANSFER_US_PER_TOKEN
-                # Decode-ready after full prefill + KV transfer (single-phase)
-                pipeline_duration = result.total_duration_us
-            else:
-                # Monolithic: prefill and decode share same pipeline.
-                has_decode = any(info['type'] == BatchType.DECODE
-                               for info in self._in_flight.values())
-                if has_decode:
-                    total_prefill_tokens = batch.batch_size_tokens + sum(
-                        info.get('prefill_tokens', 0) for info in self._in_flight.values()
-                        if info['type'] == BatchType.PREFILL)
-                    decode_batch_size = sum(
-                        info.get('decode_batch', 0) for info in self._in_flight.values()
-                        if info['type'] == BatchType.DECODE)
-                    n_prefill_req = batch.size + sum(
-                        1 for info in self._in_flight.values()
-                        if info['type'] == BatchType.PREFILL)
-                    r = PipelineEngine.concurrent_pipeline_model(
-                        total_prefill_tokens, decode_batch_size,
-                        n_requests=max(1, n_prefill_req))
-                    contention = r['contention_factor']
-                    pipeline_duration *= contention
-
-            # Update chip 0 admission window, scaled by prefill server count.
-            # N prefill servers → N independent chip 0 pipelines → N× admission rate.
-            dyn_bottleneck = PipelineEngine.prefill_chip0_bottleneck_us(
-                chunk_size=PREFILL_CHUNK_SIZE,
-                use_fp4_attn=PREFILL_USE_FP4_ATTN,
-                attn_sparsity=PREFILL_ATTN_SPARSITY,
-                n_requests=max(1, batch.size))
-            actual_chunks = max(1, (batch.batch_size_tokens + PREFILL_CHUNK_SIZE - 1)
-                                // PREFILL_CHUNK_SIZE)
-            self._next_prefill_admit_us = sim_time_us + dyn_bottleneck * actual_chunks / self.prefill_scale
+            # CPU prefill + KV transfer → independent of FPGA pipeline.
+            # No DSP/HBM contention with decode (CPU uses separate hardware).
+            self._next_prefill_admit_us = sim_time_us + 50_000  # generous admission
             self._prefill_in_flight_count += 1
             if self._prefill_in_flight_count > self._peak_prefill_in_flight:
                 self._peak_prefill_in_flight = self._prefill_in_flight_count
 
         elif is_decode:
-            if not self.is_disaggregated:
-                # Monolithic: decode contends with prefill for DSP/HBM.
-                has_prefill = any(info['type'] == BatchType.PREFILL
-                                for info in self._in_flight.values())
-                if has_prefill:
-                    prefill_tokens = sum(
-                        info.get('prefill_tokens', 0) for info in self._in_flight.values()
-                        if info['type'] == BatchType.PREFILL)
-                    n_prefill_req = sum(
-                        1 for info in self._in_flight.values()
-                        if info['type'] == BatchType.PREFILL)
-                    r = PipelineEngine.concurrent_pipeline_model(
-                        prefill_tokens, batch.size, n_requests=max(1, n_prefill_req))
-                    contention = r['contention_factor']
-                    pipeline_duration *= contention
-            # Disaggregated: decode runs on dedicated servers, no prefill contention.
+            # CPU prefill: no DSP/HBM contention between prefill and decode.
+            # CPU handles all prefill work; decode pipeline runs independently.
+            pass
 
         # Prefill requests are busy until decode starts (prevent double-scheduling)
         for req in batch.requests:
             self._busy_ids.add(req.request_id)
 
         # Track in-flight for concurrency (uses total pipeline occupancy)
+        # MIXED batches contain both prefill and decode requests
+        n_decode_in_batch = len([r for r in batch.requests
+                                 if r.state == RequestState.DECODE]) if is_mixed else 0
         self._in_flight[batch.batch_id] = {
             'type': batch.batch_type,
             'prefill_tokens': batch.batch_size_tokens if is_prefill else 0,
-            'decode_batch': batch.size if is_decode else 0,
+            'decode_batch': batch.size if is_decode else (n_decode_in_batch if is_mixed else 0),
             'start_us': sim_time_us,
             'duration_us': pipeline_duration,
             'contention': contention,
@@ -809,29 +837,6 @@ class ServingSimulation:
         # Pipeline free (monolithic) or prefill complete + KV transferred (disaggregated)
         comp_time = sim_time_us + pipeline_duration + kv_transfer_us
 
-        # 解法 C: Continuous Microbatching — early session release (DISABLED)
-        # ─────────────────────────────────────────────────────────────────
-        # Initial design released sessions after pipeline_fill_us so chip 0
-        # could accept new tokens from the same session sooner. This is
-        # PHYSICALLY INCORRECT for decode: decode is autoregressive — session
-        # X cannot inject token N+1 until token N's logits return from the
-        # pipeline tail, because token N IS the input to token N+1.
-        #
-        # The true benefit of microbatching is letting DIFFERENT sessions
-        # share the pipeline (B tokens flowing through B different stages
-        # simultaneously). This is already captured by the B/(B+K) throughput
-        # model and by allowing concurrent batches of different sessions.
-        #
-        # What microbatch=True now does:
-        #   1. MIN_DECODE_BATCH=1 (no floor) — schedule even single-session decodes
-        #   2. MAX_DECODE_BATCH=256 (raised) — pack more sessions per batch
-        #   3. (No early release: would violate autoregressive constraint)
-        if False and is_decode and self.microbatch:
-            release_time = sim_time_us + self.pipeline_fill_us
-            if release_time < comp_time:
-                self._push_event(release_time, EventType.SESSION_RELEASE,
-                                 list(batch.requests))
-
         self._push_event(comp_time, EventType.BATCH_COMPLETE, batch)
 
     # ── Multi-turn Agent Session Management ──
@@ -856,6 +861,9 @@ class ServingSimulation:
         )
         self._agent_sessions[session.session_id] = session
         self._agent_session_counter += 1
+
+        # Register session for KV cache isolation tracking
+        self.kv_manager.register_session(session.session_id)
 
         # Track tokens: with KV reuse (turn 1 full, turns 2+ delta) vs without
         self._agent_prefill_tokens_total += prompt_init  # turn 1: full prefill
@@ -911,6 +919,14 @@ class ServingSimulation:
         # add to total_requests but never be processed, inflating accept_rate.
         in_drain = sim_time_us > self.duration_us
 
+        # Track KV blocks allocated for this session across all turns.
+        # The req.kv_block_ids field (populated by model_runner) holds the
+        # block IDs allocated during prefill/decode for the current turn's
+        # request. Accumulate into the session-level set for later cleanup.
+        if hasattr(req, 'kv_block_ids') and req.kv_block_ids:
+            for bid in req.kv_block_ids:
+                session.kv_block_ids.append(bid)
+
         if session.is_active and not in_drain:
             # Schedule next turn after thinking time
             next_turn_at = sim_time_us + session.thinking_time_us
@@ -918,8 +934,13 @@ class ServingSimulation:
             self._push_event(next_turn_at, EventType.AGENT_NEXT_TURN, session)
             # KV blocks are NOT freed — reused by next turn
         else:
-            # Session complete (or drain phase) — free all KV blocks
-            self.kv_manager.free_request(req.request_id)
+            # Session complete (or drain phase) — free ALL KV blocks from all
+            # turns.  Previously only the last turn's request was freed,
+            # leaking blocks from turns 1..N-1.
+            for tid in session.turn_request_ids:
+                self.kv_manager.free_request(tid)
+            # Also clear any blocks tracked at session level
+            session.kv_block_ids.clear()
             if session_id in self._agent_sessions:
                 del self._agent_sessions[session_id]
 
@@ -930,7 +951,7 @@ class ServingSimulation:
 # ============================================================================
 
 def print_report(metrics: SimulationMetrics, args: argparse.Namespace,
-                 pipeline: 'PipelineEngine' = None):
+                 pipeline: 'PipelineEngine' = None, sim: 'ServingSimulation' = None):
     """Print formatted simulation report."""
 
     print()
@@ -998,6 +1019,28 @@ def print_report(metrics: SimulationMetrics, args: argparse.Namespace,
         print(f"  TPOT SLA compliance: {rate:.1f}% ({len(metrics.tpots_us) - violations}/{len(metrics.tpots_us)})")
     print()
 
+    # S2.5: Scheduling Metrics
+    if metrics.prefill_admission_wait_us or metrics.decode_queue_depths:
+        print("  --- Scheduling Metrics ---")
+        if metrics.prefill_admission_wait_us:
+            print(f"  Prefill admission P50: {metrics.percentile(metrics.prefill_admission_wait_us, 50)/1000:>8.1f} ms")
+            print(f"  Prefill admission P95: {metrics.percentile(metrics.prefill_admission_wait_us, 95)/1000:>8.1f} ms")
+            print(f"  Prefill admission P99: {metrics.percentile(metrics.prefill_admission_wait_us, 99)/1000:>8.1f} ms")
+        if metrics.scheduling_latencies_us:
+            print(f"  Scheduling latency P50: {metrics.percentile(metrics.scheduling_latencies_us, 50)/1000:>8.1f} ms")
+            print(f"  Scheduling latency P95: {metrics.percentile(metrics.scheduling_latencies_us, 95)/1000:>8.1f} ms")
+        if metrics.batch_formation_times_us:
+            avg_formation = np.mean(metrics.batch_formation_times_us)
+            max_formation = np.max(metrics.batch_formation_times_us)
+            print(f"  Batch formation (avg): {avg_formation:>8.0f} us")
+            print(f"  Batch formation (max): {max_formation:>8.0f} us")
+        if metrics.decode_queue_depths:
+            avg_dq = np.mean(metrics.decode_queue_depths)
+            max_dq = np.max(metrics.decode_queue_depths)
+            print(f"  Decode queue depth (avg): {avg_dq:>8.1f}")
+            print(f"  Decode queue depth (max): {max_dq:>8.0f}")
+        print()
+
     if metrics.prefill_batch_sizes:
         n_prefill_batches = len(metrics.prefill_batch_sizes)
         print("  --- Prefill Batch Stats ---")
@@ -1027,35 +1070,27 @@ def print_report(metrics: SimulationMetrics, args: argparse.Namespace,
         print(f"  Tokens saved:      {reuse_saved:>8d} ({reuse_pct:.0f}%)")
         print()
 
-    # P2 CPU-FPGA hybrid prefill analysis
+    # CPU prefill analysis
     from fpga_arch.pipeline import PipelineEngine
-    from fpga_arch.config import PREFILL_CHUNK_SIZE, PREFILL_USE_FP4_ATTN, PREFILL_ATTN_SPARSITY
 
-    if getattr(args, 'cpu_hybrid', False) and metrics.prefill_batch_tokens:
-        # Compute theoretical FPGA-only TTFT for comparison
-        p2_ttfts = []
-        baseline_ttfts = []
+    if metrics.prefill_batch_tokens:
+        cpu_ttfts = []
         for tokens in metrics.prefill_batch_tokens:
-            n_req = 1
             p2_r = PipelineEngine.cpu_hybrid_prefill_model(
-                tokens, cpu_tflops=args.cpu_tflops,
-                use_fp4_attn=PREFILL_USE_FP4_ATTN,
-                attn_sparsity=PREFILL_ATTN_SPARSITY,
-                chunk_size=PREFILL_CHUNK_SIZE, n_requests=n_req)
-            base_r = PipelineEngine.chunked_prefill_model(
-                tokens, chunk_size=PREFILL_CHUNK_SIZE,
-                use_fp4_attn=PREFILL_USE_FP4_ATTN,
-                attn_sparsity=PREFILL_ATTN_SPARSITY, n_requests=n_req)
-            p2_ttfts.append(p2_r['ttft_ms'])
-            baseline_ttfts.append(base_r['ttft_ms'])
+                tokens, cpu_tflops=args.cpu_tflops, n_requests=1)
+            cpu_ttfts.append(p2_r['ttft_ms'])
 
-        if p2_ttfts:
-            print("  --- P2 CPU-FPGA Hybrid Prefill ---")
+        if cpu_ttfts:
+            print("  --- CPU Prefill ---")
             print(f"  CPU TFLOPS:       {args.cpu_tflops:>8.1f}")
-            print(f"  P2 TTFT (mean):   {np.mean(p2_ttfts):>8.1f} ms")
-            print(f"  FPGA TTFT (mean): {np.mean(baseline_ttfts):>8.1f} ms")
-            speedup = np.mean(baseline_ttfts) / max(1, np.mean(p2_ttfts))
-            print(f"  P2 speedup:       {speedup:>8.2f}x")
+            print(f"  CPU TTFT (mean):  {np.mean(cpu_ttfts):>8.1f} ms")
+            # Prefill tier distribution (always CPU in CPU_PREFILL-only config)
+            if hasattr(sim, '_prefill_tier_counts') and sim._prefill_tier_counts:
+                total = sum(sim._prefill_tier_counts.values())
+                if total > 0:
+                    cpu_pct = sim._prefill_tier_counts.get(PrefillTier.CPU, 0) / total * 100
+                    print(f"  Prefill tier:     CPU={sim._prefill_tier_counts.get(PrefillTier.CPU, 0)} "
+                          f"({cpu_pct:.0f}%)")
             print()
 
     if metrics.batch_sizes:
@@ -1098,26 +1133,20 @@ def print_report(metrics: SimulationMetrics, args: argparse.Namespace,
             print(f"  Avg KV util:     {avg_kv_util:>8.1f}%")
             print()
 
-    # Hardware comparison
+    # Hardware comparison — FPGA decode-only (CPU handles all prefill)
     from fpga_arch.config import (
-        H200_DECODE_TPS, H200_PREFILL_TPS, H200_TTFT_P50_MS, H200_SRV_COST,
-        ASCEND_DECODE_TPS, ASCEND_PREFILL_TPS, ASCEND_TTFT_P50_MS, ASCEND_SRV_COST,
-        FPGA_DECODE_TPS, FPGA_DECODE_TPS_HW, FPGA_PREFILL_TPS, FPGA_TTFT_P50_MS,
-        FPGA_TTFT_FIRST_CHUNK_MS, FPGA_TTFT_CHUNKED_MS, FPGA_PREFILL_TPS_CHUNKED,
+        H200_DECODE_TPS, H200_SRV_COST,
+        ASCEND_DECODE_TPS, ASCEND_SRV_COST,
+        FPGA_DECODE_TPS, FPGA_DECODE_TPS_HW,
     )
-    print("  --- Hardware Comparison (DS V4 Pro, FP8, per server) ---")
+    print("  --- Hardware Comparison (decode, DS V4 Pro, per server) ---")
     print(f"  {'Metric':<28s} {'FPGA A7':>14s} {'H200':>14s} {'Ascend 950PR':>14s}")
     print(f"  {'-'*28} {'-'*14} {'-'*14} {'-'*14}")
     print(f"  {'Decode TPS (high concur)':<28s} {FPGA_DECODE_TPS:>14,d} {H200_DECODE_TPS:>14,d} {ASCEND_DECODE_TPS:>14,d}")
     print(f"  {'Decode TPS (raw HW)':<28s} {FPGA_DECODE_TPS_HW:>14,d} {'N/A':>14s} {'N/A':>14s}")
-    print(f"  {'Prefill TPS (P=512,P0+P1)':<28s} {FPGA_PREFILL_TPS:>14,d} {H200_PREFILL_TPS:>14,d} {ASCEND_PREFILL_TPS:>14,d}")
-    print(f"  {'TTFT full (P=512) ms':<28s} {FPGA_TTFT_P50_MS:>14,d} {H200_TTFT_P50_MS:>14,d} {ASCEND_TTFT_P50_MS:>14,d}")
-    print(f"  {'TTFT chunked (true) ms':<28s} {FPGA_TTFT_CHUNKED_MS:>14,d} {'N/A':>14s} {'N/A':>14s}")
-    print(f"  {'  first chunk only':<28s} {FPGA_TTFT_FIRST_CHUNK_MS:>14,d} {'N/A':>14s} {'N/A':>14s}")
     print(f"  {'Server cost (RMB 10k)':<28s} {100:>14,d} {H200_SRV_COST//10000:>14,d} {ASCEND_SRV_COST//10000:>14,d}")
     print(f"  {'Cost / (tok/s) RMB':<28s} {1_000_000/max(1,FPGA_DECODE_TPS):>13.0f}  {H200_SRV_COST/max(1,H200_DECODE_TPS):>13.0f}  {ASCEND_SRV_COST/max(1,ASCEND_DECODE_TPS):>13.0f}")
-    print(f"  P0: fp4 K/V attention (2x attn MAC). P1: router-guided sparse (88.8%).")
-    print(f"  Chunked prefill P=128: full TTFT 2,551ms -> 483ms (5.3x); first chunk 411ms (partial context only).")
+    print(f"  Prefill: CPU-only. FPGA handles decode only.")
 
     print("=" * 70)
 
@@ -1227,7 +1256,6 @@ def main():
         agent_think_ms=args.agent_think_ms,
         agent_delta_prompt=args.agent_delta_prompt,
         agent_output_per_turn=args.agent_output_per_turn,
-        cpu_hybrid=args.cpu_hybrid,
         cpu_tflops=args.cpu_tflops,
         microbatch=args.microbatch,
         expert_replication=args.expert_replication,
@@ -1239,7 +1267,7 @@ def main():
     )
 
     metrics = sim.run()
-    print_report(metrics, args, pipeline=sim.pipeline)
+    print_report(metrics, args, pipeline=sim.pipeline, sim=sim)
 
     if args.output:
         export_json(metrics, args.output)

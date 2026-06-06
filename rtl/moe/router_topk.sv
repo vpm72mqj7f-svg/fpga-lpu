@@ -1,15 +1,20 @@
 //=============================================================================
 // router_topk.sv — MoE Router Top-K
 //
-// Pipeline: 3-stage (latch → partials → reduce+top2)
-// Parameters from lpu_config_pkg. Override for non-standard configurations.
+// Pipeline: time-multiplexed dot-product with altera_mult_add DSP IP.
+// Iterates over expert × dimension-pair combinations sequentially.
+// Top-K selection is multi-cycle (K iterations, each sweeping all experts).
+// Bring-up: EXPERTS=4, HIDDEN=8 → 16+2=18 cycles.
+// Production: EXPERTS=384, HIDDEN=7168 → ~1.38M+6=1.38M cycles.
+//   NOTE: Production comparison-tree timing needs pipeline (TBD).
 //=============================================================================
 
 `include "lpu_config.svh"
 
 module router_topk #(
     parameter int EXPERTS = lpu_config_pkg::LPU_NUM_EXPERTS,
-    parameter int HIDDEN  = lpu_config_pkg::LPU_HIDDEN
+    parameter int HIDDEN  = lpu_config_pkg::LPU_HIDDEN,
+    parameter int TOP_K   = lpu_config_pkg::LPU_TOP_K
 ) (
     input  logic                         clk,
     input  logic                         rst_n,
@@ -19,16 +24,22 @@ module router_topk #(
     input  logic signed [31:0]           w_wr_data,
 
     input  logic                         valid_in,
-    input  logic signed [31:0]           a0, a1, a2, a3, a4, a5, a6, a7,
+    input  logic [HIDDEN*32-1:0]         a_flat,
 
     output logic                         valid_out,
     input  logic                         result_ready,
-    output logic [$clog2(EXPERTS)-1:0]   top0_idx, top1_idx,
-    output logic signed [31:0]           top0_score, top1_score
+    output logic [$clog2(EXPERTS)-1:0]   top_idx  [TOP_K],
+    output logic signed [31:0]           top_score [TOP_K]
 );
 
+    localparam int PAIRS     = HIDDEN / 2;
+    localparam int PAIR_BITS = $clog2(PAIRS > 1 ? PAIRS : 2);
+    localparam int EXP_BITS  = $clog2(EXPERTS > 1 ? EXPERTS : 2);
+    localparam int K_BITS    = $clog2(TOP_K > 1 ? TOP_K : 2);
+
     //=========================================================================
-    // Weight storage — 2D array replacing 32 individual registers
+    // Weight storage — flip-flop array for bring-up
+    // Production: replace with altera_syncram BRAM (EXPERTS × HIDDEN entries)
     //=========================================================================
     logic signed [31:0] w [EXPERTS-1:0][HIDDEN-1:0];
 
@@ -37,108 +48,126 @@ module router_topk #(
     end
 
     //=========================================================================
-    // Pipeline registers
+    // FSM
     //=========================================================================
-    typedef enum logic [1:0] { S_IDLE, S_COMPUTE, S_REDUCE, S_OUTPUT } state_t;
+    typedef enum logic [2:0] { S_IDLE, S_LATCH, S_COMPUTE, S_REDUCE, S_SELECT, S_OUTPUT } state_t;
     state_t state;
 
-    // Stage 1: latched activations + partial products
-    logic signed [31:0]       s1_a [HIDDEN-1:0];
-    logic signed [63:0]       s1_pair [EXPERTS-1:0][(HIDDEN/2)-1:0];
-    logic                     s1_active;
+    // Latched activations
+    logic signed [31:0] s1_a [HIDDEN-1:0];
 
-    // Stage 2: reduced scores per expert
-    logic signed [63:0]       s2_score [EXPERTS-1:0];
-    logic                     s2_active;
+    // Iteration counters
+    logic [EXP_BITS-1:0]  expert_idx;
+    logic [PAIR_BITS-1:0] pair_idx;
+
+    // Accumulated scores
+    logic signed [63:0] s2_score [EXPERTS-1:0];
+
+    // Top-K selection state
+    logic [K_BITS-1:0]          sel_round;   // 0..TOP_K-1
+    logic [EXPERTS-1:0]         taken;       // bitmap of already-selected experts
 
     //=========================================================================
-    // FSM + Pipeline
+    // DSP: 2 altera_mult_add instances for even/odd pair multiply
     //=========================================================================
+    logic signed [31:0] dsp_a_even, dsp_a_odd, dsp_b_even, dsp_b_odd;
+    wire  signed [63:0] dsp_prod_even, dsp_prod_odd;
+
+    altera_mult_add #(.A_WIDTH(32), .B_WIDTH(32), .PIPE_STAGES(0))
+    u_dsp_even (.clock(clk), .a(dsp_a_even), .b(dsp_b_even), .result(dsp_prod_even));
+
+    altera_mult_add #(.A_WIDTH(32), .B_WIDTH(32), .PIPE_STAGES(0))
+    u_dsp_odd (.clock(clk), .a(dsp_a_odd), .b(dsp_b_odd), .result(dsp_prod_odd));
+
+    // Combinational DSP input drive — updates immediately with counter changes
+    always_comb begin
+        dsp_a_even = s1_a[2*pair_idx];
+        dsp_a_odd  = s1_a[2*pair_idx+1];
+        dsp_b_even = w[expert_idx][2*pair_idx];
+        dsp_b_odd  = w[expert_idx][2*pair_idx+1];
+    end
+
+    // Combinational top-1 search among untaken experts (for S_SELECT)
+    logic [EXP_BITS-1:0]  sel_best_idx;
+    logic signed [63:0]   sel_best_score;
+
+    always_comb begin
+        sel_best_idx   = '0;
+        sel_best_score = {1'b1, {63{1'b0}}};  // min signed 64b
+        for (int e = 0; e < EXPERTS; e++) begin
+            if (!taken[e] && s2_score[e] > sel_best_score) begin
+                sel_best_score = s2_score[e];
+                sel_best_idx   = e[EXP_BITS-1:0];
+            end
+        end
+    end
+
+    assign valid_out = (state == S_OUTPUT);
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state      <= S_IDLE;
-            valid_out  <= 1'b0;
-            s1_active  <= 1'b0;
-            s2_active  <= 1'b0;
-            top0_idx   <= '0;
-            top1_idx   <= '0;
-            top0_score <= '0;
-            top1_score <= '0;
-            for (int i = 0; i < HIDDEN; i++) s1_a[i] <= '0;
-            for (int e = 0; e < EXPERTS; e++) begin
-                s2_score[e] <= '0;
-                for (int p = 0; p < HIDDEN/2; p++) s1_pair[e][p] <= '0;
+            expert_idx <= '0;
+            pair_idx   <= '0;
+            sel_round  <= '0;
+            taken      <= '0;
+            for (int k = 0; k < TOP_K; k++) begin
+                top_idx[k]   <= '0;
+                top_score[k] <= '0;
             end
+            for (int i = 0; i < HIDDEN; i++) s1_a[i] <= '0;
+            for (int e = 0; e < EXPERTS; e++) s2_score[e] <= '0;
         end else begin
-            valid_out <= 1'b0;
-
             case (state)
                 S_IDLE: begin
                     if (valid_in) begin
-                        s1_a[0] <= a0; s1_a[1] <= a1; s1_a[2] <= a2; s1_a[3] <= a3;
-                        s1_a[4] <= a4; s1_a[5] <= a5; s1_a[6] <= a6; s1_a[7] <= a7;
-                        s1_active <= 1'b1;
-                        state <= S_COMPUTE;
+                        for (int d = 0; d < HIDDEN; d++)
+                            s1_a[d] <= $signed(a_flat[d*32+:32]);
+                        state <= S_LATCH;
                     end
+                end
+
+                S_LATCH: begin
+                    expert_idx <= '0;
+                    pair_idx   <= '0;
+                    for (int e = 0; e < EXPERTS; e++) s2_score[e] <= '0;
+                    state <= S_COMPUTE;
                 end
 
                 S_COMPUTE: begin
-                    // Stage 1→2: pairwise products → partial sums
-                    // 32 DSP multiplies, then pairwise additions
-                    for (int e = 0; e < EXPERTS; e++) begin
-                        for (int p = 0; p < HIDDEN/2; p++) begin
-                            s1_pair[e][p] <=
-                                $signed(s1_a[2*p]) * $signed(w[e][2*p]) +
-                                $signed(s1_a[2*p+1]) * $signed(w[e][2*p+1]);
+                    s2_score[expert_idx] <= s2_score[expert_idx] + dsp_prod_even + dsp_prod_odd;
+
+                    if (pair_idx == PAIRS - 1) begin
+                        pair_idx <= '0;
+                        if (expert_idx == EXPERTS - 1) begin
+                            expert_idx <= '0;
+                            sel_round  <= '0;
+                            taken      <= '0;
+                            state <= S_SELECT;
+                        end else begin
+                            expert_idx <= expert_idx + 1'b1;
                         end
+                    end else begin
+                        pair_idx <= pair_idx + 1'b1;
                     end
-                    s1_active <= 1'b0;
-                    s2_active <= 1'b1;
-                    state <= S_REDUCE;
                 end
 
-                S_REDUCE: begin
-                    // Stage 2→3: adder-tree reduction to per-expert scores
-                    for (int e = 0; e < EXPERTS; e++) begin
-                        s2_score[e] <=
-                            (s1_pair[e][0] + s1_pair[e][1]) +
-                            (s1_pair[e][2] + s1_pair[e][3]);
+                S_SELECT: begin
+                    // One round: find max score among untaken experts (combinational)
+                    // Result registered at end of cycle
+                    top_idx[sel_round]   <= sel_best_idx;
+                    top_score[sel_round] <= sel_best_score[31:0];
+                    taken[sel_best_idx]  <= 1'b1;
+
+                    if (sel_round == TOP_K - 1) begin
+                        state <= S_OUTPUT;
+                    end else begin
+                        sel_round <= sel_round + 1'b1;
                     end
-                    s2_active <= 1'b0;
-                    state <= S_OUTPUT;
                 end
 
                 S_OUTPUT: begin
-                    // Top-2 search over EXPERTS scores
-                    logic signed [63:0] best, second;
-                    logic [$clog2(EXPERTS)-1:0] bi, si;
-
-                    best   = s2_score[0];
-                    bi     = '0;
-                    for (int e = 1; e < EXPERTS; e++) begin
-                        if (s2_score[e] > best) begin
-                            best = s2_score[e];
-                            bi   = e[$clog2(EXPERTS)-1:0];
-                        end
-                    end
-
-                    second = {1'b1, {63{1'b0}}};  // min signed 64b
-                    si     = '0;
-                    for (int e = 0; e < EXPERTS; e++) begin
-                        if (e[$clog2(EXPERTS)-1:0] != bi) begin
-                            if (s2_score[e] > second) begin
-                                second = s2_score[e];
-                                si     = e[$clog2(EXPERTS)-1:0];
-                            end
-                        end
-                    end
-
-                    top0_idx   <= bi;
-                    top1_idx   <= si;
-                    top0_score <= best[31:0];
-                    top1_score <= second[31:0];
-                    valid_out  <= 1'b1;
-                    state      <= S_IDLE;
+                    state <= S_IDLE;
                 end
 
                 default: state <= S_IDLE;

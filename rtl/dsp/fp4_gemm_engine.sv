@@ -47,7 +47,10 @@ module fp4_gemm_engine #(
     localparam int ROW_BITS   = $clog2(M_ROWS);
     localparam int COL_BITS   = $clog2(LANES);
     localparam int PASS_BITS  = $clog2(M_PASSES + 1);
-    localparam int BEAT_BITS  = $clog2(K_BEATS + 1);
+    // BEAT_BITS: max of beat-index width and drain-counter width (needs 3 bits
+    // for 0..6 range).  Without this headroom the counter wraps in S_DRAIN and
+    // the FSM hangs forever.
+    localparam int BEAT_BITS  = $clog2(K_BEATS + 8);
 
     typedef enum logic [3:0] {
         S_IDLE,
@@ -68,8 +71,14 @@ module fp4_gemm_engine #(
     logic [BEAT_BITS-1:0]  beat_count;
     logic [$clog2(M_OUT)-1:0] global_row; // for output
 
-    // Activation memory
-    logic [LANES*8-1:0] activ_mem [K_BEATS-1:0];
+    // Activation memory (Altera syncram IP)
+    logic [LANES*8-1:0] activ_q;
+
+    altera_syncram #(.WIDTH(LANES*8), .DEPTH(K_BEATS), .RAM_BLOCK_TYPE("AUTO"))
+    u_activ (
+        .clock(clk), .wren(activ_wr_en), .wraddress(activ_wr_beat),
+        .data(activ_wr_data), .rdaddress(beat_count), .q(activ_q)
+    );
 
     // 2D array interfaces
     logic                          array_wt_wr_en;
@@ -113,17 +122,16 @@ module fp4_gemm_engine #(
     assign array_sc_data = fp8_to_scaled12(sc_wr_data);
 
     // Weight load address mapping: global (row, col) → local (pass_row, col)
-    always_comb begin
-        array_wt_row = wt_wr_row[ROW_BITS-1:0];       // local row within pass
-        array_wt_col = wt_wr_col[COL_BITS-1:0];       // column (always local)
-    end
+    // Use continuous assignments (not always_comb) to avoid Icarus
+    // constant-select limitation.
+    assign array_wt_row = wt_wr_row[ROW_BITS-1:0];
+    assign array_wt_col = wt_wr_col[COL_BITS-1:0];
 
-    // Activation memory write
-    always_ff @(posedge clk) begin
-        if (activ_wr_en) begin
-            activ_mem[activ_wr_beat] <= activ_wr_data;
-        end
-    end
+    // Direct pass-through: weight preload writes go straight to the array.
+    // Weights are loaded externally before start, so no FSM gating needed.
+    assign array_wt_wr_en = wt_wr_en;
+
+    // Activation memory write handled by altera_syncram u_activ
 
     //=========================================================================
     // Main FSM
@@ -133,7 +141,6 @@ module fp4_gemm_engine #(
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state             <= S_IDLE;
-            array_wt_wr_en    <= 1'b0;
             array_valid       <= 1'b0;
             array_activ       <= '0;
             array_accum_clr   <= 1'b0;
@@ -149,7 +156,6 @@ module fp4_gemm_engine #(
             result_data       <= '0;
             done              <= 1'b0;
         end else begin
-            array_wt_wr_en    <= 1'b0;
             array_valid       <= 1'b0;
             array_accum_clr   <= 1'b0;
             array_reduce_start <= 1'b0;
@@ -187,7 +193,7 @@ module fp4_gemm_engine #(
                 //-------------------------------------------------------------
                 S_FEED_BEATS: begin
                     array_valid <= 1'b1;
-                    array_activ <= activ_mem[beat_count];
+                    array_activ <= activ_q;
 
                     if (beat_count == K_BEATS - 1) begin
                         beat_count <= '0;

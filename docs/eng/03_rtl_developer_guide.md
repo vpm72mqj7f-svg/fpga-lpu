@@ -133,7 +133,7 @@ Every synthesizable SystemVerilog file in the project. Parameters default from `
 | `fp4_systolic_cell.sv` | Single systolic cell: fp4_mac + scale reader | 6-stage (combined) | 2 DSPs |
 | `fp4_systolic_2d.sv` | 2D systolic array: `LPU_ARRAY_LANES x LPU_ARRAY_M_ROWS` | Pipelined rows | N*M*2 DSPs |
 | `fp4_gemm_engine.sv` | Full GEMM engine: weight buffer + systolic array + accumulator | Deep pipeline | Array dependent |
-| `fp4_prefill_engine.sv` | Superscalar prefill pipeline for dense GEMM | Multi-bank | Array dependent |
+| `fp4_prefill_engine.sv` | Superscalar prefill pipeline for dense GEMM (reserved for future FPGA prefill) | Multi-bank | Array dependent |
 
 **Critical path:** `fp4_mac.sv` Stage 2 (base multiply) and Stage 3 (scale multiply) are the two DSP-bound operations. Each fits within a single Agilex DSP block (18x19 mode). The `(* altera_attribute = "-name ALLOW_RETIMING ON" *)` annotation on Stage 0/1 registers lets Quartus retime across DSP boundaries for 450 MHz closure.
 

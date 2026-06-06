@@ -8,6 +8,19 @@ This module models that distribution and derives replica placement.
 Key results (default alpha=1.0):
   Top-20 experts capture ~34% of all token routing decisions
   Top-77 experts capture ~65% (consistent with cluster.py's 80/20 split)
+
+CR-8 caveat (2026-05-30):
+  Zipf alpha values are SYNTHETIC ASSUMPTIONS, not validated against real
+  DeepSeek V4 Pro routing traces. The literature suggests alpha ∈ [1.0, 1.5]
+  for Mixtral-style MoE models (DeepSeek V2/V3 papers report qualitatively
+  similar skew). However, without access to DeepSeek V4 Pro production routing
+  logs, the exact alpha and tier boundaries (hot/warm/cold at 35%/65% mass)
+  should be treated as sensitivity-analysis parameters, not calibrated facts.
+
+  To validate: compare against expert-level routing counts from a DeepSeek V4
+  Pro inference trace (if available under research license), or run a
+  sensitivity sweep across alpha ∈ [0.5, 2.0] to bound the impact on
+  replication planning and C2C bandwidth.
 """
 
 import numpy as np

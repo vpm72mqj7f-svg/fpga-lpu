@@ -12,7 +12,7 @@ Supported placement features:
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, TYPE_CHECKING
 from collections import defaultdict
 
 from fpga_arch.config import (
@@ -20,6 +20,9 @@ from fpga_arch.config import (
     ATTN_TOTAL_MB_PER_LAYER, ROUTER_WEIGHT_MB, HBM_SIZE_GB,
 )
 from fpga_arch.expert_popularity import ExpertPopularity
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 @dataclass
@@ -99,7 +102,13 @@ class LayoutReport:
 
 
 class WeightLayoutCompiler:
-    """Compile logical model placement into per-chip HBM maps."""
+    """Compile logical model placement into per-chip HBM maps.
+
+    Supports optional weight preloading via the weight_preloader C library
+    (Linux only, requires libaio). Use preload_weights() after compile()
+    to load layer weights from SSD into host pinned memory for Phase 1
+    startup preloading.
+    """
 
     def __init__(self, pipeline_clones: int = 1, replication: str = "none",
                  zipf_alpha: float = 1.0, kv_reserve_gb: float = 22.0,
@@ -113,6 +122,9 @@ class WeightLayoutCompiler:
         self.zipf_alpha = zipf_alpha
         self.kv_reserve_gb = kv_reserve_gb
         self.seed = seed
+        self._last_layout: Optional[LayoutReport] = None
+        self._preloader_bridge = None
+        self._preloader_weight_dir: str = ""
 
     def compile(self) -> LayoutReport:
         chips_per_pipeline = TOTAL_CHIPS // self.pipeline_clones
@@ -124,12 +136,107 @@ class WeightLayoutCompiler:
         self._allocate_hbm_regions(chip_layouts)
         self._validate(chip_layouts)
 
-        return LayoutReport(
+        report = LayoutReport(
             pipeline_clones=self.pipeline_clones,
             replication=self.replication,
             chip_layouts=chip_layouts,
             expert_to_chips=expert_to_chips,
         )
+        self._last_layout = report
+        return report
+
+    def preload_weights(self, weight_dir: str = "",
+                        layout: Optional[LayoutReport] = None,
+                        num_preload: int = 4):
+        """Preload layer weights from SSD into host pinned memory (Phase 1 startup).
+
+        Uses the weight_preloader C library (Linux + libaio). On non-Linux
+        platforms or if the shared library is not built, raises
+        NotImplementedError with a build instruction.
+
+        This is the integration point between the weight layout compiler
+        and the C weight preloader bridge. After compiling the chip layout,
+        call this to actually load the weight data into memory for DMA
+        transfer to FPGA HBM.
+
+        Args:
+            weight_dir: path to SSD weight files (e.g. "/data/weights/deepseek_v4")
+            layout: LayoutReport from compile(). Uses last compiled layout if None.
+            num_preload: max layers to keep in host memory (default 4, ~800 MB)
+
+        Returns:
+            WeightPreloaderBridge instance (for accessing loaded tensors).
+
+        Raises:
+            RuntimeError: if no layout has been compiled.
+            NotImplementedError: if the weight preloader C library is not available.
+        """
+        if layout is None:
+            if self._last_layout is None:
+                raise RuntimeError(
+                    "No layout compiled. Call compile() first, "
+                    "or pass an explicit layout."
+                )
+            layout = self._last_layout
+
+        # Defer import so the weight_layout module is usable without the bridge
+        try:
+            from prefill.weight_preloader_bridge import (
+                WeightPreloaderBridge, integrate_with_weight_layout,
+            )
+        except ImportError as e:
+            raise NotImplementedError(
+                f"Cannot import weight_preloader_bridge: {e}. "
+                "Ensure scripts/prefill/ is on PYTHONPATH."
+            )
+
+        # Use provided weight_dir or fall back to previously configured
+        effective_dir = weight_dir or self._preloader_weight_dir
+        if not effective_dir:
+            raise ValueError(
+                "weight_dir must be specified (e.g. '/data/weights/deepseek_v4')"
+            )
+
+        bridge = WeightPreloaderBridge()
+
+        if not bridge.is_available:
+            raise NotImplementedError(
+                "weight_preloader shared library not available. "
+                "Build with: cd c_ref/prefill && "
+                "gcc -O3 -shared -fPIC -o build/libweight_preloader.so "
+                "weight_preloader.c -laio -lpthread"
+            )
+
+        # Collect all unique layer indices from all chips
+        all_layers: set = set()
+        for chip_layout in layout.chip_layouts:
+            all_layers.update(chip_layout.layers)
+
+        bridge.init(effective_dir, num_layers=61, num_preload=num_preload)
+
+        # Load layers in order (LRU-friendly)
+        for layer_idx in sorted(all_layers):
+            bridge.load_layer(layer_idx)
+
+        self._preloader_bridge = bridge
+        self._preloader_weight_dir = effective_dir
+        return bridge
+
+    def get_weight_tensor(self, layer_idx: int,
+                          tensor_name: str) -> "Optional[np.ndarray]":
+        """Get a loaded weight tensor (requires preload_weights() first).
+
+        Args:
+            layer_idx: layer index (0..60)
+            tensor_name: e.g. "W_Q", "W_gate", "W_down"
+
+        Returns:
+            2D numpy array of uint8 fp8 weights, or None if not available.
+        """
+        import numpy as np
+        if self._preloader_bridge is None:
+            return None
+        return self._preloader_bridge.get_tensor_reshaped(layer_idx, tensor_name)
 
     def _assign_layers(self, chips: List[ChipLayout], chips_per_pipeline: int):
         """Assign all 61 layers to each pipeline clone."""

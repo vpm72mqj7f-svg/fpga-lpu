@@ -15,10 +15,10 @@ module mtp_verify #(
     input  logic                         clk,
     input  logic                         rst_n,
 
-    // Draft predictions (from mtp_head)
+    // Draft predictions (from mtp_head) — flat-packed for Icarus compatibility
     input  logic                         draft_valid,
-    input  logic [$clog2(VOCAB)-1:0]     draft_token_ids [N_HEADS],
-    input  logic signed [31:0]           draft_logprobs  [N_HEADS],
+    input  logic [N_HEADS*$clog2(VOCAB)-1:0] draft_token_ids_flat,
+    input  logic [N_HEADS*32-1:0]            draft_logprobs_flat,
 
     // Target model output (ground truth)
     input  logic                         target_valid,
@@ -30,6 +30,17 @@ module mtp_verify #(
     output logic [$clog2(N_HEADS+1)-1:0] n_correct,        // 0..N_HEADS
     output logic                         all_correct        // all heads matched
 );
+
+    localparam int VCB = $clog2(VOCAB);
+
+    // Unpack flat inputs via generate (Icarus: constant-select in always_* unsupported)
+    wire [VCB-1:0]     draft_token_ids [N_HEADS];
+    wire signed [31:0] draft_logprobs  [N_HEADS];
+
+    for (genvar h = 0; h < N_HEADS; h++) begin : gen_unpack
+        assign draft_token_ids[h] = draft_token_ids_flat[h*VCB +: VCB];
+        assign draft_logprobs[h]  = draft_logprobs_flat[h*32 +: 32];
+    end
 
     logic [N_HEADS-1:0] match_mask_r;
     logic [$clog2(N_HEADS+1)-1:0] count;

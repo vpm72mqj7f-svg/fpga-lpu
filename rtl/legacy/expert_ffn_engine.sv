@@ -79,6 +79,7 @@ module expert_ffn_engine #(
     generate
         for (gi = 0; gi < INTER; gi++) begin : g_silu
             silu_q12_lut u_silu (
+                .clk(clk),
                 .x_q12(gate_vec[gi]),
                 .y_q12(silu_vec[gi])
             );

@@ -10,6 +10,7 @@ IVL=/c/iverilog/bin/iverilog
 VVP=/c/iverilog/bin/vvp
 ROOT=$(dirname "$0")/..
 BUILD=$ROOT/rtl/sim/build
+SIM_IP="$ROOT/rtl/sim/altera_scfifo.sv $ROOT/rtl/sim/altera_syncram.sv $ROOT/rtl/sim/altera_mult_add.sv"
 INC="-I $ROOT/rtl/include"
 
 mkdir -p $BUILD
@@ -25,7 +26,7 @@ run_test() {
     TOTAL=$((TOTAL + 1))
     echo -n "[$TOTAL] $name ... "
     local err_out
-    err_out=$($IVL -g2012 $INC -o "$vvp" "$@" 2>&1)
+    err_out=$($IVL -g2012 $INC -o "$vvp" $SIM_IP "$@" 2>&1)
     if [ $? -ne 0 ]; then
         echo "COMPILE ERROR"
         FAIL=$((FAIL + 1))

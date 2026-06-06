@@ -22,7 +22,7 @@ class RequestState(Enum):
 class BatchType(Enum):
     PREFILL = auto()
     DECODE  = auto()
-    MIXED   = auto()   # prefill + decode in same batch (not yet supported)
+    MIXED   = auto()   # prefill + decode in same batch
 
 
 @dataclass
@@ -184,6 +184,12 @@ class SchedulerStats:
     ttfts: List[float] = field(default_factory=list)
     tpots: List[float] = field(default_factory=list)
     latencies: List[float] = field(default_factory=list)
+
+    # Scheduling metrics (S2.5)
+    scheduling_latencies: List[float] = field(default_factory=list)  # arrival -> first batch inclusion
+    admission_waits: List[float] = field(default_factory=list)       # arrival -> prefill admission
+    batch_formation_times: List[float] = field(default_factory=list) # batch assembly duration
+    decode_queue_depths: List[int] = field(default_factory=list)     # decode queue depth samples
 
     def record_finished(self, req: Request):
         self.total_finished += 1

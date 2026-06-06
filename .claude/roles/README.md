@@ -1,98 +1,43 @@
-# AI Role Configuration Guide
+# FPGA LPU — AI Role Configuration
 
-Each team member gets an AI assistant pre-configured with their role's context, codebase knowledge, and task assignments.
+10 individual role files, one per team member.
+Each session runs in its own terminal with role-specific context.
 
-## Quick Start (Per Engineer)
+## Quick Start: 10 Terminal Tabs
 
-**Step 1**: Copy your role file to your working directory:
+Open 10 terminals, all in `D:\workspace\fpgalpu`. In each, the first prompt is:
+
+```
+Read .claude/roles/<role-file>.md and follow its instructions.
+Start working on the first pending task assigned to you in TASKS.md.
+```
+
+| Tab | Role | File | Focus Area |
+|-----|------|------|------------|
+| 1 | RTL-ENG1 | `rtl-eng1.md` | DSP datapath (fp4 MAC, systolic, GEMM) |
+| 2 | RTL-ENG2 | `rtl-eng2.md` | MLA / Attention pipeline |
+| 3 | RTL-ENG3 | `rtl-eng3.md` | Layer / MoE / Chip integration |
+| 4 | RTL-ENG4 | `rtl-eng4.md` | Activation / Head / Engram + testbench gaps |
+| 5 | VERIF-ENG1 | `verif-eng1.md` | DSP + Activation golden model verification |
+| 6 | VERIF-ENG2 | `verif-eng2.md` | MLA + MoE verification |
+| 7 | VERIF-ENG3 | `verif-eng3.md` | Layer / Chip / Cluster integration tests |
+| 8 | SW-ENG1 | `sw-eng1.md` | FPGA architecture model & pipeline simulation |
+| 9 | SW-ENG2 | `sw-eng2.md` | Serving stack & scheduler |
+| 10 | SW-ENG3 | `sw-eng3.md` | Simulation experiments & validation |
+
+## Alternative: Subdirectory CLAUDE.md
+
+For RTL engineers working primarily in one directory, copy the role file:
+
 ```bash
-# RTL engineers (4 people)
-copy .claude\roles\rtl-engineer.md CLAUDE.md
-
-# Verification engineers (3 people)
-copy .claude\roles\verification-engineer.md CLAUDE.md
-
-# Software engineers (3 people)
-copy .claude\roles\software-engineer.md CLAUDE.md
-
-# Tech leads
-copy .claude\roles\tech-lead.md CLAUDE.md
+cp .claude/roles/rtl-eng1.md rtl/dsp/CLAUDE.md    # Auto-loads when working in rtl/dsp/
+cp .claude/roles/sw-eng1.md scripts/CLAUDE.md       # Auto-loads when working in scripts/
 ```
 
-**Step 2**: Start Claude Code. It auto-loads CLAUDE.md.
+## Coordination
 
-**Step 3**: The AI now knows:
-- What project this is
-- Your specific role and responsibilities
-- The full codebase map relevant to you
-- Your coding standards and workflows
-- Your current phase tasks
-- How to run simulations, tests, and builds
-
-## Role Summary
-
-| Role | File | AI Knows |
-|------|------|----------|
-| **RTL Engineer** | `rtl-engineer.md` | ~50 SystemVerilog modules, Quartus/Icarus flows, coding conventions, DSP timing rules, module specs |
-| **Verification Engineer** | `verification-engineer.md` | 24+ testbenches, golden model methodology, Python reference models, accuracy tolerances, Signal Tap, CI |
-| **Software Engineer** | `software-engineer.md` | Python simulation stack (fpga_arch + vllm_serve), C runtime, key formulas, scheduler logic, API design |
-| **Tech Lead** | `tech-lead.md` | Architecture decisions, cross-team coordination, Go/No-Go gates, risk register, code review, project tracking |
-
-## Directory-Level Configs (Optional)
-
-For deeper integration, place additional CLAUDE.md files in specific directories:
-
-```
-rtl/CLAUDE.md            → Auto-loads when working in rtl/
-rtl/dsp/CLAUDE.md        → Additional DSP-specific context
-scripts/fpga_arch/CLAUDE.md → Python sim context
-```
-
-The role file + directory file combine automatically.
-
-## Example: What "RTL Engineer AI" Can Do
-
-```
-User: "Write the fp4_systolic_2d module with 128 lanes, 32 rows, Avalon-ST interface"
-
-AI: [Generates SystemVerilog matching:
-     - Signal naming conventions (i_*, o_*, r_*, w_*)
-     - Parameterized LANES and M_ROWS from lpu_config.svh
-     - DSP inference attributes for 450 MHz
-     - Valid/ready handshake from avalon_stream.svh
-     - Synthesizable 2-always-block FSM]
-
-User: "This module fails timing at 450MHz, critical path is in the accumulator chain"
-
-AI: [Suggests:
-     - Pipeline register insertion points
-     - ALLOW_RETIMING attribute placement
-     - Register balancing recommendations
-     - Cites specific examples from existing modules]
-```
-
-## Example: What "Verification Engineer AI" Can Do
-
-```
-User: "Golden comparison fails for fp4 GEMM at test case 42"
-
-AI: [Traces the computation:
-     - Reads golden vector from tb_golden_pkg.sv
-     - Reads fp4_utils.py reference for expected output
-     - Compares RTL stage-by-stage against verify_fp4_mac_stages.py
-     - Identifies: Q12 accumulation overflow at stage 3 when >256 terms
-     - Suggests: widen accumulator or add saturation]
-```
-
-## Example: What "Software Engineer AI" Can Do
-
-```
-User: "TPS drops 30% when I enable pipeline-clone 2"
-
-AI: [Analyzes:
-     - Checks throughput_model() in pipeline.py
-     - Examines chip0_admission_rate() 
-     - Identifies: KV cache fragmentation from double allocation
-     - Suggests: adjust KV block allocation strategy for cloned pipelines
-     - Generates the code change]
-```
+- **Task board**: `TASKS.md` at repo root — everyone reads/writes
+- **Shared context**: `CLAUDE.md` at repo root — loaded by all sessions
+- **Commits**: Prefix with role tag, e.g. `[RTL-ENG1] fix fp4_mac overflow`
+- **PR reviews**: CODEOWNERS enforces review hierarchy
+- **Legacy role files**: `rtl-engineer.md`, `verification-engineer.md`, `software-engineer.md`, `tech-lead.md` are the old 4-template versions — use the individual files instead

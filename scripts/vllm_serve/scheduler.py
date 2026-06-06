@@ -22,6 +22,7 @@ from .config import (
     BLOCK_SIZE, KV_BLOCK_TOKENS, KV_BYTES_PER_TOKEN,
     PREFILL_PRIORITY,
 )
+from fpga_arch.config import CPU_PREFILL, CPU_FP8_TFLOPS, CPU_PCIE_LATENCY_US
 
 
 class ContinuousBatchingScheduler:
@@ -65,20 +66,37 @@ class ContinuousBatchingScheduler:
                  kv_manager, model_runner) -> List[Batch]:
         """Run one scheduling tick. Returns list of batches to execute.
 
+        Forms MIXED batches when both prefill and decode work is available
+        (prefill-first, then fill remaining slots with decode).
         Returns empty list if no work to do.
         """
         batches = []
 
         # 1. Admit waiting requests
         admitted = self._admit_waiting(current_time_us, kv_manager)
-        if admitted:
-            # Form prefill batch
+
+        # 2. Collect active decode requests (up to limit)
+        decode_candidates = list(self.active_decode[:self.max_decode_batch])
+
+        if admitted and decode_candidates:
+            # MIXED: prefill + decode in same batch
+            mixed_batch = self._form_mixed_batch(current_time_us, admitted,
+                                                  decode_candidates)
+            if mixed_batch:
+                batches.append(mixed_batch)
+        elif admitted:
+            # Pure PREFILL batch
             prefill_batch = self._form_prefill_batch(current_time_us, admitted)
             if prefill_batch:
                 batches.append(prefill_batch)
 
-        # 2. Form decode batch (all active decode, up to limit)
-        if self.active_decode:
+            # Still form decode batch if active
+            if self.active_decode:
+                decode_batch = self._form_decode_batch(current_time_us)
+                if decode_batch:
+                    batches.append(decode_batch)
+        elif self.active_decode:
+            # Pure DECODE batch
             decode_batch = self._form_decode_batch(current_time_us)
             if decode_batch:
                 batches.append(decode_batch)
@@ -86,10 +104,17 @@ class ContinuousBatchingScheduler:
         return batches
 
     def _admit_waiting(self, current_time_us: float, kv_manager) -> List[Request]:
-        """Admit waiting requests to prefill if capacity allows."""
+        """Admit waiting requests to prefill if capacity allows.
+
+        All prefill runs on CPU — no FPGA DSP bottleneck for attention,
+        so admission capacity is higher than FPGA-prefill mode.
+        """
         admitted = []
+        # CPU prefill: no FPGA chip 0 bottleneck → doubled admission cap.
+        effective_max_batch = MAX_BATCH_SIZE * 2
+
         # Rough capacity check: KV cache must have space
-        while self.waiting_queue and len(self.prefilling) < MAX_BATCH_SIZE:
+        while self.waiting_queue and len(self.prefilling) < effective_max_batch:
             req = self.waiting_queue.popleft()
             # Check if KV cache can accommodate
             blocks_needed = max(1, req.prompt_len // KV_BLOCK_TOKENS)
@@ -99,6 +124,10 @@ class ContinuousBatchingScheduler:
                 self.prefilling.append(req)
                 self.stats.total_accepted += 1
                 admitted.append(req)
+                # Record prefill admission wait time (S2.5)
+                admission_wait = current_time_us - req.arrival_time_us
+                self.stats.admission_waits.append(admission_wait)
+                self.stats.scheduling_latencies.append(admission_wait)
             else:
                 # Reject due to OOM
                 req.state = RequestState.REJECTED
@@ -141,6 +170,52 @@ class ContinuousBatchingScheduler:
         self.stats.total_prefill_batches += 1
         return batch
 
+    def _form_mixed_batch(self, current_time_us: float,
+                           admitted: List[Request],
+                           decode_candidates: List[Request]) -> Optional[Batch]:
+        """Form a MIXED batch: prefill requests + decode requests.
+
+        Prefill gets priority. Remaining batch slots (up to max_decode_batch)
+        are filled with decode requests.
+        """
+        if not admitted and not decode_candidates:
+            return None
+
+        # Limit total prefill tokens
+        total_tokens = sum(r.prompt_len for r in admitted)
+        selected_prefill = admitted
+        if total_tokens > MAX_PREFILL_TOKENS:
+            selected_prefill = []
+            tokens = 0
+            for r in admitted:
+                if tokens + r.prompt_len <= MAX_PREFILL_TOKENS:
+                    selected_prefill.append(r)
+                    tokens += r.prompt_len
+                else:
+                    r.state = RequestState.WAITING
+                    self.waiting_queue.appendleft(r)
+
+        # Fill remaining batch slots with decode requests
+        remaining_slots = self.max_decode_batch - len(selected_prefill)
+        selected_decode = decode_candidates[:max(0, remaining_slots)]
+
+        if not selected_prefill and not selected_decode:
+            return None
+
+        all_requests = selected_prefill + selected_decode
+        prefill_tokens = sum(r.prompt_len for r in selected_prefill)
+
+        batch = Batch(
+            batch_id=self._batch_counter,
+            batch_type=BatchType.MIXED,
+            requests=all_requests,
+            batch_size_tokens=prefill_tokens + len(selected_decode),
+            created_time_us=current_time_us,
+        )
+        self._batch_counter += 1
+        self.stats.total_prefill_batches += 1
+        return batch
+
     def _form_decode_batch(self, current_time_us: float) -> Optional[Batch]:
         """Form a decode batch from all active decode requests."""
         active = list(self.active_decode)
@@ -163,14 +238,32 @@ class ContinuousBatchingScheduler:
         return batch
 
     def on_prefill_complete(self, batch: Batch, current_time_us: float):
-        """Transition requests from prefill to decode."""
+        """Transition requests from prefill to decode.
+
+        In MIXED batches, decode-phase requests are already in DECODE state
+        and should not be re-transitioned — only prefill-phase requests.
+        """
         for req in batch.requests:
-            req.tokens_processed = req.prompt_len  # all prompt tokens processed
-            req.first_token_time_us = current_time_us  # first token "generated" at prefill end
-            req.state = RequestState.DECODE
-            self.active_decode.append(req)
-            if req in self.prefilling:
-                self.prefilling.remove(req)
+            if req.state == RequestState.PREFILL:
+                req.tokens_processed = req.prompt_len  # all prompt tokens processed
+                req.first_token_time_us = current_time_us  # first token "generated" at prefill end
+                req.state = RequestState.DECODE
+                self.active_decode.append(req)
+                if req in self.prefilling:
+                    self.prefilling.remove(req)
+
+    def on_mixed_batch_complete(self, batch: Batch, current_time_us: float):
+        """Handle MIXED batch completion: prefill transition + decode step.
+
+        1. Prefill-phase requests: transition to DECODE, set TTFT
+        2. All requests (including newly prefilled): advance one decode token
+        3. Remove finished requests from active_decode
+        """
+        # Stage 1: prefill transition
+        self.on_prefill_complete(batch, current_time_us)
+
+        # Stage 2: decode step for all requests in batch
+        self.on_decode_step(batch, current_time_us)
 
     def on_decode_step(self, batch: Batch, current_time_us: float):
         """Advance decode by one token for each request in batch."""
