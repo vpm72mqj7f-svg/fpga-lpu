@@ -110,16 +110,26 @@ follow weights to CPU, FFN ops stay on GPU.
 ## Final Results (Breakthrough)
 
 ```
-=== Validated 4-Mode Split (DS V2 Lite, ARM 256C + 4090 D) ===
+=== Validated Split Architecture (DS V2 Lite, ARM 256C + 4090 D, SVE2 enabled) ===
 
-All GPU (n-gpu-layers 99):                 24.8 tok/s  ← baseline
-CPU-MoE (--cpu-moe):                        6.1 tok/s  ← FFN→CPU, 4.1× slower
-Attn-CPU + FFN-GPU (override attn→CPU):     7.9 tok/s  ← SPLIT WORKS!
---gpu-moe partial:                          8.6 tok/s  ← GPU weights, partial compute
+All GPU (64 threads):                          54.4 tok/s  ← baseline
+All GPU (128 threads):                         24.8 tok/s  ← thread contention
+Attn-CPU + FFN-GPU (64 threads, SVE2):         26.3 tok/s  ← SPLIT WORKS!
+Attn-CPU + FFN-GPU (128 threads, SVE2):         8.2 tok/s  ← thread contention
+Attn-CPU + FFN-GPU (256 threads, SVE2):          2.0 tok/s  ← severe contention
+CPU-MoE (--cpu-moe):                             6.1 tok/s  ← FFN bottleneck
 
-Key: --override-tensor "blk.*.attn*=CPU" successfully separates attention to CPU
-     while FFN stays on GPU. Scheduler correctly assigns ops to respective backends.
-     7.9 tok/s limited by ARM NEON CPU attention (not the architecture).
+Key findings:
+1. 64 threads is the sweet spot (NUMA-aware would improve further)
+2. Split architecture achieves 48% of all-GPU TPS with unoptimized ARM CPU attention
+3. SVE2 enabled (SVE_CNT=16, 256-bit vectors) + DOTPROD
+4. GPU FFN runs at full speed; CPU attention is the remaining bottleneck
+5. FPGA FFN (21× faster than GPU) will dramatically close the gap
+
+Thread scaling analysis:
+- 64 threads: optimal — fits within L2 cache per NUMA node
+- 128 threads: contention across 2 NUMA nodes
+- 256 threads: severe contention across 4 NUMA nodes
 ```
 
 ## Hardware Summary
