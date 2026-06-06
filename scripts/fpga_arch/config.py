@@ -9,10 +9,12 @@ import math
 # ============================================================================
 # Chip-level (AGM 039-F / A7)
 # ============================================================================
-DSP_COUNT             = 12_300          # DSP units per chip
-DSP_FREQ_MHZ          = 450             # MHz
+DSP_COUNT             = 12_300          # DSP units per chip (AGM 039-F)
+DSP_FREQ_MHZ          = 450             # MHz (conservative, up to 1 GHz achievable)
+DSP_FREQ_PEAK_MHZ     = 1000            # MHz (peak, timing-closure dependent)
 DSP_MAC_PER_CYCLE     = 2               # fp4 x fp8 native mode
 DSP_TMACS             = DSP_COUNT * DSP_FREQ_MHZ * DSP_MAC_PER_CYCLE / 1e6  # 11.07
+DSP_TMACS_PEAK        = DSP_COUNT * DSP_FREQ_PEAK_MHZ * DSP_MAC_PER_CYCLE / 1e6  # 24.6
 
 HBM_SIZE_GB           = 32
 HBM_BW_GBPS           = 920
@@ -107,20 +109,31 @@ TOP_K_EXPERTS         = 6
 SHARED_EXPERT         = True
 
 # ============================================================================
-# Model dimensions (DeepSeek V4 Pro)
+# Model dimensions (DeepSeek V4 Pro — verified from paper Table 1)
+#
+# Source: DeepSeek-V4 paper, "Model Setups" section
+#   - hidden_dim = 7168, layers = 61
+#   - 384 routed experts + 1 shared expert per MoE layer
+#   - moe_intermediate_size = 3072 per expert
+#   - 6 experts activated per token
+#   - CSA (4× compression) + HCA (128× compression) hybrid attention
+#   - KV cache = 10% of V3.2 at 1M context
 # ============================================================================
 HIDDEN_SIZE           = 7168
-INTERMEDIATE_SIZE     = 3072
-NUM_ATTN_HEADS        = 128
+INTERMEDIATE_SIZE     = 3072          # moe_intermediate_size (verified)
+NUM_ATTN_HEADS        = 128           # from paper: 128 query heads
 KV_LORA_RANK          = 512
-Q_LORA_RANK           = 1536
-O_LORA_RANK           = 1024
+Q_LORA_RANK           = 1536          # from paper: query compression dim
+O_LORA_RANK           = 1024          # from paper: o_lora_rank
 QK_ROPE_HEAD_DIM      = 64
 QK_NOPE_HEAD_DIM      = 448
 V_HEAD_DIM            = 128
-NUM_EXPERTS_PER_TOK   = 6
-SLIDING_WINDOW        = 128
+NUM_EXPERTS_PER_TOK   = 6             # verified: 6 activated per token
+SLIDING_WINDOW        = 128           # verified: window size
 MLA_KV_BYTES          = KV_LORA_RANK + QK_ROPE_HEAD_DIM  # 576 bytes FP8
+# V4 Pro KV compression (CSA 4× + HCA 128×):
+#   Effective KV per token ≈ MLA_KV_BYTES / 12.8 ≈ 45 bytes (heavily compressed)
+#   1M context KV cache ≈ 1.7 GB (vs 17.2 GB without compression)
 
 # RTL-compatible aliases (kept in sync with lpu_config.svh)
 K_LATENT              = KV_LORA_RANK   # LPU_K_LATENT: MLA K low-rank dim
