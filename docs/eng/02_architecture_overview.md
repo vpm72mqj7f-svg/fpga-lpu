@@ -34,24 +34,39 @@ The cluster achieves:
 - **B=1 decode:** approximately 660 tokens/second
 - **Saturated batch decode:** approximately 14,000-17,500 tokens/second
 - **Primary Prefill: Dual AMD EPYC 9755 + Flash model + Chunked** — first token ~112ms, total P=512 in ~0.5s
-- **GPU Fallback: L20 GPU + Flash model** — ~40ms first token for sub-100ms SLA (rarely needed)
-- **High-concurrency agent serving:** approximately 5,800-8,500 tokens/second (post-optimizations)
+- **Agent concurrency @ 1M context:** ~250 sessions per node (KV in DDR5)
+- **KV Cache:** Host DDR5 (512 GB) — never leaves CPU, zero PCIe transfer
 
-### Heterogeneous Prefill/Decode Architecture
+### CPU-Attention + FPGA-FFN Architecture (v2)
+
+ML analysis reveals that in MLA, attention is **0.02% of total compute** (131K MACs vs 462M FFN MACs per layer). The architecture reflects this split:
 
 ```
-Primary (Dual EPYC + Chunked Prefill):
-  Token → [Dual AMD EPYC 9755: Flash Prefill]
-             Chunked: 128 tokens/chunk, first token ~112ms
-             Total P=512: 4 chunks → ~0.5s
-             ↓ PCIe DMA (174μs) + KV Layer Mapping (27→61)
-          [FPGA LPU: Full Decode 17,445 TPS] → Output tokens
-
-Fallback (L20 GPU, sub-100ms SLA only):
-  Token → [L20 GPU: Flash Prefill ~40ms] → KV Cache
-             ↓ PCIe DMA
-          [FPGA LPU: Full Decode 17,445 TPS] → Output tokens
+每层 Decode:
+  ┌─────────────────────────────────────────────────────────┐
+  │ CPU (Dual EPYC 9755, DDR5 512GB)                        │
+  │                                                          │
+  │  QKV投影 → K,V写入 DDR5 KV Cache (1 token)               │
+  │  Attention(Q, KV[window=128]) → attention_output (14KB)  │
+  │                                      ↓ PCIe 5.0 (5μs)   │
+  └──────────────────────────────────────┼──────────────────┘
+                                         │
+  ┌──────────────────────────────────────┼──────────────────┐
+  │ FPGA (32× Agilex 7, 177 TMACs total) │                  │
+  │                                      ↓                   │
+  │  Expert FFN (fp4 weights, 6 experts) → FFN_output        │
+  │                                      ↓ PCIe 5.0 (5μs)   │
+  └──────────────────────────────────────┼──────────────────┘
+                                         │
+  CPU: RMSNorm → 下一层
 ```
+
+| 组件 | 旧架构 (FPGA Only) | 新架构 (CPU+FPGA) | 原因 |
+|------|:---:|:---:|------|
+| **Attention** | FPGA | **CPU** | 0.02% 计算, FPGA 做浪费 |
+| **KV Cache** | HBM 32GB | **DDR5 512GB** | 容量 16×, Agent 场景必需 |
+| **Expert FFN** | FPGA | **FPGA** | 96% 计算, FPGA 最擅长 |
+| **PCIe/token** | 仅 KV prefill | 14KB×61层×2方向 | 30 GB/s @ PCIe 5.0 |
 
 The Flash model (285B, ~27 layers) and Full model (671B, 61 layers) share identical
 hidden dimensions (HIDDEN=7168, K_LATENT=512, V_LATENT=512). Flash model prefill
@@ -70,10 +85,10 @@ The primary motivation is hardware availability. NVIDIA H100/B200 GPUs are embar
 ### 1.3 What Makes This Architecturally Unique
 
 1. **Native fp4 compute throughout** -- weights stored at 4 bits (E2M1), activations at 8 bits (E4M3), DSPs multiply at 2 MAC/cycle for fp4xfp8 mode. No decompression overhead.
-2. **MLA hardened into a single pipeline** -- KV decompression, Q-K dot product, softmax, A-V dot product, and O recompression flow through dedicated RTL without repeated HBM round-trips.
-3. **Weight-stationary systolic arrays** -- the 12,300 DSPs per chip are organized as 2D weight-stationary systolic arrays. Weights are pre-loaded into the array; activations stream through. This is fundamentally different from GPU-style weight-streaming.
-4. **SRAM-resident deterministic weights** -- attention Q/KV/O projections, shared expert, router table, and RMSNorm parameters are double-buffered in on-chip SRAM. In 81.6% of layers (zero local expert hits), HBM bandwidth is completely idle during compute.
-5. **Hardware KV cache addressing** -- KV entries are addressed as `{session_id, layer_id, seq_pos}` through combinational logic. No software page table walk, no CPU involvement.
+2. **CPU-Attention + FPGA-FFN decomposition** — MLA attention is 0.02% of total compute (512-dim dot product × 128 window). Runs on CPU AMX/SVE2 in ~0.5μs. FPGA dedicates 100% of DSPs to Expert FFN (96% of compute).
+3. **Weight-stationary systolic arrays** — the 12,300 DSPs per chip are organized as 2D weight-stationary systolic arrays. 6 experts can be loaded simultaneously into different row segments, enabling parallel expert FFN execution.
+4. **KV Cache in Host DDR5** — 512 GB capacity per server, zero PCIe transfer for KV (attention runs on CPU, reads KV locally). Supports 250+ concurrent agent sessions at 1M context vs ~15 with HBM.
+5. **Expert replication** — hot experts replicated to all chips, P(0 local expert) drops from 82.7% to ≈0%. Eliminates HBM weight loading from the decode critical path.
 
 ### 1.4 System at a Glance
 

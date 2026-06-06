@@ -88,6 +88,8 @@
 | 指标 | FPGA LPU | H200 (8-GPU) | B300 (8-GPU) | 950PR (8-NPU) | 思元590¹ | C550¹ | PPU¹ |
 |------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **饱和TPS (B=32)** | **17,445** | ~2,000 | ~4,500 | ~1,500 | ~800 | ~500 | ~700 |
+| **KV 容量** | **512 GB DDR5** | ~800 GB HBM | ~1,800 GB HBM | ~700 GB HBM | ~640 GB HBM | ~512 GB HBM | ~768 GB HBM |
+| **@1M context 会话数** | **~250** (DDR5) | ~18 | ~40 | ~20 | ~10 | ~8 | ~12 |
 | **B=1 延迟 (ms/tok)** | **1.51** | ~8.0 | ~4.5 | ~10.0 | ~15.0 | ~20.0 | ~12.0 |
 | **B=8 TPS** | **4,490** | ~1,200 | ~3,000 | ~1,000 | ~500 | ~350 | ~450 |
 | **B=128 TPS** | **14,780** | ~2,000 | ~4,500 | ~1,500 | ~800 | ~500 | ~700 |
@@ -281,6 +283,22 @@ FPGA LPU 的极端能效优势来自三个架构决策：
 ---
 
 ## 6. Prefill / Decode 分解：为什么这不是妥协而是最优解
+
+### 5.5 架构演进: FPGA-Only → CPU-Attention + FPGA-FFN
+
+基于 MLA 计算量分析（Attention 仅占 0.02%，FFN 占 96%），架构从 v1 演进到 v2:
+
+| | v1: FPGA Only | v2: CPU+FPGA | 变化 |
+|------|:---:|:---:|:---:|
+| Attention | FPGA | **CPU (AMX/SVE2)** | FPGA 去掉 attention |
+| KV Cache | HBM 32GB | **DDR5 512GB** | 容量 16× |
+| Expert FFN | FPGA | **FPGA** | 不变 |
+| PCIe 开销 | 仅 Prefill KV | 14KB×61×2/层 | +30 GB/s |
+| FPGA 资源 | Attn+KV+FFN | **FFN only** | 省 30% BRAM |
+| @1M 会话 | ~15 | **~250** | 17× |
+
+> 关键认知: MLA 把 attention 压到可忽略（131K MACs vs 462M FFN），CPU 做 attention 几乎零开销。
+> FPGA 专注 Expert FFN，所有 DSP 用于 FFN 并行。KV 留在 DDR5，容量问题消失。
 
 ### 6.0 两个阶段的物理本质
 
