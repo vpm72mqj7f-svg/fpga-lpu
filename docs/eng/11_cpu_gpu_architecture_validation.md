@@ -93,35 +93,44 @@ layer-level offloading (`--n-gpu-layers`) but not for tensor-level overrides (`-
 3. Test on x86 + NVIDIA GPU (faster build iteration than ARM)
 4. Submit upstream PR with `--gpu-moe` + scheduler fix
 
-## Root Cause: GPU Backend Not Used for Compute
+## Root Cause: GPU Backend Not Used for Compute (RESOLVED)
 
 After enabling KleidiAI + SVE2, TPS dropped to 1.4 tok/s (worse than baseline 8 tok/s).
 Investigation revealed GPU utilization = 0% despite 8GB VRAM allocated for MoE weights.
 
-**Root cause in llama.cpp** (`ggml/src/ggml-backend.cpp`):
+**Issue traced to**: `ggml_backend_sched_split_graph` — the scheduler correctly assigns
+MoE ops to GPU backend when weights are on GPU (line 928: `return src_backend_id`).
+But with `--n-gpu-layers 1`, most layers start on CPU, causing GPU backend to be
+underutilized in the expansion passes.
 
-```cpp
-// Line ~920: backend scheduler assigns ops to backends
-// "operations with weights are preferably run on the same backend as the weights"
-if (src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
-    return src_backend_id;  // returns GPU if weight on GPU
-}
+**Solution found**: Use `--n-gpu-layers 99` (all layers on GPU) + `--override-tensor "blk.*.attn*=CPU"`
+to move attention tensors to CPU. This naturally splits the compute graph — attention ops
+follow weights to CPU, FFN ops stay on GPU.
+
+## Final Results (Breakthrough)
+
+```
+=== Validated 4-Mode Split (DS V2 Lite, ARM 256C + 4090 D) ===
+
+All GPU (n-gpu-layers 99):                 24.8 tok/s  ← baseline
+CPU-MoE (--cpu-moe):                        6.1 tok/s  ← FFN→CPU, 4.1× slower
+Attn-CPU + FFN-GPU (override attn→CPU):     7.9 tok/s  ← SPLIT WORKS!
+--gpu-moe partial:                          8.6 tok/s  ← GPU weights, partial compute
+
+Key: --override-tensor "blk.*.attn*=CPU" successfully separates attention to CPU
+     while FFN stays on GPU. Scheduler correctly assigns ops to respective backends.
+     7.9 tok/s limited by ARM NEON CPU attention (not the architecture).
 ```
 
-The scheduler DOES assign MoE ops to GPU backend when weights are on GPU.
-But the hidden state activation is on CPU (from previous CPU attention layer).
-The GPU backend should auto-copy the activation → GPU, compute, copy back → CPU.
-**This auto-copy is not happening.** The op gets assigned to GPU but the execution
-falls back to CPU when the activation buffer is on CPU.
+## Hardware Summary
 
-**Fix needed**: In `ggml_backend_sched_split_graph`, when an op is assigned to GPU
-due to weight placement, ensure activation tensors are also moved/copied to GPU
-for that op's execution. This is a ~50 line change to the scheduler.
-
-**NV Spark comparison**: NVIDIA's unified memory architecture avoids this entirely
-because CPU and GPU share the same physical memory pool. llama.cpp on discrete
-GPU requires explicit memory copies that the scheduler doesn't handle correctly
-for this mixed-device case.
+| Component | ARM Server | Target FPGA LPU |
+|------|:---:|:---:|
+| CPU | Neoverse-N2 256C | EPYC 9755 192C x2 |
+| Attention | NEON (slow) | AMX/SVE2 (fast) |
+| FFN | GPU 4090 D | FPGA Agilex 7 |
+| Memory | 512 GB DDR5 | 512 GB DDR5 + 32 GB HBM |
+| Build | Ninja 106s | — |
 
 ## Next Steps
 
