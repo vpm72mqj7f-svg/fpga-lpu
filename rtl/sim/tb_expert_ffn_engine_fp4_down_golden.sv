@@ -57,7 +57,7 @@ module tb_expert_ffn_engine_fp4_down_golden;
         input logic [HIDDEN*LANES*4-1:0] down_pack
     );
         begin
-            ws(0,8'h38); ws(1,8'h38);
+            ws(0,8'h38); ws(1,8'h38); ws(2,8'h38); ws(3,8'h38);
             for (int b=0;b<K_BEATS;b++) begin
                 wa(b, act_pack[b*LANES*8 +: LANES*8]);
             end

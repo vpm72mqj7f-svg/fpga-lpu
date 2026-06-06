@@ -1,10 +1,11 @@
 `timescale 1ns/1ps
 
 module tb_silu_q12_lut;
+    logic clk;
     logic signed [31:0] x_q12;
     logic signed [31:0] y_q12;
 
-    silu_q12_lut dut (.x_q12(x_q12), .y_q12(y_q12));
+    silu_q12_lut dut (.clk(clk), .x_q12(x_q12), .y_q12(y_q12));
 
     task check(input signed [31:0] x, input signed [31:0] expected, input signed [31:0] tol);
         begin

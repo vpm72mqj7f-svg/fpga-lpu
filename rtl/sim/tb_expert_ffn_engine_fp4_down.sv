@@ -24,6 +24,7 @@ module tb_expert_ffn_engine_fp4_down;
     logic [31:0] result_data;
     logic [31:0] results [HIDDEN];
     int seen;
+    logic expert_sel;  // default 0, single-expert mode
 
     expert_ffn_engine_fp4_down dut (.*);
 
@@ -40,10 +41,11 @@ module tb_expert_ffn_engine_fp4_down;
         rst_n=0; activ_wr_en=0; scale_wr_en=0; gate_w_wr_en=0; up_w_wr_en=0; down_w_wr_en=0;
         start=0; seen=0; activ_wr_beat=0; activ_wr_data='0; scale_wr_addr=0; scale_wr_data=0;
         gate_w_wr_row=0; gate_w_wr_beat=0; gate_w_wr_data='0; up_w_wr_row=0; up_w_wr_beat=0; up_w_wr_data='0; down_w_wr_row=0; down_w_wr_beat=0; down_w_wr_data='0;
+        expert_sel=0;
         for (int i=0;i<HIDDEN;i++) results[i]=0;
         repeat(4) @(posedge clk); rst_n=1;
 
-        ws(0,8'h38); ws(1,8'h38);
+        ws(0,8'h38); ws(1,8'h38); ws(2,8'h38); ws(3,8'h38);
         wa(0,{4{8'h38}}); wa(1,{4{8'h38}});
         for (int r=0;r<INTER;r++) begin
             wg(r,0,{4{4'h1}}); wg(r,1,{4{4'h0}}); // gate=1.0

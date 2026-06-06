@@ -16,6 +16,11 @@ SIM_DIR   := $(RTL_ROOT)/sim
 # ---- Source files ----
 SV_INC    := $(INC_DIR)/fp4_types.svh
 
+# Altera IP wrappers (always compiled — small, zero-dependency behavioral models)
+SIM_IP    := $(SIM_DIR)/altera_scfifo.sv \
+             $(SIM_DIR)/altera_syncram.sv \
+             $(SIM_DIR)/altera_mult_add.sv
+
 # ---- Test configuration ----
 # Override TOP, DUT_SRC, TB_SRC on command line for different modules.
 # Default: fp4_mac
@@ -39,6 +44,7 @@ work:
 	$(shell which vlib 2>/dev/null || echo vlib) work
 
 compile: work
+	$(VLOG_EXE) +define+SIM +incdir+$(INC_DIR) $(SIM_IP)
 	$(VLOG_EXE) +define+SIM +incdir+$(INC_DIR) $(DUT_SRC)
 	$(VLOG_EXE) +define+SIM +incdir+$(INC_DIR) $(TB_SRC)
 
@@ -61,7 +67,7 @@ VERILATOR ?= verilator
 # Verilator simulation flow
 # Requires creating a C++ harness; for now use lint-only mode
 lint:
-	$(VERILATOR) --lint-only -Wall +incdir+$(INC_DIR) $(DUT_SRC)
+	$(VERILATOR) --lint-only -Wall +incdir+$(INC_DIR) $(SIM_IP) $(DUT_SRC)
 
 compile: lint
 	@echo "Verilator full sim requires C++ harness — lint-only for now"
@@ -80,7 +86,7 @@ IVERILOG  ?= iverilog
 VVP       ?= vvp
 
 compile:
-	$(IVERILOG) -g2012 -I$(INC_DIR) -o $(TOP).vvp $(DUT_SRC) $(TB_SRC)
+	$(IVERILOG) -g2012 -DFPGA_LPU_SINGLE_CHIP -I$(INC_DIR) -o $(TOP).vvp $(SIM_IP) $(DUT_SRC) $(TB_SRC)
 
 run: compile
 	$(VVP) $(TOP).vvp
@@ -135,7 +141,7 @@ tb_layer_compute_engine:     DUT = $(RTL_ROOT)/layer/layer_compute_engine.sv
 tb_layer_compute_engine_golden: DUT = $(RTL_ROOT)/layer/layer_compute_engine.sv
 tb_full_transformer_layer:   DUT = $(RTL_ROOT)/layer/full_transformer_layer.sv
 tb_chip_12layer:             DUT = $(RTL_ROOT)/chip/chip_top.sv
-tb_cluster_384:              DUT = $(RTL_ROOT)/chip/chip_top.sv
+tb_cluster_384:              DUT = $(RTL_ROOT)/layer/full_transformer_layer.sv
 tb_kv_dma:                   DUT = $(RTL_ROOT)/chip/kv_dma_engine.sv
 tb_c2c_ring:                 DUT = $(RTL_ROOT)/legacy/c2c_node.sv
 tb_lookup_engine:            DUT = $(RTL_ROOT)/engram/lookup_engine.sv
@@ -143,3 +149,36 @@ tb_mtp_head:                 DUT = $(RTL_ROOT)/head/mtp_head.sv
 
 tb_%:
 	$(MAKE) TOP=$@ DUT_SRC="$(DUT)" TB_SRC="$(SIM_DIR)/$@.sv" run
+
+#=============================================================================
+# E2E Prefill → Decode co-simulation (multi-module, iverilog only)
+#=============================================================================
+E2E_DEPS := $(SIM_IP) \
+	$(DSP_DIR)/fp4_mac.sv \
+	$(DSP_DIR)/fp4_scale_reader.sv \
+	$(DSP_DIR)/fp4_systolic_tile.sv \
+	$(DSP_DIR)/fp4_systolic_array.sv \
+	$(DSP_DIR)/fp4_scaled_tile.sv \
+	$(DSP_DIR)/fp4_linear_engine.sv \
+	$(RTL_ROOT)/activation/rms_norm.sv \
+	$(RTL_ROOT)/activation/silu_q12_lut.sv \
+	$(RTL_ROOT)/activation/q12_to_fp8_e4m3.sv \
+	$(RTL_ROOT)/attention/mla_qkv_proj.sv \
+	$(RTL_ROOT)/attention/mla_rope.sv \
+	$(RTL_ROOT)/attention/mla_kv_cache.sv \
+	$(RTL_ROOT)/attention/mla_attention_v2.sv \
+	$(RTL_ROOT)/moe/router_topk.sv \
+	$(RTL_ROOT)/moe/expert_ffn_engine_fp4_down.sv \
+	$(RTL_ROOT)/layer/full_transformer_layer.sv
+
+tb_e2e_prefill_decode:
+	$(IVERILOG) -g2012 -DFPGA_LPU_SINGLE_CHIP -I$(INC_DIR) -o $@.vvp $(E2E_DEPS) $(SIM_DIR)/$@.sv
+	$(VVP) $@.vvp
+
+CLUSTER_DEPS := $(E2E_DEPS) \
+	$(RTL_ROOT)/chip/chip_top.sv \
+	$(RTL_ROOT)/cluster/cluster_top.sv
+
+tb_cluster_top:
+	$(IVERILOG) -g2012 -DFPGA_LPU_SINGLE_CHIP -I$(INC_DIR) -o $@.vvp $(CLUSTER_DEPS) $(SIM_DIR)/$@.sv
+	$(VVP) $@.vvp

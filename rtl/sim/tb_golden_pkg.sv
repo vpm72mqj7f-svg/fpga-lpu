@@ -6,7 +6,7 @@
 
 package tb_golden_pkg;
 
-    localparam int NUM_TESTS = 14;
+    localparam int NUM_TESTS = 24;
 
     // T1_SINGLE: fp4 +1.0 x fp8 +1.0 (1 terms)
     localparam int T0_LEN = 1;
@@ -105,5 +105,75 @@ package tb_golden_pkg;
     localparam logic [4*8-1:0] T13_A_PACK = {8'h38, 8'h38, 8'h38, 8'h38};
     localparam logic [4*8-1:0] T13_S_PACK = {8'h30, 8'h40, 8'h30, 8'h40};
     localparam logic [31:0] T13_EXPECTED = 32'h00007800;
+
+    // T15_FP8_SUBNORM_SCALED: fp8 subnormals x varied fp4 x non-unity scale (8 terms)
+    localparam int T14_LEN = 8;
+    localparam logic [8*4-1:0] T14_W_PACK = {4'h1, 4'h2, 4'h4, 4'h6, 4'ha, 4'hc, 4'h3, 4'h2};
+    localparam logic [8*8-1:0] T14_A_PACK = {8'h01, 8'h02, 8'h03, 8'h04, 8'h05, 8'h06, 8'h07, 8'h01};
+    localparam logic [8*8-1:0] T14_S_PACK = {8'h40, 8'h40, 8'h30, 8'h30, 8'h40, 8'h40, 8'h30, 8'h38};
+    localparam logic [31:0] T14_EXPECTED = 32'hffffffca;
+
+    // T16_SCALE_ZERO: scale=0 zeroes all products (4 terms)
+    localparam int T15_LEN = 4;
+    localparam logic [4*4-1:0] T15_W_PACK = {4'h4, 4'h6, 4'h7, 4'hc};
+    localparam logic [4*8-1:0] T15_A_PACK = {8'h38, 8'h48, 8'h50, 8'h38};
+    localparam logic [4*8-1:0] T15_S_PACK = {8'h00, 8'h00, 8'h00, 8'h00};
+    localparam logic [31:0] T15_EXPECTED = 32'h00000000;
+
+    // T17_SCALE_ZERO_MID: scale=0 in middle of accumulation (4 terms)
+    localparam int T16_LEN = 4;
+    localparam logic [4*4-1:0] T16_W_PACK = {4'h4, 4'h4, 4'h6, 4'h4};
+    localparam logic [4*8-1:0] T16_A_PACK = {8'h38, 8'h38, 8'h38, 8'h38};
+    localparam logic [4*8-1:0] T16_S_PACK = {8'h38, 8'h00, 8'h38, 8'h38};
+    localparam logic [31:0] T16_EXPECTED = 32'h00004000;
+
+    // T18_FP8_NEAR_SAT: fp8 activations near/at decode saturation (5 terms)
+    localparam int T17_LEN = 5;
+    localparam logic [5*4-1:0] T17_W_PACK = {4'h7, 4'h7, 4'h6, 4'h4, 4'h4};
+    localparam logic [5*8-1:0] T17_A_PACK = {8'h48, 8'h4f, 8'h50, 8'h57, 8'h58};
+    localparam logic [5*8-1:0] T17_S_PACK = {8'h38, 8'h38, 8'h38, 8'h38, 8'h38};
+    localparam logic [31:0] T17_EXPECTED = 32'h000427c0;
+
+    // T19_FP8_SUBNORM_SIGNED: fp8 subnormals x mixed-sign fp4 weights (5 terms)
+    localparam int T18_LEN = 5;
+    localparam logic [5*4-1:0] T18_W_PACK = {4'hc, 4'hc, 4'ha, 4'h6, 4'h4};
+    localparam logic [5*8-1:0] T18_A_PACK = {8'h07, 8'h03, 8'h01, 8'h05, 8'h07};
+    localparam logic [5*8-1:0] T18_S_PACK = {8'h38, 8'h38, 8'h38, 8'h38, 8'h38};
+    localparam logic [31:0] T18_EXPECTED = 32'h00000030;
+
+    // T20_SCALE_SUBNORM: fp8 subnormal scale values (exp=0) (4 terms)
+    localparam int T19_LEN = 4;
+    localparam logic [4*4-1:0] T19_W_PACK = {4'h7, 4'h7, 4'h6, 4'h6};
+    localparam logic [4*8-1:0] T19_A_PACK = {8'h38, 8'h38, 8'h38, 8'h38};
+    localparam logic [4*8-1:0] T19_S_PACK = {8'h07, 8'h01, 8'h07, 8'h01};
+    localparam logic [31:0] T19_EXPECTED = 32'h000000f0;
+
+    // T21_SCALE_E1_EDGE: fp8 scale at e=1 right-shift boundary (4 terms)
+    localparam int T20_LEN = 4;
+    localparam logic [4*4-1:0] T20_W_PACK = {4'h4, 4'h4, 4'h4, 4'h4};
+    localparam logic [4*8-1:0] T20_A_PACK = {8'h38, 8'h38, 8'h38, 8'h38};
+    localparam logic [4*8-1:0] T20_S_PACK = {8'h0f, 8'h0e, 8'h09, 8'h08};
+    localparam logic [31:0] T20_EXPECTED = 32'h00000160;
+
+    // T22_SCALE_SAT: fp8 scale near/at saturation clamping (safe exp) (4 terms)
+    localparam int T21_LEN = 4;
+    localparam logic [4*4-1:0] T21_W_PACK = {4'h4, 4'h4, 4'h4, 4'h4};
+    localparam logic [4*8-1:0] T21_A_PACK = {8'h38, 8'h38, 8'h38, 8'h38};
+    localparam logic [4*8-1:0] T21_S_PACK = {8'hd0, 8'h57, 8'h50, 8'h48};
+    localparam logic [31:0] T21_EXPECTED = 32'h0000bff0;
+
+    // T23_NEG_SCALE: negative fp8 scale values (4 terms)
+    localparam int T22_LEN = 4;
+    localparam logic [4*4-1:0] T22_W_PACK = {4'h6, 4'h6, 4'h6, 4'h6};
+    localparam logic [4*8-1:0] T22_A_PACK = {8'h38, 8'h38, 8'h38, 8'h38};
+    localparam logic [4*8-1:0] T22_S_PACK = {8'hc0, 8'h38, 8'hc0, 8'hb8};
+    localparam logic [31:0] T22_EXPECTED = 32'hffff8000;
+
+    // T24_ACT_ZERO: activation fp8 zero with nonzero weight/scale (3 terms)
+    localparam int T23_LEN = 3;
+    localparam logic [3*4-1:0] T23_W_PACK = {4'h7, 4'h7, 4'h7};
+    localparam logic [3*8-1:0] T23_A_PACK = {8'h00, 8'h00, 8'h00};
+    localparam logic [3*8-1:0] T23_S_PACK = {8'h7e, 8'h40, 8'h38};
+    localparam logic [31:0] T23_EXPECTED = 32'h00000000;
 
 endpackage

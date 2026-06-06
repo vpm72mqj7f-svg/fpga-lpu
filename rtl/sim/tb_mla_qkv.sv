@@ -35,6 +35,9 @@ module tb_mla_qkv;
     logic cache_rd_en, cache_rd_valid;
     logic [5:0] cache_fill_count;
     logic cache_full, cache_empty;
+    logic cache_preload_en;
+    logic [K_LATENT*DATA_W-1:0] cache_preload_K_flat;
+    logic [V_LATENT*DATA_W-1:0] cache_preload_V_flat;
 
     // DUTs
     mla_qkv_proj #(.HIDDEN(HIDDEN), .K_LATENT(K_LATENT), .V_LATENT(V_LATENT),
@@ -52,6 +55,9 @@ module tb_mla_qkv;
                    .DATA_W(DATA_W))
         u_cache (.wr_en(cache_wr_en), .K_latent_flat(cache_K_in),
                  .V_latent_flat(cache_V_in), .wr_addr(cache_wr_addr),
+                 .preload_en(cache_preload_en),
+                 .preload_K_flat(cache_preload_K_flat),
+                 .preload_V_flat(cache_preload_V_flat),
                  .rd_en(cache_rd_en), .rd_addr(cache_rd_addr),
                  .rd_valid(cache_rd_valid), .rd_K_flat(cache_K_out),
                  .rd_V_flat(cache_V_out), .fill_count(cache_fill_count),
@@ -83,6 +89,7 @@ module tb_mla_qkv;
         lut_wr_en=0; lut_pair='0; lut_sin_data='0; lut_cos_data='0;
         cache_wr_en=0; cache_K_in='0; cache_V_in='0;
         cache_rd_en=0; cache_rd_addr='0;
+        cache_preload_en=0; cache_preload_K_flat='0; cache_preload_V_flat='0;
         pass_count=0; fail_count=0;
 
         wait_cycles(4);
@@ -100,53 +107,53 @@ module tb_mla_qkv;
         for (int r = 0; r < HIDDEN; r++) begin
             for (int c = 0; c < HIDDEN; c++) begin
                 @(posedge clk);
-                wt_wr_en=1; wt_sel=0; wt_row=r; wt_col=c;
-                wt_wr_data = (r==c) ? Q12_ONE : Q12_ZERO;
-                @(posedge clk); wt_wr_en=0;
+                wt_wr_en<=1; wt_sel<=0; wt_row<=r; wt_col<=c;
+                wt_wr_data <= (r==c) ? Q12_ONE : Q12_ZERO;
+                @(posedge clk); wt_wr_en<=0;
             end
         end
         // Load W_K = [I | 0] (first 4 cols are identity)
         for (int r = 0; r < HIDDEN; r++) begin
             for (int c = 0; c < K_LATENT; c++) begin
                 @(posedge clk);
-                wt_wr_en=1; wt_sel=1; wt_row=r; wt_col=c;
-                wt_wr_data = (r==c) ? Q12_ONE : Q12_ZERO;
-                @(posedge clk); wt_wr_en=0;
+                wt_wr_en<=1; wt_sel<=1; wt_row<=r; wt_col<=c;
+                wt_wr_data <= (r==c) ? Q12_ONE : Q12_ZERO;
+                @(posedge clk); wt_wr_en<=0;
             end
         end
         // Load W_K_up = identity (first 4 rows)
         for (int r = 0; r < K_LATENT; r++) begin
             for (int c = 0; c < HIDDEN; c++) begin
                 @(posedge clk);
-                wt_wr_en=1; wt_sel=2; wt_row=r; wt_col=c;
-                wt_wr_data = (r==c) ? Q12_ONE : Q12_ZERO;
-                @(posedge clk); wt_wr_en=0;
+                wt_wr_en<=1; wt_sel<=2; wt_row<=r; wt_col<=c;
+                wt_wr_data <= (r==c) ? Q12_ONE : Q12_ZERO;
+                @(posedge clk); wt_wr_en<=0;
             end
         end
         // Load W_V = [I | 0]
         for (int r = 0; r < HIDDEN; r++) begin
             for (int c = 0; c < V_LATENT; c++) begin
                 @(posedge clk);
-                wt_wr_en=1; wt_sel=3; wt_row=r; wt_col=c;
-                wt_wr_data = (r==c) ? Q12_ONE : Q12_ZERO;
-                @(posedge clk); wt_wr_en=0;
+                wt_wr_en<=1; wt_sel<=3; wt_row<=r; wt_col<=c;
+                wt_wr_data <= (r==c) ? Q12_ONE : Q12_ZERO;
+                @(posedge clk); wt_wr_en<=0;
             end
         end
         // Load W_V_up = identity
         for (int r = 0; r < V_LATENT; r++) begin
             for (int c = 0; c < HIDDEN; c++) begin
                 @(posedge clk);
-                wt_wr_en=1; wt_sel=4; wt_row=r; wt_col=c;
-                wt_wr_data = (r==c) ? Q12_ONE : Q12_ZERO;
-                @(posedge clk); wt_wr_en=0;
+                wt_wr_en<=1; wt_sel<=4; wt_row<=r; wt_col<=c;
+                wt_wr_data <= (r==c) ? Q12_ONE : Q12_ZERO;
+                @(posedge clk); wt_wr_en<=0;
             end
         end
 
         // Send input
         @(posedge clk);
-        in_valid = 1; hidden_flat = make_vec(100);
+        in_valid <= 1; hidden_flat <= make_vec(100);
         @(posedge clk);
-        in_valid = 0;
+        in_valid <= 0;
 
         // Wait for output
         for (int cyc = 0; cyc < 60; cyc++) begin
@@ -199,9 +206,9 @@ module tb_mla_qkv;
         // LUT already has cos=1.0 (default), sin=0 (default) for all positions
 
         @(posedge clk);
-        rope_in_valid = 1; rope_in_flat = make_vec(200); rope_pos = 0;
+        rope_in_valid <= 1; rope_in_flat <= make_vec(200); rope_pos <= 0;
         @(posedge clk);
-        rope_in_valid = 0;
+        rope_in_valid <= 0;
 
         for (int cyc = 0; cyc < 30; cyc++) begin
             @(posedge clk);
@@ -228,14 +235,14 @@ module tb_mla_qkv;
         // ============================================
         $display("Test 3: RoPE 90-degree rotation (pair 0)");
         @(posedge clk);
-        lut_wr_en=1; rope_pos=1; lut_pair=0;
-        lut_cos_data=0; lut_sin_data=Q12_ONE;
-        @(posedge clk); lut_wr_en=0;
+        lut_wr_en<=1; rope_pos<=1; lut_pair<=0;
+        lut_cos_data<=0; lut_sin_data<=Q12_ONE;
+        @(posedge clk); lut_wr_en<=0;
 
         @(posedge clk);
-        rope_in_valid=1; rope_in_flat=make_vec(10); rope_pos=1;
+        rope_in_valid<=1; rope_in_flat<=make_vec(10); rope_pos<=1;
         @(posedge clk);
-        rope_in_valid=0;
+        rope_in_valid<=0;
 
         for (int cyc = 0; cyc < 30; cyc++) begin
             @(posedge clk);
@@ -271,23 +278,24 @@ module tb_mla_qkv;
         // Write 3 entries
         for (int i = 0; i < 3; i++) begin
             @(posedge clk);
-            cache_wr_en = 1;
+            cache_wr_en <= 1;
             for (int d = 0; d < K_LATENT; d++) begin
-                cache_K_in[d*DATA_W +: DATA_W] = 1000 + i*10 + d;
-                cache_V_in[d*DATA_W +: DATA_W] = 2000 + i*10 + d;
+                cache_K_in[d*DATA_W +: DATA_W] <= 1000 + i*10 + d;
+                cache_V_in[d*DATA_W +: DATA_W] <= 2000 + i*10 + d;
             end
             @(posedge clk);
-            cache_wr_en = 0;
+            cache_wr_en <= 0;
         end
 
         wait_cycles(2);
 
-        // Read back and verify
+        // Read back and verify (extra posedge wait avoids Icarus NBA race)
         for (int i = 0; i < 3; i++) begin
             @(posedge clk);
-            cache_rd_en = 1; cache_rd_addr = i;
+            cache_rd_en <= 1; cache_rd_addr <= i;
             @(posedge clk);
-            cache_rd_en = 0;
+            cache_rd_en <= 0;
+            @(posedge clk);  // wait for DUT rd_valid/data to settle
             if (cache_rd_valid) begin
                 for (int d = 0; d < K_LATENT; d++) begin
                     if (cache_K_out[d*DATA_W +: DATA_W] !== (1000 + i*10 + d)) begin

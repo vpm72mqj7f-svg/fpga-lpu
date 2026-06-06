@@ -33,12 +33,12 @@ module tb_fp4_mac;
     // Drive a single (weight, activation) pair. Blocking assigns, valid=1 pulse.
     //----------------------------------------------------------------------------
     task automatic drive(input logic [3:0] w, input logic [7:0] a, input logic [7:0] s = 8'h38);
-        mac_in.weight = w;
-        mac_in.scale  = fp8_to_scaled12(s);  // pre-decode at drive time
-        mac_in.activ  = a;
-        mac_in.valid  = 1'b1;
+        mac_in.weight <= w;
+        mac_in.scale  <= fp8_to_scaled12(s);  // pre-decode at drive time
+        mac_in.activ  <= a;
+        mac_in.valid  <= 1'b1;
         @(posedge clk);
-        mac_in.valid  = 1'b0;
+        mac_in.valid  <= 1'b0;
     endtask
 
     //----------------------------------------------------------------------------
@@ -50,13 +50,13 @@ module tb_fp4_mac;
         input logic [7:0] scales []
     );
         for (int i = 0; i < weights.size(); i++) begin
-            mac_in.weight = weights[i];
-            mac_in.scale  = fp8_to_scaled12(scales[i]);
-            mac_in.activ  = activs[i];
-            mac_in.valid  = 1'b1;
+            mac_in.weight <= weights[i];
+            mac_in.scale  <= fp8_to_scaled12(scales[i]);
+            mac_in.activ  <= activs[i];
+            mac_in.valid  <= 1'b1;
             @(posedge clk);
         end
-        mac_in.valid = 1'b0;
+        mac_in.valid <= 1'b0;
     endtask
 
     //----------------------------------------------------------------------------
@@ -96,9 +96,9 @@ module tb_fp4_mac;
         input bit           use_stream = 1'b0
     );
         // Clear accumulator
-        accum_clr = 1'b1;
+        accum_clr <= 1'b1;
         @(posedge clk);
-        accum_clr = 1'b0;
+        accum_clr <= 1'b0;
 
         // Drive inputs (packed element 0 in low bits)
         for (int i = 0; i < len; i++) begin
@@ -125,7 +125,7 @@ module tb_fp4_mac;
         $display("============================================================");
         $display(" tb_fp4_mac — Golden Vector Verification");
         $display("============================================================");
-        $display(" Pipeline: 3-stage, %0d tests from tb_golden_pkg", tb_golden_pkg::NUM_TESTS);
+        $display(" Pipeline: 4-stage, %0d tests from tb_golden_pkg", tb_golden_pkg::NUM_TESTS);
         $display("============================================================");
         $display("");
 
@@ -145,6 +145,20 @@ module tb_fp4_mac;
         run_test(tb_golden_pkg::T12_LEN, tb_golden_pkg::T12_W_PACK, tb_golden_pkg::T12_A_PACK, tb_golden_pkg::T12_S_PACK, tb_golden_pkg::T12_EXPECTED, "T13 fp8 exponent sweep     ");
         run_test(tb_golden_pkg::T13_LEN, tb_golden_pkg::T13_W_PACK, tb_golden_pkg::T13_A_PACK, tb_golden_pkg::T13_S_PACK, tb_golden_pkg::T13_EXPECTED, "T14 non-unity scale        ");
 
+        // --- Corner case vectors (T1.4) ---
+        run_test(tb_golden_pkg::T14_LEN, tb_golden_pkg::T14_W_PACK, tb_golden_pkg::T14_A_PACK, tb_golden_pkg::T14_S_PACK, tb_golden_pkg::T14_EXPECTED, "T15 fp8 subnorm scaled     ");
+        run_test(tb_golden_pkg::T15_LEN, tb_golden_pkg::T15_W_PACK, tb_golden_pkg::T15_A_PACK, tb_golden_pkg::T15_S_PACK, tb_golden_pkg::T15_EXPECTED, "T16 scale=0 all zeros      ");
+        run_test(tb_golden_pkg::T16_LEN, tb_golden_pkg::T16_W_PACK, tb_golden_pkg::T16_A_PACK, tb_golden_pkg::T16_S_PACK, tb_golden_pkg::T16_EXPECTED, "T17 scale=0 mid-stream     ");
+        run_test(tb_golden_pkg::T17_LEN, tb_golden_pkg::T17_W_PACK, tb_golden_pkg::T17_A_PACK, tb_golden_pkg::T17_S_PACK, tb_golden_pkg::T17_EXPECTED, "T18 fp8 near-saturation    ");
+        run_test(tb_golden_pkg::T18_LEN, tb_golden_pkg::T18_W_PACK, tb_golden_pkg::T18_A_PACK, tb_golden_pkg::T18_S_PACK, tb_golden_pkg::T18_EXPECTED, "T19 fp8 subnorm signed     ");
+
+        // --- Gap-filling vectors (V1.3) ---
+        run_test(tb_golden_pkg::T19_LEN, tb_golden_pkg::T19_W_PACK, tb_golden_pkg::T19_A_PACK, tb_golden_pkg::T19_S_PACK, tb_golden_pkg::T19_EXPECTED, "T20 fp8 scale subnormal    ");
+        run_test(tb_golden_pkg::T20_LEN, tb_golden_pkg::T20_W_PACK, tb_golden_pkg::T20_A_PACK, tb_golden_pkg::T20_S_PACK, tb_golden_pkg::T20_EXPECTED, "T21 fp8 scale e=1 edge     ");
+        run_test(tb_golden_pkg::T21_LEN, tb_golden_pkg::T21_W_PACK, tb_golden_pkg::T21_A_PACK, tb_golden_pkg::T21_S_PACK, tb_golden_pkg::T21_EXPECTED, "T22 fp8 scale saturation   ");
+        run_test(tb_golden_pkg::T22_LEN, tb_golden_pkg::T22_W_PACK, tb_golden_pkg::T22_A_PACK, tb_golden_pkg::T22_S_PACK, tb_golden_pkg::T22_EXPECTED, "T23 negative fp8 scale     ");
+        run_test(tb_golden_pkg::T23_LEN, tb_golden_pkg::T23_W_PACK, tb_golden_pkg::T23_A_PACK, tb_golden_pkg::T23_S_PACK, tb_golden_pkg::T23_EXPECTED, "T24 activation fp8 zero    ");
+
         //--------------------------------------------------------------------
         // Dynamic test: accum_clr during streaming
         //--------------------------------------------------------------------
@@ -155,7 +169,7 @@ module tb_fp4_mac;
             $display("--- Dynamic: accum_clr mid-stream ---");
 
             // First accumulation
-            accum_clr = 1'b1; @(posedge clk); accum_clr = 1'b0;
+            accum_clr <= 1'b1; @(posedge clk); accum_clr <= 1'b0;
             drive(4'b0100, 8'h38);  // +1.0 x +1.0 = 4096
             drive(4'b0100, 8'h38);  // +1.0 x +1.0 = 4096
             repeat (PIPELINE_DEPTH) @(posedge clk);
@@ -163,7 +177,7 @@ module tb_fp4_mac;
             $display("  After 2 terms: 0x%08h (expect 0x%08h)", part1, 32'h2000);
 
             // Clear and start fresh
-            accum_clr = 1'b1; @(posedge clk); accum_clr = 1'b0;
+            accum_clr <= 1'b1; @(posedge clk); accum_clr <= 1'b0;
             drive(4'b0110, 8'h38);  // +2.0 x +1.0 = 8192
             drive(4'b0110, 8'h38);  // +2.0 x +1.0 = 8192
             repeat (PIPELINE_DEPTH) @(posedge clk);

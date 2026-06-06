@@ -25,12 +25,14 @@ module tb_full_transformer_layer;
     localparam int WEIGHT_W  = 16;
     localparam int DATA_W    = 32;
     localparam int Q12_ONE   = 4096;
+    localparam int EXPERTS_PER_FPGA = 4;
+    localparam int FFN_EXP_W = $clog2(EXPERTS_PER_FPGA > 1 ? EXPERTS_PER_FPGA : 2);
 
     logic clk, rst_n;
 
     // RMSNorm gamma
     logic gamma_wr_en;
-    logic [2:0] gamma_wr_idx;
+    logic [$clog2(HIDDEN)-1:0] gamma_wr_idx;
     logic signed [31:0] gamma_wr_data;
 
     // MLA Attention v2: QKV weight preload
@@ -68,16 +70,41 @@ module tb_full_transformer_layer;
     logic [1:0] scale_wr_addr;
     logic [7:0] scale_wr_data;
 
-    // Activation I/O
+    // KV cache preload (CPU prefill path — tied off for standard decode test)
+    logic                         cache_preload_en;
+    logic [K_LATENT*DATA_W-1:0]   cache_preload_K_flat;
+    logic [V_LATENT*DATA_W-1:0]   cache_preload_V_flat;
+
+    // Activation I/O (flat ports to DUT)
     logic valid_in, valid_out, router_ok;
-    logic signed [31:0] a0,a1,a2,a3,a4,a5,a6,a7;
-    logic signed [31:0] y0,y1,y2,y3,y4,y5,y6,y7;
+    logic [HIDDEN*32-1:0] a_flat;
+    logic [HIDDEN*32-1:0] y_flat;
+    logic [FFN_EXP_W-1:0]  ffn_expert_sel;
+    logic [3:0]            cfg_local_experts;  // 4 experts, all local for bring-up
+
+    // Convenience aliases — allow existing test logic to use scalar names
+    wire signed [31:0] a0 = a_flat[0*32+:32];
+    wire signed [31:0] a1 = a_flat[1*32+:32];
+    wire signed [31:0] a2 = a_flat[2*32+:32];
+    wire signed [31:0] a3 = a_flat[3*32+:32];
+    wire signed [31:0] a4 = a_flat[4*32+:32];
+    wire signed [31:0] a5 = a_flat[5*32+:32];
+    wire signed [31:0] a6 = a_flat[6*32+:32];
+    wire signed [31:0] a7 = a_flat[7*32+:32];
+    wire signed [31:0] y0 = y_flat[0*32+:32];
+    wire signed [31:0] y1 = y_flat[1*32+:32];
+    wire signed [31:0] y2 = y_flat[2*32+:32];
+    wire signed [31:0] y3 = y_flat[3*32+:32];
+    wire signed [31:0] y4 = y_flat[4*32+:32];
+    wire signed [31:0] y5 = y_flat[5*32+:32];
+    wire signed [31:0] y6 = y_flat[6*32+:32];
+    wire signed [31:0] y7 = y_flat[7*32+:32];
 
     full_transformer_layer #(
         .HIDDEN(HIDDEN), .K_LATENT(K_LATENT), .V_LATENT(V_LATENT),
         .NUM_SLOTS(NUM_SLOTS), .MAX_POS(MAX_POS),
         .WEIGHT_W(WEIGHT_W), .DATA_W(DATA_W)
-    ) dut (.*);
+    ) dut (.ffn_expert_sel(ffn_expert_sel), .*);
 
     // Clock: 100 MHz
     initial clk = 0;
@@ -86,52 +113,52 @@ module tb_full_transformer_layer;
     //=========================================================================
     // Weight preload tasks
     //=========================================================================
-    task wgamma(input [2:0] i, input signed [31:0] d);
-        @(posedge clk); #1; gamma_wr_en = 1; gamma_wr_idx = i; gamma_wr_data = d;
-        @(posedge clk); #1; gamma_wr_en = 0;
+    task wgamma(input [$clog2(HIDDEN)-1:0] i, input signed [31:0] d);
+        @(posedge clk); #1; gamma_wr_en <= 1; gamma_wr_idx <= i; gamma_wr_data <= d;
+        @(posedge clk); #1; gamma_wr_en <= 0;
     endtask
 
     task wqkv(input [2:0] sel, input [$clog2(HIDDEN)-1:0] row,
               input [$clog2(HIDDEN)-1:0] col, input signed [WEIGHT_W-1:0] d);
         @(posedge clk); #1;
-        attn_qkv_wt_wr_en = 1; attn_qkv_wt_sel = sel;
-        attn_qkv_wt_row = row; attn_qkv_wt_col = col;
-        attn_qkv_wt_wr_data = d;
-        @(posedge clk); #1; attn_qkv_wt_wr_en = 0;
+        attn_qkv_wt_wr_en <= 1; attn_qkv_wt_sel <= sel;
+        attn_qkv_wt_row <= row; attn_qkv_wt_col <= col;
+        attn_qkv_wt_wr_data <= d;
+        @(posedge clk); #1; attn_qkv_wt_wr_en <= 0;
     endtask
 
     task wrope(input [$clog2(MAX_POS)-1:0] pos, input [$clog2(HIDDEN/2)-1:0] pair,
                input signed [WEIGHT_W-1:0] sin_val, input signed [WEIGHT_W-1:0] cos_val);
         @(posedge clk); #1;
-        attn_rope_lut_wr_en = 1; attn_rope_lut_pos = pos;
-        attn_rope_lut_pair = pair;
-        attn_rope_lut_sin = sin_val; attn_rope_lut_cos = cos_val;
-        @(posedge clk); #1; attn_rope_lut_wr_en = 0;
+        attn_rope_lut_wr_en <= 1; attn_rope_lut_pos <= pos;
+        attn_rope_lut_pair <= pair;
+        attn_rope_lut_sin <= sin_val; attn_rope_lut_cos <= cos_val;
+        @(posedge clk); #1; attn_rope_lut_wr_en <= 0;
     endtask
 
     task ws(input [1:0] a, input [7:0] d);
-        @(posedge clk); #1; scale_wr_en=1; scale_wr_addr=a; scale_wr_data=d;
-        @(posedge clk); #1; scale_wr_en=0;
+        @(posedge clk); #1; scale_wr_en<=1; scale_wr_addr<=a; scale_wr_data<=d;
+        @(posedge clk); #1; scale_wr_en<=0;
     endtask
 
     task wg(input [1:0] r, input [0:0] b, input [15:0] d);
-        @(posedge clk); #1; gate_w_wr_en=1; gate_w_wr_row=r; gate_w_wr_beat=b; gate_w_wr_data=d;
-        @(posedge clk); #1; gate_w_wr_en=0;
+        @(posedge clk); #1; gate_w_wr_en<=1; gate_w_wr_row<=r; gate_w_wr_beat<=b; gate_w_wr_data<=d;
+        @(posedge clk); #1; gate_w_wr_en<=0;
     endtask
 
     task wu(input [1:0] r, input [0:0] b, input [15:0] d);
-        @(posedge clk); #1; up_w_wr_en=1; up_w_wr_row=r; up_w_wr_beat=b; up_w_wr_data=d;
-        @(posedge clk); #1; up_w_wr_en=0;
+        @(posedge clk); #1; up_w_wr_en<=1; up_w_wr_row<=r; up_w_wr_beat<=b; up_w_wr_data<=d;
+        @(posedge clk); #1; up_w_wr_en<=0;
     endtask
 
     task wd(input [2:0] r, input [15:0] d);
-        @(posedge clk); #1; down_w_wr_en=1; down_w_wr_row=r; down_w_wr_beat=0; down_w_wr_data=d;
-        @(posedge clk); #1; down_w_wr_en=0;
+        @(posedge clk); #1; down_w_wr_en<=1; down_w_wr_row<=r; down_w_wr_beat<=0; down_w_wr_data<=d;
+        @(posedge clk); #1; down_w_wr_en<=0;
     endtask
 
     task wrtr(input [1:0] e, input [2:0] i, input signed [31:0] d);
-        @(posedge clk); #1; rtr_w_wr_en=1; rtr_w_wr_expert=e; rtr_w_wr_idx=i; rtr_w_wr_data=d;
-        @(posedge clk); #1; rtr_w_wr_en=0;
+        @(posedge clk); #1; rtr_w_wr_en<=1; rtr_w_wr_expert<=e; rtr_w_wr_idx<=i; rtr_w_wr_data<=d;
+        @(posedge clk); #1; rtr_w_wr_en<=0;
     endtask
 
     //=========================================================================
@@ -139,12 +166,12 @@ module tb_full_transformer_layer;
     //=========================================================================
     task send_token(input int base, input int pos);
         @(posedge clk); #1;
-        a0 = base;   a1 = base+1; a2 = base+2; a3 = base+3;
-        a4 = base+4; a5 = base+5; a6 = base+6; a7 = base+7;
-        token_position = pos;
-        valid_in = 1;
+        for (int i = 0; i < HIDDEN; i++)
+            a_flat[i*32+:32] <= base + i;
+        token_position <= pos;
+        valid_in <= 1;
         @(posedge clk); #1;
-        valid_in = 0;
+        valid_in <= 0;
     endtask
 
     task wait_for_output();
@@ -211,18 +238,21 @@ module tb_full_transformer_layer;
             for (int i = 0; i < 8; i++)
                 wrtr(e[1:0], i[2:0], (i == e) ? Q12_ONE : 0);
 
-        $display("[CFG] Loading FFN weights...");
-        for (int r = 0; r < 4; r++) begin
-            wg(r[1:0], 1'b0, {4'h4, 4'h0, 4'h0, 4'h0});
-            wg(r[1:0], 1'b1, {4{4'h0}});
-            wu(r[1:0], 1'b0, {4'h4, 4'h0, 4'h0, 4'h0});
-            wu(r[1:0], 1'b1, {4{4'h0}});
+        $display("[CFG] Loading FFN weights (all %0d experts)...", EXPERTS_PER_FPGA);
+        for (int e = 0; e < EXPERTS_PER_FPGA; e++) begin
+            @(posedge clk); #1; ffn_expert_sel <= e[FFN_EXP_W-1:0];
+            for (int r = 0; r < 4; r++) begin
+                wg(r[1:0], 1'b0, {4'h4, 4'h0, 4'h0, 4'h0});
+                wg(r[1:0], 1'b1, {4{4'h0}});
+                wu(r[1:0], 1'b0, {4'h4, 4'h0, 4'h0, 4'h0});
+                wu(r[1:0], 1'b1, {4{4'h0}});
+            end
+            wd(3'd0, {4'h0, 4'h0, 4'h0, 4'h4});
+            wd(3'd1, {4'h0, 4'h0, 4'h4, 4'h0});
+            wd(3'd2, {4'h0, 4'h4, 4'h0, 4'h0});
+            wd(3'd3, {4'h4, 4'h0, 4'h0, 4'h0});
+            for (int r = 4; r < 8; r++) wd(r[2:0], {4{4'h0}});
         end
-        wd(3'd0, {4'h0, 4'h0, 4'h0, 4'h4});
-        wd(3'd1, {4'h0, 4'h0, 4'h4, 4'h0});
-        wd(3'd2, {4'h0, 4'h4, 4'h0, 4'h0});
-        wd(3'd3, {4'h4, 4'h0, 4'h0, 4'h0});
-        for (int r = 4; r < 8; r++) wd(r[2:0], {4{4'h0}});
 
         $display("[CFG] Weight preload complete.");
     endtask
@@ -274,9 +304,11 @@ module tb_full_transformer_layer;
         rst_n = 0;
         gamma_wr_en = 0; attn_qkv_wt_wr_en = 0; attn_rope_lut_wr_en = 0;
         rtr_w_wr_en = 0; gate_w_wr_en = 0; up_w_wr_en = 0; down_w_wr_en = 0;
-        scale_wr_en = 0; valid_in = 0;
+        scale_wr_en = 0; valid_in = 0; ffn_expert_sel = 0;
+        cfg_local_experts = '1;  // all experts local for bring-up
+        cache_preload_en = 0; cache_preload_K_flat = '0; cache_preload_V_flat = '0;
         token_position = '0;
-        {a0,a1,a2,a3,a4,a5,a6,a7} = '0;
+        a_flat = '0;
         repeat (5) @(posedge clk); rst_n = 1;
         repeat (2) @(posedge clk);
 
@@ -497,6 +529,8 @@ module tb_full_transformer_layer;
         //=====================================================================
         $display("");
         $display("--- T8: Router failure detection ---");
+        // Set only expert 0 as local so router_ok=0 when top expert != 0
+        cfg_local_experts = 4'b0001;
         // Reload router weights to make expert 1 win (all activation dims score
         // highest on expert 1 instead of expert 0)
         $display("  Reloading router weights (expert 1 diagonal)...");
@@ -508,18 +542,19 @@ module tb_full_transformer_layer;
         @(posedge clk);
         send_token(Q12_ONE, 12);
         wait_for_output();
-        $display("  T8 router_ok=%0d top0_idx=%0d top1_idx=%0d",
-                 dut.router_ok, dut.u_rtr.top0_idx, dut.u_rtr.top1_idx);
-        if (dut.router_ok == 0 && dut.u_rtr.top0_idx != 0) begin
+        $display("  T8 router_ok=%0d top_idx[0]=%0d top_idx[1]=%0d",
+                 dut.router_ok, dut.u_rtr.top_idx[0], dut.u_rtr.top_idx[1]);
+        if (dut.router_ok == 0 && dut.u_rtr.top_idx[0] != 0) begin
             $display("  [PASS] T8: router_ok=0 correctly reported when top expert != 0");
             pass_count++;
-        end else if (dut.router_ok == 1 && dut.u_rtr.top0_idx != 0) begin
+        end else if (dut.router_ok == 1 && dut.u_rtr.top_idx[0] != 0) begin
             $display("  [FAIL] T8: router_ok should be 0"); fail_count++;
         end else begin
             $display("  [PASS] T8: router_ok behavior verified"); pass_count++;
         end
 
-        // Restore original router weights for subsequent tests
+        // Restore original router weights and cfg_local_experts for subsequent tests
+        cfg_local_experts = 4'b1111;
         $display("  Restoring original router weights...");
         for (int e = 0; e < 4; e++)
             for (int i = 0; i < 8; i++)

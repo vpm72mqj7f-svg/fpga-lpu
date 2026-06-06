@@ -59,10 +59,36 @@ module tb_cluster_384;
     logic [1:0] scale_wr_addr;
     logic [7:0] scale_wr_data;
 
-    // Activation I/O
+    // KV cache preload (unused in this test)
+    logic                         cache_preload_en;
+    logic [K_LATENT*DATA_W-1:0]   cache_preload_K_flat;
+    logic [V_LATENT*DATA_W-1:0]   cache_preload_V_flat;
+
+    // Activation I/O (flat ports to DUT)
     logic valid_in, valid_out, router_ok;
-    logic signed [31:0] a0,a1,a2,a3,a4,a5,a6,a7;
-    logic signed [31:0] y0,y1,y2,y3,y4,y5,y6,y7;
+    logic [HIDDEN*32-1:0] a_flat;
+    logic [HIDDEN*32-1:0] y_flat;
+    logic [1:0] ffn_expert_sel;            // FFN expert select for weight preload
+    logic [3:0] cfg_local_experts;          // local expert bitmap
+
+    // Convenience aliases for existing test logic
+    wire signed [31:0] a0 = a_flat[0*32+:32];
+    wire signed [31:0] a1 = a_flat[1*32+:32];
+    wire signed [31:0] a2 = a_flat[2*32+:32];
+    wire signed [31:0] a3 = a_flat[3*32+:32];
+    wire signed [31:0] a4 = a_flat[4*32+:32];
+    wire signed [31:0] a5 = a_flat[5*32+:32];
+    wire signed [31:0] a6 = a_flat[6*32+:32];
+    wire signed [31:0] a7 = a_flat[7*32+:32];
+
+    wire signed [31:0] y0 = y_flat[0*32+:32];
+    wire signed [31:0] y1 = y_flat[1*32+:32];
+    wire signed [31:0] y2 = y_flat[2*32+:32];
+    wire signed [31:0] y3 = y_flat[3*32+:32];
+    wire signed [31:0] y4 = y_flat[4*32+:32];
+    wire signed [31:0] y5 = y_flat[5*32+:32];
+    wire signed [31:0] y6 = y_flat[6*32+:32];
+    wire signed [31:0] y7 = y_flat[7*32+:32];
 
     full_transformer_layer #(
         .HIDDEN(HIDDEN), .K_LATENT(K_LATENT), .V_LATENT(V_LATENT),
@@ -88,8 +114,8 @@ module tb_cluster_384;
     //=========================================================================
     task preload_scales;
         begin
-            @(posedge clk); scale_wr_en=1; scale_wr_addr=0; scale_wr_data=8'h38; @(posedge clk); scale_wr_en=0;
-            @(posedge clk); scale_wr_en=1; scale_wr_addr=1; scale_wr_data=8'h38; @(posedge clk); scale_wr_en=0;
+            @(posedge clk); scale_wr_en<=1; scale_wr_addr<=0; scale_wr_data<=8'h38; @(posedge clk); scale_wr_en<=0;
+            @(posedge clk); scale_wr_en<=1; scale_wr_addr<=1; scale_wr_data<=8'h38; @(posedge clk); scale_wr_en<=0;
         end
     endtask
 
@@ -97,7 +123,7 @@ module tb_cluster_384;
         integer i;
         begin
             for (i = 0; i < 8; i = i + 1) begin
-                @(posedge clk); gamma_wr_en=1; gamma_wr_idx=i[2:0]; gamma_wr_data=4096; @(posedge clk); gamma_wr_en=0;
+                @(posedge clk); gamma_wr_en<=1; gamma_wr_idx<=i[2:0]; gamma_wr_data<=4096; @(posedge clk); gamma_wr_en<=0;
             end
         end
     endtask
@@ -107,38 +133,38 @@ module tb_cluster_384;
         begin
             for (r = 0; r < 8; r = r + 1)
                 for (c = 0; c < 8; c = c + 1) begin
-                    @(posedge clk); attn_qkv_wt_wr_en=1; attn_qkv_wt_sel=0;
-                    attn_qkv_wt_row=r[2:0]; attn_qkv_wt_col=c[2:0];
-                    attn_qkv_wt_wr_data=(r==c)?16'sd4096:16'sd0;
-                    @(posedge clk); attn_qkv_wt_wr_en=0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=1; attn_qkv_wt_sel<=0;
+                    attn_qkv_wt_row<=r[2:0]; attn_qkv_wt_col<=c[2:0];
+                    attn_qkv_wt_wr_data<=(r==c)?16'sd4096:16'sd0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=0;
                 end
             for (r = 0; r < 4; r = r + 1)
                 for (c = 0; c < 8; c = c + 1) begin
-                    @(posedge clk); attn_qkv_wt_wr_en=1; attn_qkv_wt_sel=1;
-                    attn_qkv_wt_row=r[2:0]; attn_qkv_wt_col=c[2:0];
-                    attn_qkv_wt_wr_data=(r==c)?16'sd4096:16'sd0;
-                    @(posedge clk); attn_qkv_wt_wr_en=0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=1; attn_qkv_wt_sel<=1;
+                    attn_qkv_wt_row<=r[2:0]; attn_qkv_wt_col<=c[2:0];
+                    attn_qkv_wt_wr_data<=(r==c)?16'sd4096:16'sd0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=0;
                 end
             for (r = 0; r < 8; r = r + 1)
                 for (c = 0; c < 4; c = c + 1) begin
-                    @(posedge clk); attn_qkv_wt_wr_en=1; attn_qkv_wt_sel=2;
-                    attn_qkv_wt_row=r[2:0]; attn_qkv_wt_col=c[2:0];
-                    attn_qkv_wt_wr_data=(r==c)?16'sd4096:16'sd0;
-                    @(posedge clk); attn_qkv_wt_wr_en=0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=1; attn_qkv_wt_sel<=2;
+                    attn_qkv_wt_row<=r[2:0]; attn_qkv_wt_col<=c[2:0];
+                    attn_qkv_wt_wr_data<=(r==c)?16'sd4096:16'sd0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=0;
                 end
             for (r = 0; r < 4; r = r + 1)
                 for (c = 0; c < 8; c = c + 1) begin
-                    @(posedge clk); attn_qkv_wt_wr_en=1; attn_qkv_wt_sel=3;
-                    attn_qkv_wt_row=r[2:0]; attn_qkv_wt_col=c[2:0];
-                    attn_qkv_wt_wr_data=(r==c)?16'sd4096:16'sd0;
-                    @(posedge clk); attn_qkv_wt_wr_en=0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=1; attn_qkv_wt_sel<=3;
+                    attn_qkv_wt_row<=r[2:0]; attn_qkv_wt_col<=c[2:0];
+                    attn_qkv_wt_wr_data<=(r==c)?16'sd4096:16'sd0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=0;
                 end
             for (r = 0; r < 8; r = r + 1)
                 for (c = 0; c < 4; c = c + 1) begin
-                    @(posedge clk); attn_qkv_wt_wr_en=1; attn_qkv_wt_sel=4;
-                    attn_qkv_wt_row=r[2:0]; attn_qkv_wt_col=c[2:0];
-                    attn_qkv_wt_wr_data=(r==c)?16'sd4096:16'sd0;
-                    @(posedge clk); attn_qkv_wt_wr_en=0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=1; attn_qkv_wt_sel<=4;
+                    attn_qkv_wt_row<=r[2:0]; attn_qkv_wt_col<=c[2:0];
+                    attn_qkv_wt_wr_data<=(r==c)?16'sd4096:16'sd0;
+                    @(posedge clk); attn_qkv_wt_wr_en<=0;
                 end
         end
     endtask
@@ -148,10 +174,10 @@ module tb_cluster_384;
         begin
             for (p = 0; p < MAX_POS; p = p + 1)
                 for (pair = 0; pair < HIDDEN/2; pair = pair + 1) begin
-                    @(posedge clk); attn_rope_lut_wr_en=1;
-                    attn_rope_lut_pos=p[5:0]; attn_rope_lut_pair=pair[1:0];
-                    attn_rope_lut_sin=16'sd0; attn_rope_lut_cos=16'sd4096;
-                    @(posedge clk); attn_rope_lut_wr_en=0;
+                    @(posedge clk); attn_rope_lut_wr_en<=1;
+                    attn_rope_lut_pos<=p[5:0]; attn_rope_lut_pair<=pair[1:0];
+                    attn_rope_lut_sin<=16'sd0; attn_rope_lut_cos<=16'sd4096;
+                    @(posedge clk); attn_rope_lut_wr_en<=0;
                 end
         end
     endtask
@@ -172,9 +198,9 @@ module tb_cluster_384;
                     end else begin
                         w = ((layer_id * 137 + i * 73 + e * 53) % 1024);
                     end
-                    @(posedge clk); rtr_w_wr_en=1; rtr_w_wr_expert=e[1:0];
-                    rtr_w_wr_idx=i[2:0]; rtr_w_wr_data=w;
-                    @(posedge clk); rtr_w_wr_en=0;
+                    @(posedge clk); rtr_w_wr_en<=1; rtr_w_wr_expert<=e[1:0];
+                    rtr_w_wr_idx<=i[2:0]; rtr_w_wr_data<=w;
+                    @(posedge clk); rtr_w_wr_en<=0;
                 end
             end
         end
@@ -188,22 +214,22 @@ module tb_cluster_384;
             for (r = 0; r < 4; r = r + 1) begin
                 // Beat 0: lanes 0-3
                 lane_val = 4 + ((layer_id * 97 + r * 67) % 8);  // fp4 range 0-7
-                @(posedge clk); gate_w_wr_en=1; gate_w_wr_row=r[1:0]; gate_w_wr_beat=0;
-                gate_w_wr_data={lane_val[3:0], lane_val[3:0], lane_val[3:0], lane_val[3:0]};
-                @(posedge clk); gate_w_wr_en=0;
+                @(posedge clk); gate_w_wr_en<=1; gate_w_wr_row<=r[1:0]; gate_w_wr_beat<=0;
+                gate_w_wr_data<={lane_val[3:0], lane_val[3:0], lane_val[3:0], lane_val[3:0]};
+                @(posedge clk); gate_w_wr_en<=0;
                 // Beat 1: lanes 4-7 (zero for HIDDEN=8 with LANES=4, only 4 INTER dims)
-                @(posedge clk); gate_w_wr_en=1; gate_w_wr_row=r[1:0]; gate_w_wr_beat=1;
-                gate_w_wr_data=16'h0;
-                @(posedge clk); gate_w_wr_en=0;
+                @(posedge clk); gate_w_wr_en<=1; gate_w_wr_row<=r[1:0]; gate_w_wr_beat<=1;
+                gate_w_wr_data<=16'h0;
+                @(posedge clk); gate_w_wr_en<=0;
 
                 // Up weights: same pattern
                 lane_val = 4 + ((layer_id * 151 + r * 89) % 8);
-                @(posedge clk); up_w_wr_en=1; up_w_wr_row=r[1:0]; up_w_wr_beat=0;
-                up_w_wr_data={lane_val[3:0], lane_val[3:0], lane_val[3:0], lane_val[3:0]};
-                @(posedge clk); up_w_wr_en=0;
-                @(posedge clk); up_w_wr_en=1; up_w_wr_row=r[1:0]; up_w_wr_beat=1;
-                up_w_wr_data=16'h0;
-                @(posedge clk); up_w_wr_en=0;
+                @(posedge clk); up_w_wr_en<=1; up_w_wr_row<=r[1:0]; up_w_wr_beat<=0;
+                up_w_wr_data<={lane_val[3:0], lane_val[3:0], lane_val[3:0], lane_val[3:0]};
+                @(posedge clk); up_w_wr_en<=0;
+                @(posedge clk); up_w_wr_en<=1; up_w_wr_row<=r[1:0]; up_w_wr_beat<=1;
+                up_w_wr_data<=16'h0;
+                @(posedge clk); up_w_wr_en<=0;
             end
         end
     endtask
@@ -217,23 +243,23 @@ module tb_cluster_384;
             //   int2 → out2, out6
             //   int3 → out3, out7
             // First 4 rows: identity (intX → outX)
-            @(posedge clk); down_w_wr_en=1; down_w_wr_row=0; down_w_wr_beat=0;
-            down_w_wr_data={4'h0,4'h0,4'h0,4'h4}; @(posedge clk); down_w_wr_en=0;
-            @(posedge clk); down_w_wr_en=1; down_w_wr_row=1; down_w_wr_beat=0;
-            down_w_wr_data={4'h0,4'h0,4'h4,4'h0}; @(posedge clk); down_w_wr_en=0;
-            @(posedge clk); down_w_wr_en=1; down_w_wr_row=2; down_w_wr_beat=0;
-            down_w_wr_data={4'h0,4'h4,4'h0,4'h0}; @(posedge clk); down_w_wr_en=0;
-            @(posedge clk); down_w_wr_en=1; down_w_wr_row=3; down_w_wr_beat=0;
-            down_w_wr_data={4'h4,4'h0,4'h0,4'h0}; @(posedge clk); down_w_wr_en=0;
+            @(posedge clk); down_w_wr_en<=1; down_w_wr_row<=0; down_w_wr_beat<=0;
+            down_w_wr_data<={4'h0,4'h0,4'h0,4'h4}; @(posedge clk); down_w_wr_en<=0;
+            @(posedge clk); down_w_wr_en<=1; down_w_wr_row<=1; down_w_wr_beat<=0;
+            down_w_wr_data<={4'h0,4'h0,4'h4,4'h0}; @(posedge clk); down_w_wr_en<=0;
+            @(posedge clk); down_w_wr_en<=1; down_w_wr_row<=2; down_w_wr_beat<=0;
+            down_w_wr_data<={4'h0,4'h4,4'h0,4'h0}; @(posedge clk); down_w_wr_en<=0;
+            @(posedge clk); down_w_wr_en<=1; down_w_wr_row<=3; down_w_wr_beat<=0;
+            down_w_wr_data<={4'h4,4'h0,4'h0,4'h0}; @(posedge clk); down_w_wr_en<=0;
             // Rows 4-7: repeat (intX → outX+4)
-            @(posedge clk); down_w_wr_en=1; down_w_wr_row=4; down_w_wr_beat=0;
-            down_w_wr_data={4'h0,4'h0,4'h0,4'h4}; @(posedge clk); down_w_wr_en=0;
-            @(posedge clk); down_w_wr_en=1; down_w_wr_row=5; down_w_wr_beat=0;
-            down_w_wr_data={4'h0,4'h0,4'h4,4'h0}; @(posedge clk); down_w_wr_en=0;
-            @(posedge clk); down_w_wr_en=1; down_w_wr_row=6; down_w_wr_beat=0;
-            down_w_wr_data={4'h0,4'h4,4'h0,4'h0}; @(posedge clk); down_w_wr_en=0;
-            @(posedge clk); down_w_wr_en=1; down_w_wr_row=7; down_w_wr_beat=0;
-            down_w_wr_data={4'h4,4'h0,4'h0,4'h0}; @(posedge clk); down_w_wr_en=0;
+            @(posedge clk); down_w_wr_en<=1; down_w_wr_row<=4; down_w_wr_beat<=0;
+            down_w_wr_data<={4'h0,4'h0,4'h0,4'h4}; @(posedge clk); down_w_wr_en<=0;
+            @(posedge clk); down_w_wr_en<=1; down_w_wr_row<=5; down_w_wr_beat<=0;
+            down_w_wr_data<={4'h0,4'h0,4'h4,4'h0}; @(posedge clk); down_w_wr_en<=0;
+            @(posedge clk); down_w_wr_en<=1; down_w_wr_row<=6; down_w_wr_beat<=0;
+            down_w_wr_data<={4'h0,4'h4,4'h0,4'h0}; @(posedge clk); down_w_wr_en<=0;
+            @(posedge clk); down_w_wr_en<=1; down_w_wr_row<=7; down_w_wr_beat<=0;
+            down_w_wr_data<={4'h4,4'h0,4'h0,4'h0}; @(posedge clk); down_w_wr_en<=0;
         end
     endtask
 
@@ -247,11 +273,11 @@ module tb_cluster_384;
         input integer layer_id;
         begin
             layer_start_cycle = $time / 10;
-            token_position = layer_id % MAX_POS;
+            token_position <= layer_id % MAX_POS;
             @(posedge clk); #1;
-            valid_in = 1;
+            valid_in <= 1;
             @(posedge clk); #1;
-            valid_in = 0;
+            valid_in <= 0;
 
             layer_latency = 0;
             while (!valid_out) begin
@@ -287,9 +313,11 @@ module tb_cluster_384;
     initial begin
         // Init
         rst_n = 0;
-        gamma_wr_en = 0; attn_qkv_wt_wr_en = 0; attn_rope_lut_wr_en = 0;
-        rtr_w_wr_en = 0; gate_w_wr_en = 0; up_w_wr_en = 0; down_w_wr_en = 0;
-        scale_wr_en = 0; valid_in = 0; token_position = '0;
+        gamma_wr_en <= 0; attn_qkv_wt_wr_en <= 0; attn_rope_lut_wr_en <= 0;
+        rtr_w_wr_en <= 0; gate_w_wr_en <= 0; up_w_wr_en <= 0; down_w_wr_en <= 0;
+        scale_wr_en <= 0; valid_in <= 0; token_position <= '0;
+        cache_preload_en <= 0; cache_preload_K_flat <= '0; cache_preload_V_flat <= '0;
+        ffn_expert_sel <= 0; cfg_local_experts <= '1;
         repeat (5) @(posedge clk); rst_n = 1;
         repeat (2) @(posedge clk);
 
@@ -351,8 +379,7 @@ module tb_cluster_384;
                 reload_ffn_for_layer(global_layer);
 
                 // ---- Feed token ----
-                a0 = tok[0]; a1 = tok[1]; a2 = tok[2]; a3 = tok[3];
-                a4 = tok[4]; a5 = tok[5]; a6 = tok[6]; a7 = tok[7];
+                for (int d = 0; d < 8; d++) a_flat[d*32+:32] = tok[d];
 
                 run_one_layer(global_layer);
                 chip_lat[chip] = chip_lat[chip] + layer_latency;
