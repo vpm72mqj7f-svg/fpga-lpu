@@ -49,13 +49,13 @@ Four modes compared using llama.cpp:
 Added to llama.cpp (2 files, ~5 lines):
 
 ```cpp
-// common/common.h
+// common/common.h (after llm_ffn_exps_cpu_override)
 inline llama_model_tensor_buft_override llm_ffn_exps_gpu_override() {
     return { LLM_FFN_EXPS_REGEX, ggml_backend_dev_buffer_type(
         ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU)) };
 }
 
-// common/arg.cpp
+// common/arg.cpp (after --cpu-moe block)
 {"-gmoe", "--gpu-moe"},
     "keep all Mixture of Experts (MoE) weights in the GPU (opposite of --cpu-moe)",
     [](common_params & params) {
@@ -63,7 +63,35 @@ inline llama_model_tensor_buft_override llm_ffn_exps_gpu_override() {
     }
 ```
 
-PR candidate for upstream llama.cpp.
+### Known Issue: GPU Compute Not Triggered
+
+`--gpu-moe` successfully places MoE weights in GPU VRAM, but the backend scheduler
+(`ggml_backend_sched_split_graph`) does not run MoE compute on GPU. The GPU utilization
+remains 0%.
+
+**Root cause**: In `ggml/src/ggml-backend.cpp`, function
+`ggml_backend_sched_backend_id_from_cur` (line ~916), the scheduler correctly identifies
+that weight tensors are on GPU and attempts to assign MoE ops to GPU backend. However,
+the hidden state activation tensor resides on CPU (from the previous CPU attention layer).
+The scheduler does not auto-insert the required CPU→GPU→CPU activation copies needed
+to execute the op on GPU.
+
+**Fix (to be PR'd)**:
+1. When weight src has `USAGE_WEIGHTS` and is on non-CPU backend, force return that backend
+2. Ensure `ggml_backend_sched_split_graph` inserts tensor copy nodes at backend boundaries
+3. Test with `--n-gpu-layers 1 --gpu-moe` to verify GPU utilization >0%
+
+**Comparison with NV Spark**: NVIDIA's unified memory architecture avoids this issue
+entirely because CPU and GPU share the same physical memory pool. On discrete GPU
+systems, explicit copies are required. llama.cpp's backend scheduler handles this for
+layer-level offloading (`--n-gpu-layers`) but not for tensor-level overrides (`--gpu-moe`).
+
+### PR Submission Plan
+
+1. Fix `ggml_backend_sched_backend_id_from_cur` to force GPU backend for MoE weight ops
+2. Add activation tensor copy nodes in scheduler split logic
+3. Test on x86 + NVIDIA GPU (faster build iteration than ARM)
+4. Submit upstream PR with `--gpu-moe` + scheduler fix
 
 ## Root Cause: GPU Backend Not Used for Compute
 
