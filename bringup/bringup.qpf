@@ -1,0 +1,12 @@
+# =============================================================================
+# bringup.qpf — Quartus Prime Pro Project File
+# Target: Intel Stratix 10 MX Development Kit (DK-DEV-1SMX-H-A)
+# Device: 1SM21BHU2F53E1VG (Production, Speed Grade -1)
+# =============================================================================
+
+PROJECT_REVISION = "bringup"
+PROJECT_OUTPUT_DIRECTORY = "output_files"
+
+# Quartus Prime Version (v18.1.1 or later for Production device)
+# Use Quartus Prime Pro Edition — Stratix 10 MX is only supported on Pro
+QUARTUS_VERSION = "18.1"

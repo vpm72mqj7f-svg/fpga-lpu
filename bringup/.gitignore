@@ -1,0 +1,34 @@
+# Binary executables (BTS tools, Windows exes)
+*.exe
+*.dll
+
+# JRE (bundled Java runtime)
+**/jre/
+
+# Large Quartus example ZIPs (>50MB)
+**/examples/qts_*/**/*.zip
+
+# Quartus build artifacts
+output_files/
+db/
+incremental_db/
+*.qdf
+*.qws
+*.sof
+*.pof
+*.jdi
+*.sld
+*.summary
+*.pin
+*.done
+*.rpt
+*.csv
+
+# Simulation artifacts
+sim/work/
+sim/*.vcd
+sim/*.log
+
+# Temp files
+*.swp
+*~

@@ -1,0 +1,7232 @@
+
+
+
+
+
+
+
+Intel® Stratix® 10 MX FPGA Development Kit User Guide
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   Subscribe Send Feedback
+UG-20151 | 2020.06.15
+Latest document on the web: PDF | HTML
+
+
+Contents
+
+
+Contents
+
+
+Overview.4
+General Development Kit Description4
+Recommended Operating Conditions6
+Handling the Development Kit6
+Getting Started7
+About the Intel Quartus® Prime Software7
+Development Kit Package7
+Installing the Intel FPGA Download Cable Driver8
+Development Kit Setup10
+Applying Power to the Development Kit10
+Default Switch and Jumper Settings11
+Development Kit Components13
+Components Overview14
+Intel MAX 10 FPGA System Controller17
+Intel MAX 10 FPGA Power Manager21
+FPGA Configuration25
+Status and User I/O Elements28
+Interfaces and Ports29
+PCI Express29
+Memory Interface34
+High Bandwidth Memory (HBM2)48
+QSFP50
+4.6.5. I2C.52
+4.6.6. Flash Memory54
+HiLo Daughter Cards55
+4.7.1. DDR456
+4.7.2. QDR-IV56
+Clocks58
+Power59
+Power Guidelines60
+Power Distribution System61
+Power Sequence62
+Power Measurement63
+Power Fast Discharging63
+Thermal Limitations and Protection64
+Cooling Design64
+Mechanical Information65
+Top Cover Removal66
+Board Test System68
+Preparing the Board69
+Running the Board Test System69
+Before you begin70
+To run the BTS70
+Using the Board Test System70
+Intel® Stratix® 10 MX FPGA Development Kit User Guide   Send Feedback
+2
+Contents
+The Configure Menu70
+The Sys Info Tab71
+The QSFP Tab72
+The PCIE Tab75
+The Component DDR4 Tab79
+The HiLo DDR4 Tab80
+The DDR4 Dimm Tab82
+The HBM2 Top Tab83
+The HBM2 Bottom Tab84
+Power Monitor85
+Clock Controller87
+Additional Information.90
+Add SmartVID settings in the QSF file90
+Safety and Regulatory Information91
+Safety Warnings91
+Safety Cautions93
+Compliance and Conformity Statement95
+Revision History96
+Revision History96
+
+
+
+UG-20151 | 2020.06.15
+  Send Feedback
+
+
+
+
+Overview
+The Intel® Stratix® 10 MX FPGA development kit provides a hardware platform for evaluating the performance and features of the Intel Stratix 10 MX device.
+Table 1.Ordering Information
+
+Board Version
+Board Part Number
+Device Part Number
+Intel Stratix 10 MX FPGA H-Tile (8 GB)
+DK-DEV-1SMX-H-A
+1SM21BHU2F53E1VG
+Intel Stratix 10 MX FPGA H-Tile (16 GB)
+DK-DEV-1SMC-H-A
+1SM21CHU1F53E1VG
+
+General Development Kit Description
+PCle Gen3 x16 Root PortPCle Gen3 x16 Root PortQSFP28-2QSFP28-2Figure 1.Intel Stratix 10 MX FPGA Development Kit Block Diagram
+PCle Gen3 x16 Root Port
+PCle Gen3 x16 Root Port
+QSFP28-2
+QSFP28-2
+Ch0, Ch1, Ch3, Ch4
+4F4F4E4E4D4D4C4C4K4L 4M 4N4K4L 4M 4Nx16x1625Gx425Gx4I2CI2CI2CI2CMap to 100G HIP
+4F
+4F
+4E
+4E
+4D
+4D
+4C
+4C
+4K4L 4M 4N
+4K4L 4M 4N
+x16
+x16
+25Gx4
+25Gx4
+I2CI2C
+I2CI2C
+
+
+USB JTAG HDR
+Other JTAGs
+
+         USB      PHY
+
+       JTAG 
+
+MAX 10 USB BLASTER JTAG SW I2C CTRLMAX 10 USB BLASTER JTAG SW I2C CTRL
+MAX 10 USB BLASTER JTAG SW I2C CTRL
+MAX 10 USB BLASTER JTAG SW I2C CTRL
+3K3KJTAG
+3K
+3K
+
+
+3J3JPcie Hard IP (CvP)Pcie Hard IP (CvP)IOs
+3J
+3J
+Pcie Hard IP (CvP)
+Pcie Hard IP (CvP)
+
+Transceivers
+
+3B3B
+3B
+3B
+3A3A
+3A
+3A
+2F2F
+2F
+2F
+3I3I
+
+3I
+
+3I
+
+3C3Cx72
+3C
+3C
+
+3L3L
+3L
+3L
++12V for DDR-T Support
+
+DIMM DDR4/DDR-TDIMM DDR4/DDR-T
+
+DIMM DDR4/DDR-T
+
+DIMM DDR4/DDR-T
+16Gb X516Gb X58GB ECC
+16Gb X5
+16Gb X5
+DDR4DDR4
+DDR4
+DDR4
+
+Config QSPI 2Gb FlashConfig QSPI 2Gb Flash  AS x4
+Config QSPI 2Gb Flash
+Config QSPI 2Gb Flash
+HiLo ConnHiLo ConnFast Mode
+
+HiLo Conn
+
+HiLo Conn
+
+2B2Bx72
+2B
+2B
+
+Supports DDR4/QDR-IV
+SDMSDM
+SDM
+SDM
+2C2C
+2C
+2C
+
+
+
+1E1E1D1D1C1C2A2APcie Hard IP
+1E
+1E
+1D
+1D
+1C
+1C
+2A
+2A
+S10 MX
+
+
+
+
+1F1FMAX 10Power Seq. Power MonitorMAX 10Power Seq. Power MonitorTransceivers
+1F
+1F
+MAX 10
+Power Seq. Power Monitor
+MAX 10
+Power Seq. Power Monitor
+
+
+2K2Kx72
+2K
+2K
+
+
+2N2N2M2M2L2LTop HBM2Top HBM2GPIOs, Push- bottons, LEDs
+2N
+2N
+2M
+2M
+2L
+2L
+
+Top HBM2
+
+Top HBM2
+2N2N
+2N
+2N
+1K1L 1M 1N1K1L 1M 1Nx16x1625Gx425Gx4 
+1K1L 1M 1N
+1K1L 1M 1N
+x16
+x16
+25Gx4
+25Gx4
+
+
+
+Bot HBM2Bot HBM2MT40A512M16 x5
+
+Bot HBM2
+
+Bot HBM2
+Voltage Sense Inputs
+
+
+
+
+
+
+
+
+
+Seq Ctrl
+
+
+
+
+
+All Voltages
+
+
+
+
+Power Regulators & Discharge CKTPower Regulators & Discharge CKTI2C
+
+Power Regulators & Discharge CKT
+
+Power Regulators & Discharge CKT
+
+PCle Gen3 x16 End Point
+
+
+QSFP28-1QSFP28-1
+QSFP28-1
+QSFP28-1
+Ch0, Ch1, Ch3, Ch4
+Map to 100G HIP
+
+  
+
+  
+
+Clocks
+
+Current Sense Inputs
+Temp SenseTemp SenseCurrent SenseCurrent SenseTemp Diodes
+Temp Sense
+Temp Sense
+Current Sense
+Current Sense
+
+All Clocks
+
+Hot-plug & PWR or CKTHot-plug & PWR or CKT
+Hot-plug & PWR or CKT
+Hot-plug & PWR or CKT
+12V12VAux Aux 12V Conn
+12V
+12V
+
+
+I2C
++12V from PCle Gold Fingers
+
+
+
+
+
+
+
+
+
+
+
+
+Intel Corporation. All rights reserved. Agilex, Altera, Arria, Cyclone, Enpirion, Intel, the Intel logo, MAX, Nios, Quartus and Stratix words and logos are trademarks of Intel Corporation or its subsidiaries in the U.S. and/or other countries. Intel warrants performance of its FPGA and semiconductor products to current specifications in accordance with Intel's standard warranty, but reserves the right to make changes to any products and services at any time without notice. Intel assumes no responsibility or liability arising out of the application or use of any information, product, or service described herein except as expressly agreed to in writing by Intel. Intel customers are advised to obtain the latest version of device specifications before relying on any published information and before placing orders for products or services.
+*Other names and brands may be claimed as the property of others.
+
+
+ISO 9001:2015
+Registered
+
+
+Overview
+UG-20151 | 2020.06.15
+
+
+Feature Summary
+Intel Stratix 10 MX FPGA device
+0.85 V - 0.89 V VID-adjustable VCC core, 1 mm pitch, 2597 pin BGA
+H-Tile transceivers capable of 28.3 gigabit per second (Gbps) data rates
+HBM2 embedded memory tiles: 8 GB (4 GB x 2) or 16 GB (8 GB x 2)
+FPGA Configuration
+Partial reconfiguration support
+2 gigabits (Gb) QSPI Flash
+Storage for two configuration images in flash (Factory and User)
+JTAG header for device programming
+Built-in Intel FPGA Download Cable II for device programming
+Programmable Clock Sources
+644.53125 MHz Differential LVDS for QSFP
+100.000 MHz Differential LVDS for PCIe*
+133.333 MHz Differential LVDS to Memory
+125 MHz Configuration Clock
+Transceiver Interfaces
+PCIe x16 interface supporting Gen3 End-Point mode connected to a x16 PCIe edge connector (gold edge fingers)
+PCIe x16 interface supporting Gen3 Root-Port mode connected to a x16 straddle-mount PCIe edge connector
+2x standard QSFP28 optical module interfaces connected to the FPGA H-Tile transceivers
+Memory Interfaces
+One on-board independent single rank DDR4 x72 (ECC) channels operating at 1333 MHz (DDR4-2666)
+One DIMM socket supporting DDR4 DIMM or DDR-T DIMM
+One HiLo connector supporting DDR4 and QDR-IV
+Communication Ports
+2x QSFP28 optical interface port
+JTAG header
+USB (Micro) on-board Intel FPGA Download Cable II
+Buttons, Switches and LEDs
+System Reset Pushbutton
+CPU Reset Pushbutton
+PCIe Reset Pushbutton
+Four dedicated User LEDs
+Two dedicated configuration status LEDs
+
+
+1. Overview
+UG-20151 | 2020.06.15
+
+
+Heatsink and Fan
+Air-cooled heatsink assembly
+Red Over-Temperature Warning LED Indicator
+Power
+PCIe input power including required 2 x 4 Aux power connector
+Blue Power-On LED
+On/Off Slide Power Switch for bench-top operation
+On board Power Measurement Circuitry
+Mechanical
+PCIe standard height form factor
+— 4.376” x 10.8” board size
+3 Slots height requirement (with Air-cooled thermal solution)
+Operating Environment
+Maximum ambient temperature of 0 °C - 35 °C
+
+Recommended Operating Conditions
+Recommended ambient operating temperature range: 0 °C to 35 °C
+Maximum ICC load current: 192 A
+Maximum ICC load transient percentage: 30 %
+Maximum board power consumption: 192 Watts
+
+Handling the Development Kit
+When handling the kit, it is important to observe static discharge precautions.
+
+Note:Without proper anti-static handling, the board could be damaged. Use anti-static handling precautions when handling the board.
+
+Note:You must not operate this development kit in a Vibration environment.
+
+Note:This development kit requires the top cover to be enclosed for proper cooling during operation.
+
+
+UG-20151 | 2020.06.15
+  Send Feedback
+
+
+
+
+Getting Started
+About the Intel Quartus® Prime Software
+The Intel Quartus® Prime design software is a multi-platform design environment that easily adapts to your specific needs in all phases of FPGA, CPLD and SoC designs. The Intel Quartus Prime software delivers the highest performance and productivity for Intel FPGAs, CPLDs, and SoCs.
+The Intel Quartus Prime Design Suite software includes everything needed to design for using Intel FPGAs, SoCs and CPLDs from design entry and synthesis to optimization, verification and simulation.
+Intel Quartus Prime Software
+The Intel Quartus Prime Design Suite software is available in three editions based on specific design requirements: Pro, Standard, and Lite Edition.
+The Intel Quartus Prime Pro Edition is optimized to support the advanced features in Intel's next generation FPGAs and SoCs.
+The Intel Stratix 10 MX FPGA is only supported on Intel Quartus Prime Pro Edition. There is no paid license fee required for Intel Stratix 10 support in Intel Quartus Prime Pro Edition.
+Included in the Intel Quartus Prime Pro Edition are the Intel Quartus Prime software, Nios® II EDS and the Intel FPGA IP Library.
+To install Intel's development tools, download the Intel Quartus Prime Pro Edition software from the Quartus Prime Pro Edition page from the Download Center of Intel's website.
+
+Development Kit Package
+To download the Intel Stratix 10 MX FPGA Development Kit package, perform the following steps:
+Download the development kit package from the Intel Stratix 10 MX FPGA Development Kit link (provided below) on the Intel website.
+Unzip the Intel Stratix 10 MX FPGA Development Kit package contents to your machine's local hard drive.
+The package creates the directory structure shown in the figure below.
+
+
+
+
+
+
+
+Intel Corporation. All rights reserved. Agilex, Altera, Arria, Cyclone, Enpirion, Intel, the Intel logo, MAX, Nios, Quartus and Stratix words and logos are trademarks of Intel Corporation or its subsidiaries in the U.S. and/or other countries. Intel warrants performance of its FPGA and semiconductor products to current specifications in accordance with Intel's standard warranty, but reserves the right to make changes to any products and services at any time without notice. Intel assumes no responsibility or liability arising out of the application or use of any information, product, or service described herein except as expressly agreed to in writing by Intel. Intel customers are advised to obtain the latest version of device specifications before relying on any published information and before placing orders for products or services.
+*Other names and brands may be claimed as the property of others.
+
+
+ISO 9001:2015
+Registered
+
+
+2. Getting Started
+UG-20151 | 2020.06.15
+
+
+Figure 2.Development Kit Directory Structure
+
+<package rootdir>
+board design files demos documents
+examples
+
+factory recovery
+
+The table below lists the file directory names and a description of their contents
+Table 2.Installed Development Kit Directory Structure
+
+Directory Name
+Description of Directory Contents
+board_design_files
+Contains schematics, layout, assembly and bill of material board design files. Use these files as a starting point for a new prototype board design
+demos
+Contains demonstration applications when available
+documents
+Contains the development kit documentation
+examples
+Contains the sample design files for the development kit
+factory_recovery
+Contains the original data programmed onto the board before shipment. Use this data to restore the board with its original factory contents.
+
+Note:To view the layout *.brd files in the board package, you can download the Cadence® Allegro®/OrCAD® Free Viewer from Cadence's website.
+
+Related Information
+Intel Stratix 10 MX FPGA Development Kit
+The downloadable development kit package is in Table #3 at the link provided on Intel website.
+Cadence Allegro Downloads
+
+Installing the Intel FPGA Download Cable Driver
+The Intel Stratix 10 MX FPGA Development Kit includes embedded Intel FPGA Download Cable circuits for FPGA programming. However, for the host computer and board to communicate, you must install the Intel FPGA Download Cable driver on the host computer.
+Installation instructions for the Intel FPGA Download Cable driver for your operating system are available on the Intel website.
+
+
+Getting Started
+UG-20151 | 2020.06.15
+
+
+On the Intel website, navigate to the Cable and Adapter Drivers Information link to locate the table entry for your configuration and click the link to access the instructions.
+
+
+UG-20151 | 2020.06.15
+  Send Feedback
+
+
+
+
+Development Kit Setup
+
+This chapter describes how to apply power to the development board and provides default switch and jumper settings.
+
+Applying Power to the Development Kit
+This development kit is designed to operate in two modes:
+As a PCIe add-in card
+When operating the card as a PCIe system, insert the card into an available PCIe slot and connect a 2x4 pin PCIe power cable from the system to the power connectors at Aux power connector J11 of the board.
+
+Note:When operating as a PCIe add-in card, the board does not power on unless power is supplied to J11.
+
+In bench-top mode
+In bench-top mode, you must supply the board with the provided 240 W power supply connected to the Aux power connector J11, as follows
+
+Note:This development board ships with its switches preconfigured to support the design examples in the kit. If you suspect that your board may not be correctly configured with the default settings, follow the instructions in the Default Switch and Jumper Settings on page 11 of this chapter.
+
+Connect the provided power supply to an outlet and the DC Power Jack (J11) on the FPGA board.
+Note: Use only the supplied power supply. Power regulation circuits on the board can be damaged by power supplies with greater voltage.
+Set the power switch (SW3) to the ON position.
+When the board powers up, the blue power LED illuminates and the board is ready for use.
+
+
+
+
+
+
+
+
+
+
+
+
+Intel Corporation. All rights reserved. Agilex, Altera, Arria, Cyclone, Enpirion, Intel, the Intel logo, MAX, Nios, Quartus and Stratix words and logos are trademarks of Intel Corporation or its subsidiaries in the U.S. and/or other countries. Intel warrants performance of its FPGA and semiconductor products to current specifications in accordance with Intel's standard warranty, but reserves the right to make changes to any products and services at any time without notice. Intel assumes no responsibility or liability arising out of the application or use of any information, product, or service described herein except as expressly agreed to in writing by Intel. Intel customers are advised to obtain the latest version of device specifications before relying on any published information and before placing orders for products or services.
+*Other names and brands may be claimed as the property of others.
+
+
+ISO 9001:2015
+Registered
+
+
+Development Kit Setup
+UG-20151 | 2020.06.15
+
+Default Switch and Jumper Settings
+Figure 3.Default Switch Settings
+
+
+
+
+Development Kit Setup
+UG-20151 | 2020.06.15
+
+
+Table 3.SW2 DIP JTAG Switch Default Settings (Board Bottom)
+
+Switch
+Board Label
+Function
+Default Position
+1
+JTAG INPUT
+JTAG Source Select
+OFF (On-board Intel FPGA Download Cable)
+2
+M10
+Intel MAX® 10 JTAG
+ON (JTAG OUT)
+3
+PCIE RT
+PCIe Root Port JTAG
+ON (JTAG OUT)
+4
+S10
+Intel Stratix 10 FPGA JTAG
+OFF (JTAG IN)
+Table 4.SW1 DIP PMBus Switch Default Settings (Board Bottom)
+
+Switch
+Board Label
+Function
+Default Position
+1
+SI5341 I2C BUS
+Clock Generator I2C Bus
+OFF (Enable)
+2
+3V3 I2C BUS
+3V3 VRM I2C BUS
+OFF (Enable)
+3
+MAIN I2C BUS
+MAIN I2C BUS
+OFF (Enable)
+4
+S10 PMBus
+Intel Stratix 10 FPGA PMBus
+OFF (Enable)
+
+
+UG-20151 | 2020.06.15
+  Send Feedback
+
+
+
+
+Development Kit Components
+
+This chapter introduces all the important components on the development kit. A complete set of schematics, a physical layout database and Gerber files for the development board reside in the development kit documents directory.
+Figure 4.Intel Stratix 10 MX FPGA Development Kit - Front
+Figure 5.Intel Stratix 10 MX FPGA Development Kit - Rear
+
+
+
+
+
+
+
+
+
+
+
+Intel Corporation. All rights reserved. Agilex, Altera, Arria, Cyclone, Enpirion, Intel, the Intel logo, MAX, Nios, Quartus and Stratix words and logos are trademarks of Intel Corporation or its subsidiaries in the U.S. and/or other countries. Intel warrants performance of its FPGA and semiconductor products to current specifications in accordance with Intel's standard warranty, but reserves the right to make changes to any products and services at any time without notice. Intel assumes no responsibility or liability arising out of the application or use of any information, product, or service described herein except as expressly agreed to in writing by Intel. Intel customers are advised to obtain the latest version of device specifications before relying on any published information and before placing orders for products or services.
+*Other names and brands may be claimed as the property of others.
+
+
+ISO 9001:2015
+Registered
+
+
+Figure 6.Intel Stratix 10 MX FPGA Development Kit Picture
+
+
+
+
+
+
+S10 PCle PERST 0 (S1)
+
+S10 PCle PERST 1 (S11)
+
+QSFP 1 (J5)
+
+
+
+USB Connector (J15)
+MAX10 Reset (S12)
+LT PMBus
+Connector (J13)
+Ext. JTAG
+Connector (J9)
+
+PCle Root
+Port Connector (J7)
+
+
+
+DIMM Socket (J1)
+RZQ Jumper (J3)Enpirion PMBus Connector (J12)
+
+
+
+
+ATX Aux Connector (J11)
+
+
+
+
+
+
+Power LED (D4) OverTemp LED (D5)
+Power Switch (SW3)
+User LED 0 (D7) User LED 1 (D8) User LED 2 (D9)
+User LED 3 (D10)
+CPU Reset (S10)
+S10 Config_Done LED (S14) S10 CvP_Done LED (D16)
+
+Fan Connector LED (J10)
+
+
+QSFP 2 (J4)
+
+
+HILO Connector (J2)
+
+
+
+PCle X16 End Point Edge Connector (J6)
+
+
+
+
+Components Overview
+Table 5.Development Kit Components Table
+
+Board Reference
+Type
+Description
+Featured Devices
+U1
+FPGA
+Intel Stratix 10 MX FPGA(1)
+Adaptive Logic Modules (ALM): 702,720
+Logic Elements (LE): 2,073K
+Registers: 2,810,880
+M20K Memory Blocks: 6,847
+Transceiver Count: 96
+Package Type: 2597 BGA
+HMB2 DRAM (GB): 8 or 16
+U11
+FPGA
+Intel MAX 10 FPGA, 4K LEs, 169 FBGA
+(System)
+U27
+FPGA
+Intel MAX 10, 16K LEs, 169 FBGA
+(Power)
+Configuration and Setup Elements
+J15
+On-board Intel FPGA Download Cable II
+Micro-USB 2.0 connector for programming and debugging the FPGA.
+SW2
+JTAG Bypass DIP Switch
+Enable and disable devices in the JTAG chain. This switch is located on the back of the board.
+continued...
+
+
+(1) Refer to Overview on page 4 for the part number for your specific board
+
+
+
+Board Reference
+Type
+Description
+SW1
+I2C Bus Selection Switch
+Enable or Disable the I2C Bus for Clock chip, 3.3 V VRM, Main I2C, and Intel Stratix 10 FPGA
+S10
+CPU reset push button
+The default reset for the FPGA logic.
+S1
+PCIe PERST 0 push button
+This push button connects to Intel Stratix 10 FPGA's NPERSTL0 pin.
+S11
+PCIe PERST 1 push button
+This push button connects to Intel Stratix 10 FPGA's NPERSTR1 pin.
+S12
+Intel MAX 10 Reset Push Button
+The default reset for the Intel MAX 10 FPGA System Controller
+Status Elements
+D14
+Configuration Done LED
+Illuminates when FPGA configuration is completed
+D16
+CvP Done LED
+Illuminates when CvP process is completed
+D4
+Power LED (Blue)
+Illuminates when board is powered on.
+D5
+Temperature LED (Green)
+Illuminates when an over temperature condition occurs for the FPGA device. Ensure that an adequate heatsink/fan is properly installed.
+D7, D8, D9, D10
+User-defined LEDs
+Four green color user LEDs. Illuminate when driven low.
+Clock Circuits
+U17
+Intel MAX 10 Reference Clock
+Si510 Crystal Oscillator provides reference clocks for Intel MAX 10 devices
+Default Frequencies are:
+Out0= 50.00 MHz
+Out1= 50.00 MHz
+U16
+Programmable Clock Generator
+Si5341A Programmable Clock Generator by the clock control GUI
+Default Frequencies are:
+Out0= 644.53125 MHz
+Out1= 644.53125 MHz
+Out2= 100 MHz
+Out3= 100 MHz
+Out4= 100 MHz
+Out5= 100 MHz
+Out6= 100 MHz
+Out7= 100 MHz
+Out8= 100 MHz
+Out9= 100 MHz
+U18
+Programmable Clock Generator
+Si5338A Programmable Clock Generator by the Clock Control GUI
+Default Frequencies are:
+CLK0= 50 MHz
+CLK1= 100 MHz
+CLK2= 125 MHz
+CLK3= 100 MHz
+continued...
+
+
+
+Board Reference
+Type
+Description
+U19
+Programmable Clock Generator
+Si5338B Programmable Clock Generator by the Clock Control GUI
+Default Frequencies are:
+CLK0= 133.333 MHz
+CLK1= 133.333 MHz
+CLK2= 133.333 MHz
+CLK3= Not Used
+Transceiver Interfaces
+J6
+PCIe x16 gold fingers
+PCIe TX/RX x16 interface from FPGA bank 1C, 1D, 1E
+J7
+PCIe x16 Root Port Connector
+PCIe TX/RX x16 interface from FPGA bank 4C, 4D, 4E
+J4
+QSFP Connector
+Four TX/RX channels from FPGA Bank 1F
+J5
+QSFP Connector
+Four TX/RX channels from 4F from FPGA bank 4F
+General User Input/Output
+D7, D8, D9. D10
+User defined LEDs
+Four green color user LEDs. Illuminates when driven low.
+Memory Devices
+J2
+HiLo Connector
+One x72 memory interface supporting DDR3 (x72), DDR4 (x72), QDR-IV (x36) and RLDRAM3 (x36).
+This development kit includes one plugin modules (daughtercards) that use the HiLo connector: DDR4 memory (x72) 1333 MHz
+J1
+DDR4, DDR-T, DIMM Socket
+One X72 memory interface supporting DDR4 (x72) or DDR-T memory module.
+DDR4 memory (x72) 1333 MHz
+DDR-T memory (requires DDR-T IP)
+U3, U4, U5, U6, U7
+On-board DDR4 memory
+On-board DDR4 memory (x72) 1333 MHz
+Communication Ports
+J6
+PCI Express* x16 Edge Connector
+Gold-plated edge fingers for up to x16 signaling in either Gen1, Gen2 or Gen3 mode.
+J7
+PCI Express x16 Root Port Connector
+Standard PCI Express Gen3 x16 Connector for connecting PCIe Endpoint card.
+J4
+QSFP interface
+Provides four transceiver channels per port for a 100G QSFP module
+J5
+QSFP interface
+Provides four transceiver channels per port for a 100G QSFP module
+J13
+Linear Tech VRM PMBus Port
+Provides PMBus connection using dongle from Linear Tech.
+J12
+Enpirion VRM PMBus Port
+Provides PMBus connection using dongle from Intel Enpirion®
+continued...
+
+
+
+Board Reference
+Type
+Description
+J9
+External JTAG Port
+This port allows the use of Intel FPGA Download Cable II dongle to access the JTAG links on the board. Connection to this port automatically disable the internal Intel FPGA Download Cable II JTAG.
+J15
+Micro-USB Connector
+Embedded Intel FPGA Download Cable II JTAG for programming the FPGA via a USB cable.
+Power Supply
+J6
+PCI Express edge connector
+Interfaces to a PCI Express root port such as an appropriate PC motherboard.
+J11
+DC Input Jack
+Accepts a 12 V DC power supply when powering the board from the provided power brick for lab bench operation. When operating from the PCIe slot, this input must also be connected to the 8-pin Aux PCIe power connector provided by the PC system along with J11, or else the board does not power on.
+SW3
+Power Switch
+Switch to power ON or OFF the board when supplied from the DC input jack.
+
+Related Information
+Overview on page 4
+
+Intel MAX 10 FPGA System Controller
+This development kit utilizes the Intel MAX 10 FPGA (10M04SCU169) as system controller for the following purposes:
+On-board Intel FPGA Download Cable
+JTAG Switch
+I2C Bus Control
+Control registers for all programmable clocks
+Control registers for QSFP and PCIe interfaces
+Table 6.Intel MAX 10 FPGA System Controller Device Pin Table
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+FX2_PA0
+K6
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus A
+FX2_PA1
+M4
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus A
+FX2_PA2
+M5
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus A
+FX2_PA3
+K5
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus A
+continued...
+
+
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+FX2_PA4
+L4
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus A
+FX2_PA5
+J5
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus A
+FX2_PA6
+N4
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus A
+FX2_PA7
+J7
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus A
+FX2_PB0
+K7
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus B
+FX2_PB1
+N9
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus B
+FX2_PB2
+N7
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus B
+FX2_PB3
+N6
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus B
+FX2_PB4
+M13
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus B
+FX2_PB5
+N5
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus B
+FX2_PB6
+M9
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus B
+FX2_PB7
+M11
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus B
+USB_MAX_TCK
+G2
+3.3V
+Intel MAX 10 JTAG to USB PHY FX2_PD0
+USB_MAX_TMS
+G1
+3.3V
+Intel MAX 10 JTAG to USB PHY FX2_PD1
+USB_MAX_TDI
+F5
+3.3V
+Intel MAX 10 JTAG to USB PHY FX2_PD2
+USB_MAX_TDO
+F6
+3.3V
+Intel MAX 10 JTAG to USB PHY FX2_PD3
+FX2_PD4
+N8
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus D
+FX2_PD5
+M7
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus D
+FX2_PD6
+M8
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus D
+FX2_PD7
+J6
+3.3V
+Intel MAX 10 to USB PHY Download Cable bus D
+FX2_RESETn
+N3
+3.3V
+USB PHY Reset
+FX2_FLAGA
+J8
+3.3V
+USB PHY FIFO output Flag signal to Intel MAX 10
+FX2_FLAGB
+L5
+3.3V
+USB PHY FIFO output Flag signal to Intel MAX 10
+FX2_FLAGC
+L11
+3.3V
+USB PHY FIFO output Flag signal to Intel MAX 10
+continued...
+
+
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+FX2_SLRDn
+M12
+3.3V
+USB PHY Read signal
+FX2_SLWRn
+N10
+3.3V
+USB PHY Write signal
+FX2_SCL
+K8
+3.3V
+USB PHY I2C signal
+FX2_SDA
+L10
+3.3V
+USB PHY I2C signal
+USB_T_CLK
+H6
+3.3V
+Interface Clock from USB PHY
+USB_DISABLEn
+N2
+3.3V
+External JTAG signal to Intel MAX 10 for disabling internal USB Blaster circuit
+EM_PMBUS_ALERTn
+L1
+3.3V
+PMBus Alert signal from Intel Enpirion Power Regulator
+LT_PMBUS_ALERTn
+N11
+3.3V
+PMBus Alert signal from LT Power regulator
+ZQSFP0_1V8_RESET_L
+K10
+1.8V
+QSFP module 0 Reset signal (Intel MAX 10 to FPGA)
+ZQSFP0_1V8_MODPRS_L
+K11
+1.8V
+QSFP module 0 control signal (Intel MAX 10 to FPGA)
+ZQSFP0_1V8_LPMODE
+J10
+1.8V
+QSFP module 0 Low Power signal (Intel MAX 10 to FPGA)
+ZQSFP0_1V8_INT_L
+L12
+1.8V
+QSFP module 0 interrupt signal (Intel MAX 10 to FPGA)
+ZQSFP0_1V8_MODSEL_L
+H9
+1.8V
+QSFP module 0 Mode Select signal (Intel MAX 10 to FPGA)
+ZQSFP1_1V8_RESET_L
+K12
+1.8V
+QSFP module 1 Reset signal (Intel MAX 10 to FPGA)
+ZQSFP1_1V8_MODPRS_L
+L13
+1.8V
+QSFP module 1 Present signal (Intel MAX 10 to FPGA)
+ZQSFP1_1V8_LPMODE
+J12
+1.8V
+QSFP module 1 Low Power signal (Intel MAX 10 to FPGA)
+ZQSFP1_1V8_INT_L
+J9
+1.8V
+QSFP module 1 interrupt signal (Intel MAX 10 to FPGA)
+ZQSFP1_1V8_MODSEL_L
+G13
+1.8V
+QSFP module 1 Mode Select signal (Intel MAX 10 to FPGA)
+ZQSFP0_3V3_RESET_L
+B10
+3.3V
+QSFP module 0 Reset signal to Intel MAX 10
+ZQSFP0_3V3_MODPRS_L
+A10
+3.3V
+QSFP module 0 control signal to Intel MAX 10
+ZQSFP0_3V3_LPMODE
+A11
+3.3V
+QSFP module 0 Low Power signal to Intel MAX 10
+continued...
+
+
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+ZQSFP0_3V3_INT_L
+E8
+3.3V
+QSFP module 0 interrupt signal to Intel MAX 10
+ZQSFP0_3V3_MODSEL_L
+A3
+3.3V
+QSFP module 0 Mode Select signal to Intel MAX 10
+ZQSFP1_3V3_RESET_L
+A7
+3.3V
+QSFP module 1 Reset signal to Intel MAX 10
+ZQSFP1_3V3_MODPRS_L
+A6
+3.3V
+QSFP module 1 Present signal to Intel MAX 10
+ZQSFP1_3V3_LPMODE
+B6
+3.3V
+QSFP module 1 Low Power signal to Intel MAX 10
+ZQSFP1_3V3_INT_L
+A4
+3.3V
+QSFP module 1 interrupt signal to Intel MAX 10
+ZQSFP1_3V3_MODSEL_L
+B5
+3.3V
+QSFP module 1 Mode Select signal to Intel MAX 10
+PCIE_RT_JTAG_TCK
+C10
+3.3V
+PCIe Root Port JTAG signal
+PCIE_RT_JTAG_TDI
+A8
+3.3V
+PCIe Root Port JTAG signal
+PCIE_RT_JTAG_TMS
+C9
+3.3V
+PCIe Root Port JTAG signal
+PCIE_RT_JTAG_TDO
+A9
+3.3V
+PCIe Root Port JTAG signal
+PCIE_RT_JTAG_TRSTn
+B2
+3.3V
+PCIe Root Port JTAG signal
+PCIE_RT_PERSTn
+D1
+3.3V
+PCIe Root Port signal
+PCIE_RT_PRSNT2n
+C2
+3.3V
+PCIe Rootport signal
+PCIE_RT_S10_PERSTn
+F12
+1.8V
+PCIe Root Port signal ( Intel MAX 10 to FPGA)
+PCIE_RT_S10_PRSNT2n
+E12
+1.8V
+PCIe Rootport signal ( Intel MAX 10 to FPGA)
+PCIE_RT_WAKEN
+B4
+3.3V
+PCIe Rootport Wake signal
+PCIE_EP_JTAG_TCK
+E3
+3.3V
+PCIe EndPoint JTAG signal
+PCIE_EP_JTAG_TDI
+F1
+3.3V
+PCIe EndPoint JTAG signal
+PCIE_EP_JTAG_TMS
+C1
+3.3V
+PCIe EndPoint JTAG signal
+PCIE_EP_JTAG_TDO
+F4
+3.3V
+PCIe EndPoint JTAG signal
+S10_CVP_CONFDONE
+E9
+1.8V
+CVP_CONFDONE signal from FPGA to Intel MAX 10
+S10_CONF_DONE
+B11
+1.8V
+CONF_DONE signal from FPGA to Intel MAX 10
+S10_INIT_DONE
+C12
+1.8V
+INIT_DONE signal from FPGA to Intel MAX 10
+CPU_RESETn
+C13
+1.8V
+RESETn signal fromIntel MAX 10 to FPGA
+S10_NCONFIG
+D9
+1.8V
+N_CONFIG signal from Intel MAX 10 to FPGA
+SI5341_ENn
+B13
+1.8V
+Clock enable signal
+SI5341_RSTn
+C11
+1.8V
+Check chip reset
+continued...
+
+
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+SI5341_FINC
+A!2
+1.8V
+Clock Frequency increment control
+SI5341_FDEC
+E10
+1.8V
+Clock Frequency decrement control
+EXT_JTAG_TDI
+L3
+3.3V
+External JTAG signal
+EXT_JTAG_TCK
+J1
+3.3V
+External JTAG signal
+EXT_JTAG_TMS
+M2
+3.3V
+External JTAG signal
+EXT_JTAG_TDO
+K2
+3.3V
+External JTAG signal
+PWR_MAX10_BYPASSn
+J2
+3.3V
+Power Intel MAX 10 JTAG Bypass input (select by Dip switch SW2-2)
+PCIE_RT_BYPASSn
+M2
+3.3V
+PCIe Root Port JTAG Bypass input (select by Dip Switch SW2-3)
+S10_BYPASSn
+E4
+3.3V
+FPGA JTAG Bypass input (select by Dip Switch SW2-4)
+JTAG_INPUT_SOURCE
+M3
+3.3V
+JTAG input source selection, SW2-1 select between external JTAG or PCIE EP JTAG
+PCIE_EP_3V3_I2C_SDA
+L2
+3.3V
+I2C bus from PCIE_End Point
+PCIE_EP_3V3_I2C_SCL
+K1
+3.3V
+I2C bus from PCIE_End Point
+MAIN_I2C_SCL
+F8
+1.8V
+Main I2C bus (Intel MAX 10)
+MAIN_I2C_SDA
+B12
+1.8V
+Main I2C bus (Intel MAX 10)
+3V3_I2C_EN
+H3
+3.3V
+This Intel MAX 10 signal controls U22 that allows 3V3_I2C bus connect to the Main I2C bus
+S10_PMBUS_EN
+G4
+3.3V
+This Intel MAX 10 signal controls U20 that allows CORE_PMBus connect to the S10 SDM I2C bus
+MAIN_PMBUS_EN
+H2
+3.3V
+This Intel MAX 10 signal controls U21 that allows CORE_PMBus connect to MAIN I2C bus
+PWR_GOOD
+E1
+3.3V
+Power Good signal from Intel MAX 10 Power
+
+Intel MAX 10 FPGA Power Manager
+This development kit utilizes the Intel MAX 10 FPGA 10M16SAU169 FPGA as Power Manager (U27) for the following purposes:
+
+
+Power Sequencing Control
+Power Discharging Control
+Voltage Monitoring
+Fan Control
+Table 7.Intel MAX 10 FPGA Power Manager Pin Table
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+3p3V_EN
+L5
+3.3V
+Enable or disable 3.3V power rail
+S10_VCC_EN
+M4
+3.3V
+Enable or disable FPGA Core power rail
+S10_VCCERAM_EN
+L4
+3.3V
+Enable or disable VCCERAM power rail
+S10_VCCRL_EN
+M5
+3.3V
+Enable or disable Left side Receiver Power VCCRL power rail
+S10_VCCRR
+K5
+3.3V
+Enable or disable Right side Receiver Power VCCRR power rail
+S10_VCCT
+N4
+3.3V
+Enable or disable Transmitter Power VCCT power rail
+1p8V_EN
+J5
+3.3V
+Enable or disable 1.8V power rail
+VCCIO_UIB_EN
+N5
+3.3V
+Enable or disable VCCIO_UIB power rail
+VCCM_EN
+N6
+3.3V
+Enable or disable VCCM power rail
+1p2V_DDR4_EN
+N7
+3.3V
+Enable or disable 1.2V for DDR4 power rail
+HILO_VDDQ_EN
+M7
+3.3V
+Enable or disable VDDQ power rail for HILO memory
+HILO_VDD_EN
+N8
+3.3V
+Enable or disable VDD power rail for HILO memory
+2p5V_EN
+J6
+3.3V
+Enable or disable 2.5V power rail
+ZQSFP0_PWR_EN
+M8
+3.3V
+Enable or disable the power to QSFP_0 module
+ZQSFP1_PWR_EN
+K6
+3.3V
+Enable or disable the power to QSFP_1 module
+DIMM_VTT_EN
+M9
+3.3V
+Enable or disable the termination power for DDR4 DIMM
+COMP_VTT_EN
+J7
+3.3V
+Enable or disable the termination power for on- board DDR4 memory
+POWER_ON
+M13
+3.3V
+Signal from power input circuit to Intel MAX 10 for starting power sequencing
+continued...
+
+
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+1p2V_DDR4_DIS
+N2
+3.3V
+Signal to enable discharge circuit for 1.2 V DDR4 power rail
+VCCIO_UIB_DIS
+N3
+3.3V
+Signal to enable discharge circuit for 1.2 V VCCIO UIB power rail
+HILO_VDD_DIS
+M11
+3.3V
+Signal to enable discharge circuit for HILO VDD power rail
+HILO_VDDQ_DIS
+L11
+3.3V
+Signal to enable discharge circuit for HILO VDDQ power rail
+VCCM_DIS
+K8
+3.3V
+Signal to enable discharge circuit for HBM's VCCM power rail
+1p8V_DIS
+G9
+3.3V
+Signal to enable discharge circuit for 1.8 V power rail
+VCCRL_GXB_DIS
+G10
+3.3V
+Signal to enable discharge circuit for VCCRL_GXB power rail
+VCCRR_GXB_DIS
+F13
+3.3V
+Signal to enable discharge circuit for VCCRR_GXB power rail
+VCCT_DIS
+E13
+3.3V
+Signal to enable discharge circuit for VCCT_GXB power rail
+VCCERAM_DIS
+F9
+3.3V
+Signal to enable discharge circuit for VCCERAM power rail
+2p5V_DIS
+F10
+3.3V
+Signal to enable discharge circuit for 2.5V power rail
+3p3V_DIS
+C10
+3.3V
+Signal to enable discharge circuit for 3.3V power rail
+I2C_3V3_SDA
+M12
+3.3V
+I2C signals
+I2C_3V3_SCL
+N9
+3.3V
+I2C signals
+PWR_MAX10_JTAG_TMS
+G1
+3.3V
+JTAG signals
+PWR_MAX10_JTAG_TCK
+G2
+3.3V
+JTAG signals
+PWR_MAX10_JTAG_TDI
+F5
+3.3V
+JTAG signals
+PWR_MAX10_JTAG_TDO
+F6
+3.3V
+JTAG signals
+3p3V _PG
+A6
+3.3V
+Power Good signal from 3.3V power supply
+S10_VCC_PG
+A9
+3.3V
+Power Good signal from VCC Core power supply
+S10_VCCERAM_PG
+B10
+3.3V
+Power Good signal from VCCERAM power supply
+S10_VCCRL_PG
+A10
+3.3V
+Power Good signal from VCCRL power supply
+continued...
+
+
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+S10_VCCRR_PG
+A11
+3.3V
+Power Good signal from VCCRR power supply
+S10_VCCT_PG
+E8
+3.3V
+Power Good signal from VCCT power supply
+1p8V_PG
+A4
+3.3V
+Power Good signal from 1.8V power supply
+1p2V_VCCIO_UIB_PG
+A7
+3.3V
+Power Good signal from VCCIO_UIB power supply
+VCCM_PG
+A4
+3.3V
+Power Good signal from VCCM power supply
+HILO_VDD_PG
+B5
+3.3V
+Power Good signal from VDD power supply for HILO
+HILO_VDDQ_PG
+A3
+3.3V
+Power Good signal from VDDQ power supply for HILO
+1p2V_DDR4_PG
+E6
+3.3V
+Power Good signal from 1.2V power supply for DDR4 Memory
+12V_G1_PG
+F12
+3.3V
+Power Good signal from 12V Group1 of input power circuit
+12V_G2_PG
+E12
+3.3V
+Power Good signal from 12V Group2 of input power circuit
+5V_PG
+C13
+3.3V
+Power Good signal from 5V power supply
+2p5V_PG
+E10
+3.3V
+Power Good signal from 2.5V power supply
+COMP_VTT_PG
+F8
+3.3V
+Power Good signal from on- board DDR4 termination power supply
+DIMM_VTT_PG
+B13
+3.3V
+Power Good signal from DIMM DDR4 termination power supply
+12V_G1_UV_PG
+D9
+3.3V
+Power Good signal from 12V Group 1's Under-Voltage monitor
+12V_G1_OV_PG
+D12
+3.3V
+Power Good signal from 12V Group 1's Over-Voltage monitor
+S10_VCCFAULT
+B4
+3.3V
+Fault signal from FPGA VCC Core power supply
+EM_PMBUS_ALERTn
+B11
+3.3V
+Alert signal from Enpirion power regulators
+LT_PMBUS_ALERTn
+C12
+3.3V
+Alert signal from Linear Technology power regulators
+ZQSFP0_FAULT_N
+C11
+3.3V
+Fault signal from QSFP_0 module
+ZQSFP1_FAULT_N
+A12
+3.3V
+Fault signal from QSFP_1 module
+continued...
+
+
+
+Schematic Signal Name
+Pin Number
+I/O Standard
+Description
+PCIE_RT_PRSNT2n
+D11
+3.3V
+PCIE Root Port Present signal
+PCIE_EP_PERSTN
+H4
+3.3V
+PCIE End Point Present signal
+PWR_LED_DR
+B12
+3.3V
+Power LED drive signal
+PWR_GOOD
+E9
+3.3V
+Power Good signal of all power supplies to Intel MAX 10 System Controller
+OVERTEMPn
+K11
+3.3V
+Over Temperature signal from Board Temp sensor chip U29
+TSENSE_ALERTn
+L12
+3.3V
+Temperature Sense Alert signal from Board Temp sensor chip U29
+FAN_CTRL
+K12
+3.3V
+Fan speed control signal to cooling fans driver
+S10MX_VCC
+D2
+Analog
+FPGA Core Voltage sensing input
+S10_VCCERAM
+D1
+Analog
+VCCERAM Voltage sensing input
+S10_VCCRL_GXB
+C2
+Analog
+FPGA Left side receiver voltage sensing input
+S10_VCCRR_GXB
+E3
+Analog
+FPGA Right side receiver voltage sensing input
+S10_VCCT_GXB
+E4
+Analog
+FPGA Transmitter voltage sensing input
+1p2V_VCCIO_UIB
+C1
+Analog
+1.2V VCCIO UIB Voltage sensing input
+1p8V
+B1
+Analog
+1.8V Voltage sensing input
+1p2V_DDR4
+F1
+Analog
+1,2V for DDR4 voltage sensing input
+VCCM
+E1
+Analog
+VCCM for HMB voltage sensing input
+
+FPGA Configuration
+You can use the Intel Quartus Prime Programmer to configure the FPGA with your SRAM Object File (.sof).
+Ensure the following
+The Intel Quartus Prime Programmer is installed on your PC.
+The micro-USB cable is connected to the FPGA development board.
+Power to the board is ON, and no other applications that use the JTAG chain are running.
+
+
+Steps
+Start the Intel Quartus Prime Programmer.
+Click Auto Detect to display the devices in the JTAG chain.
+Click Change File and select the path to the desired .sof.
+Turn on the Program/Configure option for the added file.
+Click Start to download the selected file to the FPGA. Configuration is complete when the progress bar reaches 100%.
+Using the Intel Quartus Prime Programmer to configure a device on the board causes other JTAG based applications such as the Board Test System and the Power Monitor to lose their connection to the board. Restart those applications after configuration is complete.
+Programming the FPGA over Intel FPGA Download Cable II
+The figure below shows the high-level conceptual block diagram for programming the Intel Stratix 10 MX FPGA over the embedded Intel FPGA Download Cable II or External Intel FPGA Download Cable II.
+USB   Data JTAG CONNUSBConnUSB PHYMAX 10USB   Data JTAG CONNUSBConnUSB PHYMAX 10Figure 7.Embedded Intel FPGA Download Cable Conceptual Block Diagram
+USB
+   Data 
+JTAG CONN
+USB
+Conn
+
+USB PHY
+
+MAX 10
+USB
+   Data 
+JTAG CONN
+USB
+Conn
+
+USB PHY
+
+MAX 10
+
+
+
+JTAG
+
+
+S10 MX
+
+
+
+Connection on the external JTAG header (J9) automatically disables the on-board JTAG Intel FPGA Download Cable II. This allows the use of an external USB JTAG dongle to access the JTAG bus on the board.
+Supported Configuration Modes
+This development kit supports two configuration modes: Active Serial x4 (AS x4) and JTAG. The default configuration is AS x4 using a 2 Gb QSPI Flash device. JTAG configuration is supported by using either the on-board Intel FPGA Download Cable II or the through an external Intel FPGA Download Cable II dongle.
+Active Serial x4 Mode
+The Secure Device Manager (SDM) block in the Intel Stratix 10 MX FPGA device controls the configuration process and interface. The flash memory is a Micron Technology 1.8 V core, 1.8 V I/O 2 Gigabit CFI NOR-type device (P/N: MT25Qu02GCBB3E12). For AS x4 Fast modes, MSEL [2:0] signals need to be set according to the table below. Not all modes are supported. AS x4 is the default configuration mode.
+
+
+Table 8.Active Serial Mode
+
+Configuration Scheme
+MSEL [2:0]
+Avalon-ST (x32)
+000 (Not Supported)
+Avalon-ST (x16)
+101 (Not Supported)
+Avalon-ST (x8)
+110 (Not Supported)
+AS (Fast Mode for CvP)
+001
+AS (Normal Mode)
+011 (Not Supported)
+NAND x8
+010 (Not Supported)
+SD/MMC x4/x8
+100 (Not Supported)
+JTAG only
+111
+Figure 8.AS x4 Configuration Conceptual Block Diagram
+You must drive the nCONFIG low to hold the Stratix 10 device in idle state to prevent it from
+
+driving the interfaces when programming the EPCQ-L device.
+ VCCIO_SDM
+
+10kΩ10kΩ
+CONF_DONE connection to external
+FPGA DevicenSTATUS nCONFIG CONF_DONEAS_DATA[0] AS_DATA[1] AS_DATA[2] AS_DATA[3]AS_CLK0SC_CLK_1FPGA DevicenSTATUS nCONFIG CONF_DONEAS_DATA[0] AS_DATA[1] AS_DATA[2] AS_DATA[3]AS_CLK0SC_CLK_1host for monitoring is optional.
+FPGA Device
+nSTATUS nCONFIG CONF_DONE
+AS_DATA[0] AS_DATA[1] AS_DATA[2] AS_DATA[3]
+AS_CLK0SC_CLK_1
+FPGA Device
+nSTATUS nCONFIG CONF_DONE
+AS_DATA[0] AS_DATA[1] AS_DATA[2] AS_DATA[3]
+AS_CLK0SC_CLK_1
+
+
+EPCQ-L DeviceDATA0 DATA1 DATA2 DATA3 DCLKnCSEPCQ-L DeviceDATA0 DATA1 DATA2 DATA3 DCLKnCSExternal clock source to feed
+EPCQ-L Device
+
+
+DATA0 DATA1 DATA2 DATA3 DCLK
+
+
+nCS
+EPCQ-L Device
+
+
+DATA0 DATA1 DATA2 DATA3 DCLK
+
+
+nCS
+
+ the Stratix 10 device is optional.
+
+
+
+VCC  IO_SDM
+MSEL [0]/AS_nCSO[0] MSEL [1]MSEL [2]MSEL [0]/AS_nCSO[0] MSEL [1]MSEL [2]4.7kΩ
+MSEL [0]/AS_nCSO[0] MSEL [1]
+MSEL [2]
+MSEL [0]/AS_nCSO[0] MSEL [1]
+MSEL [2]
+
+
+
+
+Termination recommendation:
+Connect a 50Ω series termination resistor.
+4.7kΩ GND
+
+AS fast mode: Pull MSEL [1] low
+AS normal mode: Pull MSEL [1] high
+
+JTAG Configuration Mode
+The JTAG Switch implemented in the Intel MAX 10 System Control FPGA (U24) allows the selection of the device(s) to be included in the JTAG chain. It is done by the settings of the DIP switch SW2. The embedded Intel FPGA Download Cable (or external Intel FPGA Download Cable) or PCIe JTAG can be selected as the source for programming the device(s) on the chain. The embedded Intel FPGA Download Cable is the default setting for this configuration mode.
+
+
+Source selectEnable/BypassPCIe EPEdge ConnDNIPD[3:0]UBIIUBII MAX10UBII PHYExternal HeaderPCIe Root ConnPWR MAX10Stratix 10 MX FPGAJTAGJTAG MUXDIP switchDIP switchSource selectEnable/BypassPCIe EPEdge ConnDNIPD[3:0]UBIIUBII MAX10UBII PHYExternal HeaderPCIe Root ConnPWR MAX10Stratix 10 MX FPGAJTAGJTAG MUXDIP switchDIP switchFigure 9.JTAG Chain Conceptual Block Diagram
+Source select
+Enable/Bypass
+PCIe EP
+Edge Conn
+DNI
+PD[3:0]
+UBII
+UBII MAX10
+UBII PHY
+External Header
+PCIe Root Conn
+PWR MAX10
+Stratix 10 MX FPGA
+JTAG
+
+
+
+
+
+
+JTAG MUX
+DIP switch
+DIP switch
+Source select
+Enable/Bypass
+PCIe EP
+Edge Conn
+DNI
+PD[3:0]
+UBII
+UBII MAX10
+UBII PHY
+External Header
+PCIe Root Conn
+PWR MAX10
+Stratix 10 MX FPGA
+JTAG
+
+
+
+
+
+
+JTAG MUX
+DIP switch
+DIP switch
+
+Note:AS x4 is default configuration mode. Changing to JTAG mode requires changing pull- up/pull-down resistors for the MSEL lines on the board. Please refer to the board schematics and layout for detailed resistor locations.
+
+Status and User I/O Elements
+The Intel Stratix 10 MX FPGA development kit includes status LEDs as listed below.
+Table 9.Board-Specific Status LEDs
+
+Board Reference
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+D14
+S10_CONF_DONE
+AY39
+1.8 V
+D16
+S10_CVP_CONFDONE
+BC42
+1.8 V
+D5
+OVERTEMPn
+K11 (MAX10_U27)
+1.8 V
+D4
+PWR_LED_DR
+B12 (MAX10_U27)
+1.8 V
+
+
+Table 10.Board-Specific Push Buttons
+
+Board Reference
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+S1
+S10_PCIe_PERST_0
+AH39
+1.8 V
+S11
+S10_PCIe_PERST_1
+BL10
+1.8 V
+S12
+MAX10_Reset
+N3 (MAX10_U24)
+1.8 V
+S10
+CPU_Reset
+BL14
+1.8 V
+User-Defined LEDs
+The Intel Stratix 10 MX FPGA development kit includes a set of four user-defined LEDs. The LEDs illuminate (turn ON) when a logic 0 is driven, and turn OFF when a logic 1 is driven. There are no board-specific functions for these LEDs.
+Table 11.User-Defined LEDs
+
+Board Reference
+Schematic Signal Names
+FPGA Pin Number
+I/O Standard
+D7
+S10_LED0
+BG12
+1.8 V
+D8
+S10_LED1
+BF12
+1.8 V
+D9
+S10_LED2
+BG11
+1.8 V
+D10
+S10_LED3
+BH11
+1.8 V
+
+Interfaces and Ports
+This section describes the development board's communication ports and interface cards relative to the Intel Stratix 10 MX FPGA device.
+
+PCI Express
+The Intel Stratix 10 MX FPGA development kit supports two PCI Express interfaces: PCI Express End Point via a standard PCI Express x16 Edge connector and PCI Express Root Port via a standard PCI Express x16 connector.
+The Intel Stratix 10 MX FPGA development board is designed to fit entirely into a PC motherboard with a x16 PCI Express slot that can accommodate a full height, 3-slot long form factor add-in card. This interface uses the PCI Express hard IP block on the Intel Stratix 10 MX FPGA, saving logic resources for the user logic application. The PCI Express edge connector has a presence detect feature to allow the motherboard to determine if a card is installed.
+The PCI Express interface supports bus width of x16 by using the PCIe Intel FPGA IP. The PCI Express edge connector has a connection speed of 2.5 Gbps/lane for a maximum of 40 Gbps full-duplex (Gen1), 5.0 Gbps/lane for maximum of 80 Gbps full- duplex (Gen 2), or 8.0 Gbps/lane for a maximum of 128 Gbps full-duplex (Gen3).
+The power for the board can be sourced entirely from the PC host when installed into a PC motherboard with the PC's 2x4 ATX auxiliary power connected to the 12V ATX inputs (J11) of the Intel Stratix 10 MX development kit.
+
+
+The REFCLK_PCIE_EP_EDGE_P/N signal is a 100 MHz differential input that is driven from the PC motherboard on to this board through the edge connector. This signal connects directly to an Intel Stratix 10 MX FPGA REFCLK input pin pair using DC coupling.
+This clock is terminated on the motherboard, and therefore no on-board termination is required. This clock can have spread-spectrum properties that change its period between 9.847 ps and 10.203 ps.
+The I/O standard is High-Speed Current Steering Logic (HCSL). The JTAG and SMB are optional signals in the PCI Express TDI to PCI Express TDO and are not used on this board. The SMB signals are wired to the Intel Stratix 10 MX FPGA but are not required for normal operation.
+
+Table 12.PCI Express (J6) End Point Interface Pin Connections
+
+Receive Bus
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+A11
+PCIE_EP_PERST_N
+-
+-
+Connect to PRSNT2n_x16 (pin B81)
+B17
+PCIE_PRSNT2n_X1
+-
+-
+No connect
+B31
+PCIE_PRSNT2n_X4
+-
+-
+No connect
+B48
+PCIE_PRSNT2n_X8
+-
+-
+No connect
+B81
+PCIE_PRSNT2n_X16
+-
+-
+Connect to PCIE_PRSNT1n ( pin A11)
+B15
+PCIE_EP_TX_N0
+BH44
+1.4 V PCML
+Transmit bus
+B20
+PCIE_EP_TX_N1
+BJ46
+1.4 V PCML
+Transmit bus
+B24
+PCIE_EP_TX_N2
+BG46
+1.4 V PCML
+Transmit bus
+B28
+PCIE_EP_TX_N3
+BF44
+1.4 V PCML
+Transmit bus
+B34
+PCIE_EP_TX_N4
+BE46
+1.4 V PCML
+Transmit bus
+B38
+PCIE_EP_TX_N5
+BD44
+1.4 V PCML
+Transmit bus
+B42
+PCIE_EP_TX_N6
+BB44
+1.4 V PCML
+Transmit bus
+B46
+PCIE_EP_TX_N7
+BC46
+1.4 V PCML
+Transmit bus
+B51
+PCIE_EP_TX_N8
+BA46
+1.4 V PCML
+Transmit bus
+B55
+PCIE_EP_TX_N9
+AY44
+1.4 V PCML
+Transmit bus
+B59
+PCIE_EP_TX_N10
+AW46
+1.4 V PCML
+Transmit bus
+B63
+PCIE_EP_TX_N11
+AV44
+1.4 V PCML
+Transmit bus
+B67
+PCIE_EP_TX_N12
+AU46
+1.4 V PCML
+Transmit bus
+B71
+PCIE_EP_TX_N13
+AT44
+1.4 V PCML
+Transmit bus
+B75
+PCIE_EP_TX_N14
+AR46
+1.4 V PCML
+Transmit bus
+B79
+PCIE_EP_TX_N15
+AP44
+1.4 V PCML
+Transmit bus
+B14
+PCIE_EP_TX_P0
+BH45
+1.4 V PCML
+Transmit bus
+continued...
+
+
+
+Receive Bus
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+B19
+PCIE_EP_TX_P1
+BJ47
+1.4 V PCML
+Transmit bus
+B23
+PCIE_EP_TX_P2
+BG47
+1.4 V PCML
+Transmit bus
+B27
+PCIE_EP_TX_P3
+BF45
+1.4 V PCML
+Transmit bus
+B33
+PCIE_EP_TX_P4
+BE47
+1.4 V PCML
+Transmit bus
+B37
+PCIE_EP_TX_P5
+BD45
+1.4 V PCML
+Transmit bus
+B41
+PCIE_EP_TX_P6
+BB45
+1.4 V PCML
+Transmit bus
+B45
+PCIE_EP_TX_P7
+BC47
+1.4 V PCML
+Transmit bus
+B50
+PCIE_EP_TX_P8
+BA47
+1.4 V PCML
+Transmit bus
+B54
+PCIE_EP_TX_P9
+AY45
+1.4 V PCML
+Transmit bus
+B58
+PCIE_EP_TX_P10
+AW47
+1.4 V PCML
+Transmit bus
+B62
+PCIE_EP_TX_P11
+AV45
+1.4 V PCML
+Transmit bus
+B66
+PCIE_EP_TX_P12
+AU47
+1.4 V PCML
+Transmit bus
+B70
+PCIE_EP_TX_P13
+AT45
+1.4 V PCML
+Transmit bus
+B74
+PCIE_EP_TX_P14
+AR47
+1.4 V PCML
+Transmit bus
+B78
+PCIE_EP_TX_P15
+AP45
+1.4 V PCML
+Transmit bus
+A17
+PCIE_EP_RX_N0
+BL46
+1.4 V PCML
+Receive bus
+A22
+PCIE_EP_RX_N1
+BK48
+1.4 V PCML
+Receive bus
+A26
+PCIE_EP_RX_N2
+BH48
+1.4 V PCML
+Receive bus
+A30
+PCIE_EP_RX_N3
+BG50
+1.4 V PCML
+Receive bus
+A36
+PCIE_EP_RX_N4
+BF48
+1.4 V PCML
+Receive bus
+A40
+PCIE_EP_RX_N5
+BE50
+1.4 V PCML
+Receive bus
+A44
+PCIE_EP_RX_N6
+BD48
+1.4 V PCML
+Receive bus
+A48
+PCIE_EP_RX_N7
+BC50
+1.4 V PCML
+Receive bus
+A53
+PCIE_EP_RX_N8
+BB48
+1.4 V PCML
+Receive bus
+A57
+PCIE_EP_RX_N9
+BA50
+1.4 V PCML
+Receive bus
+A61
+PCIE_EP_RX_N10
+AY48
+1.4 V PCML
+Receive bus
+A65
+PCIE_EP_RX_N11
+AW50
+1.4 V PCML
+Receive bus
+A69
+PCIE_EP_RX_N12
+AV48
+1.4 V PCML
+Receive bus
+A73
+PCIE_EP_RX_N13
+AU50
+1.4 V PCML
+Receive bus
+A77
+PCIE_EP_RX_N14
+AT48
+1.4 V PCML
+Receive bus
+A81
+PCIE_EP_RX_N15
+AR50
+1.4 V PCML
+Receive bus
+A16
+PCIE_EP_RX_P0
+BL47
+1.4 V PCML
+Receive bus
+A21
+PCIE_EP_RX_P1
+BK49
+1.4 V PCML
+Receive bus
+A25
+PCIE_EP_RX_P2
+BH49
+1.4 V PCML
+Receive bus
+continued...
+
+
+
+Receive Bus
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+A29
+PCIE_EP_RX_P3
+BG51
+1.4 V PCML
+Receive bus
+A35
+PCIE_EP_RX_P4
+BF49
+1.4 V PCML
+Receive bus
+A39
+PCIE_EP_RX_P5
+BE51
+1.4 V PCML
+Receive bus
+A43
+PCIE_EP_RX_P6
+BD49
+1.4 V PCML
+Receive bus
+A47
+PCIE_EP_RX_P7
+BC51
+1.4 V PCML
+Receive bus
+A52
+PCIE_EP_RX_P8
+BB49
+1.4 V PCML
+Receive bus
+A56
+PCIE_EP_RX_P9
+BA51
+1.4 V PCML
+Receive bus
+A60
+PCIE_EP_RX_P10
+AY49
+1.4 V PCML
+Receive bus
+A64
+PCIE_EP_RX_P11
+AW51
+1.4 V PCML
+Receive bus
+A68
+PCIE_EP_RX_P12
+AV49
+1.4 V PCML
+Receive bus
+A72
+PCIE_EP_RX_P13
+AU51
+1.4 V PCML
+Receive bus
+A76
+PCIE_EP_RX_P14
+AT49
+1.4 V PCML
+Receive bus
+A80
+PCIE_EP_RX_P15
+AR51
+1.4 V PCML
+Receive bus
+B11
+PCIE_EP_WAKEN
+BH16
+1.8V
+Wake signal
+
+Table 13.PCI Express Root Port Interface (J7) Pin Connections
+
+Receive Bus
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+A1
+PCIE_PRSNT1n
+-
+-
+Connect to PCIE_PRSNT2n_X16
+B17
+PCIE_PRSNT2n_X1
+-
+-
+No connect
+B31
+PCIE_PRSNT2n_X4
+-
+-
+No connect
+B48
+PCIE_PRSNT2n_X8
+-
+-
+No connect
+B81
+PCIE_PRSNT2n_X16
+-
+-
+Connect to PCIE_PRSNT1n
+B15
+PCIE_RT_TX_N0
+BL6
+1.4 V PCML
+Transmit bus
+B20
+PCIE_RT_TX_N1
+BK4
+1.4 V PCML
+Transmit bus
+B24
+PCIE_RT_TX_N2
+BH4
+1.4 V PCML
+Transmit bus
+B28
+PCIE_RT_TX_N3
+BG2
+1.4 V PCML
+Transmit bus
+B34
+PCIE_RT_TX_N4
+BF4
+1.4 V PCML
+Transmit bus
+B38
+PCIE_RT_TX_N5
+BE2
+1.4 V PCML
+Transmit bus
+B42
+PCIE_RT_TX_N6
+BD4
+1.4 V PCML
+Transmit bus
+B46
+PCIE_RT_TX_N7
+BC2
+1.4 V PCML
+Transmit bus
+B51
+PCIE_RT_TX_N8
+BB4
+1.4 V PCML
+Transmit bus
+B55
+PCIE_RT_TX_N9
+BA2
+1.4 V PCML
+Transmit bus
+B59
+PCIE_RT_TX_N10
+AY4
+1.4 V PCML
+Transmit bus
+continued...
+
+
+
+Receive Bus
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+B63
+PCIE_RT_TX_N11
+AW2
+1.4 V PCML
+Transmit bus
+B67
+PCIE_RT_TX_N12
+AV4
+1.4 V PCML
+Transmit bus
+B71
+PCIE_RT_TX_N13
+AU2
+1.4 V PCML
+Transmit bus
+B75
+PCIE_RT_TX_N14
+AT4
+1.4 V PCML
+Transmit bus
+B79
+PCIE_RT_TX_N15
+AR2
+1.4 V PCML
+Transmit bus
+B14
+PCIE_RT_TX_P0
+BL5
+1.4 V PCML
+Transmit bus
+B19
+PCIE_RT_TX_P1
+BK3
+1.4 V PCML
+Transmit bus
+B23
+PCIE_RT_TX_P2
+BH3
+1.4 V PCML
+Transmit bus
+B27
+PCIE_RT_TX_P3
+BG1
+1.4 V PCML
+Transmit bus
+B33
+PCIE_RT_TX_P4
+BF3
+1.4 V PCML
+Transmit bus
+B37
+PCIE_RT_TX_P5
+BE1
+1.4 V PCML
+Transmit bus
+B41
+PCIE_RT_TX_P6
+BB8
+1.4 V PCML
+Transmit bus
+B45
+PCIE_RT_TX_P7
+BC5
+1.4 V PCML
+Transmit bus
+B50
+PCIE_RT_TX_P8
+BA5
+1.4 V PCML
+Transmit bus
+B54
+PCIE_RT_TX_P9
+AY7
+1.4 V PCML
+Transmit bus
+B58
+PCIE_RT_TX_P10
+AW5
+1.4 V PCML
+Transmit bus
+B62
+PCIE_RT_TX_P11
+AV7
+1.4 V PCML
+Transmit bus
+B66
+PCIE_RT_TX_P12
+AV3
+1.4 V PCML
+Transmit bus
+B70
+PCIE_RT_TX_P13
+AU1
+1.4 V PCML
+Transmit bus
+B74
+PCIE_RT_TX_P14
+At3
+1.4 V PCML
+Transmit bus
+B78
+PCIE_RT_TX_P15
+AR1
+1.4 V PCML
+Transmit bus
+A17
+PCIE_RT_RX_N0
+BH7
+1.4 V PCML
+Receive bus
+A22
+PCIE_RT_RX_N1
+BJ5
+1.4 V PCML
+Receive bus
+A26
+PCIE_RT_RX_N2
+BG5
+1.4 V PCML
+Receive bus
+A30
+PCIE_RT_RX_N3
+BF7
+1.4 V PCML
+Receive bus
+A36
+PCIE_RT_RX_N4
+BE5
+1.4 V PCML
+Receive bus
+A40
+PCIE_RT_RX_N5
+BD7
+1.4 V PCML
+Receive bus
+A44
+PCIE_RT_RX_N6
+BB7
+1.4 V PCML
+Receive bus
+A48
+PCIE_RT_RX_N7
+BC6
+1.4 V PCML
+Receive bus
+A53
+PCIE_RT_RX_N8
+BA6
+1.4 V PCML
+Receive bus
+A57
+PCIE_RT_RX_N9
+AY8
+1.4 V PCML
+Receive bus
+A61
+PCIE_RT_RX_N10
+AW6
+1.4 V PCML
+Receive bus
+A65
+PCIE_RT_RX_N11
+AV8
+1.4 V PCML
+Receive bus
+A69
+PCIE_RT_RX_N12
+AU6
+1.4 V PCML
+Receive bus
+continued...
+
+
+
+Receive Bus
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+A73
+PCIE_RT_RX_N13
+AT8
+1.4 V PCML
+Receive bus
+A77
+PCIE_RT_RX_N14
+AR6
+1.4 V PCML
+Receive bus
+A81
+PCIE_RT_RX_N15
+AP8
+1.4 V PCML
+Receive bus
+A16
+PCIE_RT_RX_P0
+BH8
+1.4 V PCML
+Receive bus
+A21
+PCIE_RT_RX_P1
+BJ5
+1.4 V PCML
+Receive bus
+A25
+PCIE_RT_RX_P2
+BG6
+1.4 V PCML
+Receive bus
+A29
+PCIE_RT_RX_P3
+BF8
+1.4 V PCML
+Receive bus
+A35
+PCIE_RT_RX_P4
+BE6
+1.4 V PCML
+Receive bus
+A39
+PCIE_RT_RX_P5
+BD8
+1.4 V PCML
+Receive bus
+A43
+PCIE_RT_RX_P6
+BB8
+1.4 V PCML
+Receive bus
+A47
+PCIE_RT_RX_P7
+BC5
+1.4 V PCML
+Receive bus
+A52
+PCIE_RT_RX_P8
+AY7
+1.4 V PCML
+Receive bus
+A56
+PCIE_RT_RX_P9
+AW5
+1.4 V PCML
+Receive bus
+A60
+PCIE_RT_RX_P10
+AW5
+1.4 V PCML
+Receive bus
+A64
+PCIE_RT_RX_P11
+AV7
+1.4 V PCML
+Receive bus
+A68
+PCIE_RT_RX_P12
+AU5
+1.4 V PCML
+Receive bus
+A72
+PCIE_RT_RX_P13
+AT7
+1.4 V PCML
+Receive bus
+A76
+PCIE_RT_RX_P14
+AR5
+1.4 V PCML
+Receive bus
+A80
+PCIE_RT_RX_P15
+AP7
+1.4 V PCML
+Receive bus
+B11
+PCIE_RT_WAKEN
+B4
+1.8V
+Wake signal
+
+Memory Interface
+This section describes the Intel Stratix 10 MX FPGA development kit's memory interface support and their signal names, types and connectivity relative to the Intel Stratix 10 MX FPGA.
+Three independent memory interfaces are supported: On-board DDR4, DIMM for DDR4 or DDR-T, and HiLo for DDR4 or QDR-IV.
+The on-board DDR4 uses five 16 Gb DDR4 single rank devices connecting to Bank 2L, 2M, 2N of the Intel Stratix 10 MX FPGA. The total memory size is 8 GB running at 1333 MHz.
+The 288-pin DIMM socket interfaces to Bank 3I, 3J, 3K, 3L of the Intel Stratix 10 MX FPGA. This socket accepts DDR4 module or DDR-T module (requires DDR-T protocol IP).
+The HiLo connector interfaces to Bank 2A, 2B, 2C of the Intel Stratix 10 MX FPGA. Supported HiLo modules are DDR4 and QDR-IV.
+
+
+Figure 10.Memory Interfaces
+
+
+
+
+
+
+
+
+
+
+
+
+2A2B2CS10 MX3I3J3K3L2L2M2N2A2B2CS10 MX3I3J3K3L2L2M2N X7
+
+
+2A
+
+2B
+
+2C
+
+
+S10 MX
+3I
+
+3J
+
+3K
+
+3L
+
+
+2L
+
+2M
+
+2N
+
+
+
+
+2A
+
+2B
+
+2C
+
+
+S10 MX
+3I
+
+3J
+
+3K
+
+3L
+
+
+2L
+
+2M
+
+2N
+
+
+
+
+
+
+
+ X7
+
+
+
+
+
+
+ X7
+2   2   HiLo ConnHiLo Conn
+2   
+2   
+HiLo Conn
+HiLo Conn
+Supporting DDR4 and QDR-IV
+
+
+
+
+
+2      2      DIMMDIMM
+2      
+2      
+DIMM
+DIMM
+Supporting DDR4 or DDR-T ( with DDR-T IP)
+
+
+
+
+2   2   DDR416Gb x5DDR416Gb x5
+2   
+2   
+
+DDR4
+
+
+
+
+
+
+
+16Gb x5
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+DDR4
+
+
+
+
+
+
+
+16Gb x5
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+8GB
+
+
+On-board DDR4 Memory Interface
+The on-board DDR4 memory uses five Micron Technology’s MT40A1G16KNR-075E 16 Gb DDR4 single rank devices mapping to the FPGA’s 2L, 2M and 2N I/O blocks. The total memory size is 8 GB running at 1333 MHz.
+Table 14.On-board DDR4 Memory Interface Pin Connections
+
+Board Reference - DDR4 device
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+U3,U4,U5,U6,U7 pin P3
+DDR4_COMP_A0
+H34
+1.2V
+U3,U4,U5,U6,U7 pin P7
+DDR4_COMP_A1
+J34
+1.2V
+U3,U4,U5,U6,U7 pin R3
+DDR4_COMP_A2
+G35
+1.2V
+U3,U4,U5,U6,U7 pin N7
+DDR4_COMP_A3
+H35
+1.2V
+U3,U4,U5,U6,U7 pin N3
+DDR4_COMP_A4
+L35
+1.2V
+U3,U4,U5,U6,U7 pin P8
+DDR4_COMP_A5
+K35
+1.2V
+U3,U4,U5,U6,U7 pin P2
+DDR4_COMP_A6
+L34
+1.2V
+U3,U4,U5,U6,U7 pin R8
+DDR4_COMP_A7
+K34
+1.2V
+U3,U4,U5,U6,U7 pin R2
+DDR4_COMP_A8
+N34
+1.2V
+U3,U4,U5,U6,U7 pin R7
+DDR4_COMP_A9
+P34
+1.2V
+U3,U4,U5,U6,U7 pin M3
+DDR4_COMP_A10
+M35
+1.2V
+U3,U4,U5,U6,U7 pin T2
+DDR4_COMP_A11
+N35
+1.2V
+U3,U4,U5,U6,U7 pin M7
+DDR4_COMP_A12
+B40
+1.2V
+U3,U4,U5,U6,U7 pin T8
+DDR4_COMP_A13
+C39
+1.2V
+U3,U4,U5,U6,U7 pin L2
+DDR4_COMP_A14
+D39
+1.2V
+U3,U4,U5,U6,U7 pin M8
+DDR4_COMP_A15
+D38
+1.2V
+U3,U4,U5,U6,U7 pin L8
+DDR4_COMP_A16
+C38
+1.2V
+U3_G2
+DDR4_COMP_DQ0
+K36
+1.2V
+U3_F7
+DDR4_COMP_DQ1
+H36
+1.2V
+U3_H3
+DDR4_COMP_DQ2
+P36
+1.2V
+U3_H7
+DDR4_COMP_DQ3
+T35
+1.2V
+U3_H2
+DDR4_COMP_DQ4
+J36
+1.2V
+U3_H8
+DDR4_COMP_DQ5
+G36
+1.2V
+U3_J3
+DDR4_COMP_DQ6
+R36
+1.2V
+U3_J7
+DDR4_COMP_DQ7
+T34
+1.2V
+U3_A3
+DDR4_COMP_DQ8
+K37
+1.2V
+U3_B8
+DDR4_COMP_DQ9
+G38
+1.2V
+U3_C3
+DDR4_COMP_DQ10
+M37
+1.2V
+U3_C7
+DDR4_COMP_DQ11
+P38
+1.2V
+continued...
+
+
+
+Board Reference - DDR4 device
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+U3_C2
+DDR4_COMP_DQ12
+L37
+1.2V
+U3_C8
+DDR4_COMP_DQ13
+P37
+1.2V
+U3_D3
+DDR4_COMP_DQ14
+N38
+1.2V
+U3_D7
+DDR4_COMP_DQ15
+R37
+1.2V
+U4_G2
+DDR4_COMP_DQ16
+G42
+1.2V
+U4_F7
+DDR4_COMP_DQ17
+J39
+1.2V
+U4_H3
+DDR4_COMP_DQ18
+H42
+1.2V
+U4_H7
+DDR4_COMP_DQ19
+G40
+1.2V
+U4_H2
+DDR4_COMP_DQ20
+H41
+1.2V
+U4_H8
+DDR4_COMP_DQ21
+L39
+1.2V
+U4_J3
+DDR4_COMP_DQ22
+H40
+1.2V
+U4_J7
+DDR4_COMP_DQ23
+G41
+1.2V
+U4_A3
+DDR4_COMP_DQ24
+B32
+1.2V
+U4_B8
+DDR4_COMP_DQ25
+G32
+1.2V
+U4_C3
+DDR4_COMP_DQ26
+C33
+1.2V
+U4_C7
+DDR4_COMP_DQ27
+J31
+1.2V
+U4_C2
+DDR4_COMP_DQ28
+B33
+1.2V
+U4_C8
+DDR4_COMP_DQ29
+H31
+1.2V
+U4_D3
+DDR4_COMP_DQ30
+D33
+1.2V
+U4_D7
+DDR4_COMP_DQ31
+K31
+1.2V
+U5_G2
+DDR4_COMP_DQ32
+M33
+1.2V
+U5_F7
+DDR4_COMP_DQ33
+R31
+1.2V
+U5_H3
+DDR4_COMP_DQ34
+N33
+1.2V
+U5_H7
+DDR4_COMP_DQ35
+R32
+1.2V
+U5_H2
+DDR4_COMP_DQ36
+L33
+1.2V
+U5_H8
+DDR4_COMP_DQ37
+T32
+1.2V
+U5_J3
+DDR4_COMP_DQ38
+P33
+1.2V
+U5_J7
+DDR4_COMP_DQ39
+T33
+1.2V
+U5_A3
+DDR4_COMP_DQ40
+P39
+1.2V
+U5_B8
+DDR4_COMP_DQ41
+T39
+1.2V
+U5_C3
+DDR4_COMP_DQ42
+T38
+1.2V
+U5_C7
+DDR4_COMP_DQ43
+V39
+1.2V
+U5_C2
+DDR4_COMP_DQ44
+M38
+1.2V
+U5_C8
+DDR4_COMP_DQ45
+V38
+1.2V
+continued...
+
+
+
+Board Reference - DDR4 device
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+U5_D3
+DDR4_COMP_DQ46
+U38
+1.2V
+U5_D7
+DDR4_COMP_DQ47
+W39
+1.2V
+U6_G2
+DDR4_COMP_DQ48
+C40
+1.2V
+U6_F7
+DDR4_COMP_DQ49
+E39
+1.2V
+U6_H3
+DDR4_COMP_DQ50
+B42
+1.2V
+U6_H7
+DDR4_COMP_DQ51
+F39
+1.2V
+U6_H2
+DDR4_COMP_DQ52
+D41
+1.2V
+U6_H8
+DDR4_COMP_DQ53
+F38
+1.2V
+U6_J3
+DDR4_COMP_DQ54
+D42
+1.2V
+U6_J7
+DDR4_COMP_DQ55
+F40
+1.2V
+U6_A3
+DDR4_COMP_DQ56
+C34
+1.2V
+U6_B8
+DDR4_COMP_DQ57
+H33
+1.2V
+U6_C3
+DDR4_COMP_DQ58
+D34
+1.2V
+U6_C7
+DDR4_COMP_DQ59
+J32
+1.2V
+U6_C2
+DDR4_COMP_DQ60
+C35
+1.2V
+U6_C8
+DDR4_COMP_DQ61
+J33
+1.2V
+U6_D3
+DDR4_COMP_DQ62
+E34
+1.2V
+U6_D7
+DDR4_COMP_DQ63
+L32
+1.2V
+U7_G2
+DDR4_COMP_DQ64
+C31
+1.2V
+U7_F7
+DDR4_COMP_DQ65
+C30
+1.2V
+U7_H3
+DDR4_COMP_DQ66
+A34
+1.2V
+U7_H7
+DDR4_COMP_DQ67
+A30
+1.2V
+U7_H2
+DDR4_COMP_DQ68
+D31
+1.2V
+U7_H8
+DDR4_COMP_DQ69
+E31
+1.2V
+U7_J3
+DDR4_COMP_DQ70
+B35
+1.2V
+U7_J7
+DDR4_COMP_DQ71
+B30
+1.2V
+U3,U4,U5,U6,U7 pin M2
+DDR4_COMP_BG0
+G37
+1.2V
+U3,U4,U5,U6,U7 pin M9
+DDR4_COMP_BG1
+F34
+1.2V
+U3,U4,U5,U6,U7 pin N2
+DDR4_COMP_BA0
+D37
+1.2V
+U3,U4,U5,U6,U7 pin N8
+DDR4_COMP_BA1
+F37
+1.2V
+U3,U4,U5,U6,U7 pin B7
+DDR4_COMP_DQS_P1
+B7
+1.2V
+U3,U4,U5,U6,U7 pin A7
+DDR4_COMP_DQS_N1
+A7
+1.2V
+U3,U4,U5,U6,U7 pin G3
+DDR4_COMP_DQS_P0
+G3
+1.2V
+U3,U4,U5,U6,U7 pin F3
+DDR4_COMP_DQS_N0
+F3
+1.2V
+continued...
+
+
+
+Board Reference - DDR4 device
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+U3,U4,U5,U6,U7 pin L7
+DDR4_COMP_CS_N
+E36
+1.2V
+U3,U4,U5,U6,U7 pin K3
+DDR4_COMP_ODT
+C36
+1.2V
+U3,U4,U5,U6,U7 pin L3
+DDR4_COMP_ACT_N
+E35
+1.2V
+U3,U4,U5,U6,U7 pin T3
+DDR4_COMP_PAR
+A39
+1.2V
+U3,U4,U5,U6,U7 pin K2
+DDR4_COMP_CKE
+B36
+1.2V
+U3,U4,U5,U6,U7 pin P1
+DDR4_COMP_RESET_N
+F35
+1.2V
+U3,U4,U5,U6,U7 pin P9
+DDR4_COMP_ALERT_N
+A38
+1.2V
+U3,U4,U5,U6,U7 pin E2
+DDR4_COMP_DBI_N1
+J37
+1.2V
+U3,U4,U5,U6,U7 pin E7
+DDR4_COMP_DBI_N0
+R34
+1.2V
+U3,U4,U5,U6,U7 pin K7
+DDR4_COMP_CLK_P
+B37
+1.2V
+U3,U4,U5,U6,U7 pin K8
+DDR4_COMP_CLK_N
+B38
+1.2V
+
+DDR4/DDR-T DIMM Memory Interface
+The DIMM Memory interface uses a standard 288-pin DIMM connector that is mapped to the FPGA’s 3I, 3J, 3K and 3L I/O blocks. The connector supports plugins for the following memory interfaces:
+DDR4 x72 (included in the kit)
+DDR-T module (not included in the kit. DDR-T support requires DDR-T protocol soft IP)
+Table 15.DDR4/DDR-T DIMM Memory Interface Pin Connections
+
+Board Reference - DIMM Pin
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+1, 145
+12V/NC
+
+12V DC
+5
+DDR4_DIMM_DQ0
+T14
+1.2V
+150
+DDR4_DIMM_DQ1
+R14
+1.2V
+12
+DDR4_DIMM_DQ2
+N14
+1.2V
+157
+DDR4_DIMM_DQ3
+H14
+1.2V
+3
+DDR4_DIMM_DQ4
+T15
+1.2V
+148
+DDR4_DIMM_DQ5
+P14
+1.2V
+10
+DDR4_DIMM_DQ6
+P14
+1.2V
+155
+DDR4_DIMM_DQ7
+J14
+1.2V
+16
+DDR4_DIMM_DQ8
+N16
+1.2V
+161
+DDR4_DIMM_DQ9
+M16
+1.2V
+23
+DDR4_DIMM_DQ10
+H16
+1.2V
+168
+DDR4_DIMM_DQ11
+G16
+1.2V
+continued...
+
+
+
+Board Reference - DIMM Pin
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+14
+DDR4_DIMM_DQ12
+R16
+1.2V
+159
+DDR4_DIMM_DQ13
+P16
+1.2V
+21
+DDR4_DIMM_DQ14
+L15
+1.2V
+166
+DDR4_DIMM_DQ15
+K15
+1.2V
+27
+DDR4_DIMM_DQ16
+K21
+1.2V
+172
+DDR4_DIMM_DQ17
+J22
+1.2V
+34
+DDR4_DIMM_DQ18
+M20
+1.2V
+179
+DDR4_DIMM_DQ19
+H23
+1.2V
+25
+DDR4_DIMM_DQ20
+N20
+1.2V
+170
+DDR4_DIMM_DQ21
+H23
+1.2V
+32
+DDR4_DIMM_DQ22
+N20
+1.2V
+177
+DDR4_DIMM_DQ23
+J21
+1.2V
+38
+DDR4_DIMM_DQ24
+H10
+1.2V
+183
+DDR4_DIMM_DQ25
+A10
+1.2V
+45
+DDR4_DIMM_DQ26
+G10
+1.2V
+190
+DDR4_DIMM_DQ27
+C11
+1.2V
+36
+DDR4_DIMM_DQ28
+F10
+1.2V
+181
+DDR4_DIMM_DQ29
+A9
+1.2V
+43
+DDR4_DIMM_DQ30
+H11
+1.2V
+188
+DDR4_DIMM_DQ31
+D11
+1.2V
+97
+DDR4_DIMM_DQ32
+C14
+1.2V
+242
+DDR4_DIMM_DQ33
+C16
+1.2V
+104
+DDR4_DIMM_DQ34
+F15
+1.2V
+249
+DDR4_DIMM_DQ35
+E15
+1.2V
+95
+DDR4_DIMM_DQ36
+G15
+1.2V
+240
+DDR4_DIMM_DQ37
+C15
+1.2V
+102
+DDR4_DIMM_DQ38
+D16
+1.2V
+247
+DDR4_DIMM_DQ39
+H15
+1.2V
+108
+DDR4_DIMM_DQ40
+C26
+1.2V
+253
+DDR4_DIMM_DQ41
+C25
+1.2V
+115
+DDR4_DIMM_DQ42
+B27
+1.2V
+260
+DDR4_DIMM_DQ43
+G26
+1.2V
+106
+DDR4_DIMM_DQ44
+E26
+1.2V
+251
+DDR4_DIMM_DQ45
+D26
+1.2V
+continued...
+
+
+
+Board Reference - DIMM Pin
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+113
+DDR4_DIMM_DQ46
+B26
+1.2V
+258
+DDR4_DIMM_DQ47
+G27
+1.2V
+119
+DDR4_DIMM_DQ48
+B25
+1.2V
+264
+DDR4_DIMM_DQ49
+F24
+1.2V
+126
+DDR4_DIMM_DQ50
+F25
+1.2V
+171
+DDR4_DIMM_DQ51
+H25
+1.2V
+117
+DDR4_DIMM_DQ52
+A25
+1.2V
+262
+DDR4_DIMM_DQ53
+E24
+1.2V
+124
+DDR4_DIMM_DQ54
+E25
+1.2V
+269
+DDR4_DIMM_DQ55
+G25
+1.2V
+130
+DDR4_DIMM_DQ56
+A22
+1.2V
+275
+DDR4_DIMM_DQ57
+F22
+1.2V
+137
+DDR4_DIMM_DQ58
+A24
+1.2V
+282
+DDR4_DIMM_DQ59
+B23
+1.2V
+128
+DDR4_DIMM_DQ60
+C23
+1.2V
+273
+DDR4_DIMM_DQ61
+G22
+1.2V
+135
+DDR4_DIMM_DQ62
+A23
+1.2V
+280
+DDR4_DIMM_DQ63
+D23
+1.2V
+49
+DDR4_DIMM_DQ64
+D12
+1.2V
+194
+DDR4_DIMM_DQ65
+E12
+1.2V
+56
+DDR4_DIMM_DQ66
+A12
+1.2V
+201
+DDR4_DIMM_DQ67
+A13
+1.2V
+47
+DDR4_DIMM_DQ68
+D13
+1.2V
+192
+DDR4_DIMM_DQ69
+F12
+1.2V
+54
+DDR4_DIMM_DQ70
+C13
+1.2V
+199
+DDR4_DIMM_DQ71
+B13
+1.2V
+79
+DDR4_DIMM_A0
+J19
+1.2V
+72
+DDR4_DIMM_A1
+H19
+1.2V
+216
+DDR4_DIMM_A2
+L19
+1.2V
+71
+DDR4_DIMM_A3
+K19
+1.2V
+214
+DDR4_DIMM_A4
+G18
+1.2V
+213
+DDR4_DIMM_A5
+F18
+1.2V
+69
+DDR4_DIMM_A6
+G17
+1.2V
+211
+DDR4_DIMM_A7
+F17
+1.2V
+continued...
+
+
+
+Board Reference - DIMM Pin
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+68
+DDR4_DIMM_A8
+G17
+1.2V
+66
+DDR4_DIMM_A9
+E16
+1.2V
+225
+DDR4_DIMM_A10
+D17
+1.2V
+210
+DDR4_DIMM_A11
+D18
+1.2V
+65
+DDR4_DIMM_A12
+A17
+1.2V
+232
+DDR4_DIMM_A13
+E19
+1.2V
+226
+DDR4_DIMM_A14
+F19
+1.2V
+86
+DDR4_DIMM_A15
+C19
+1.2V
+82
+DDR4_DIMM_A16
+D19
+1.2V
+234
+DDR4_DIMM_A17
+A20
+1.2V
+152
+DDR4_DIMM_DQS_N0
+K14
+1.2V
+153
+DDR4_DIMM_DQS_P0
+L14
+1.2V
+163
+DDR4_DIMM_DQS_N1
+N15
+1.2V
+164
+DDR4_DIMM_DQS_P1
+M15
+1.2V
+174
+DDR4_DIMM_DQS_N2
+K20
+1.2V
+175
+DDR4_DIMM_DQS_P2
+L20
+1.2V
+185
+DDR4_DIMM_DQS_N3
+E11
+1.2V
+186
+DDR4_DIMM_DQS_P3
+E10
+1.2V
+244
+DDR4_DIMM_DQS_N4
+A15
+1.2V
+245
+DDR4_DIMM_DQS_P4
+A14
+1.2V
+255
+DDR4_DIMM_DQS_N5
+E27
+1.2V
+256
+DDR4_DIMM_DQS_P5
+F27
+1.2V
+266
+DDR4_DIMM_DQS_N6
+C24
+1.2V
+267
+DDR4_DIMM_DQS_P6
+D24
+1.2V
+277
+DDR4_DIMM_DQS_N7
+E27
+1.2V
+278
+DDR4_DIMM_DQS_P7
+F27
+1.2V
+196
+DDR4_DIMM_DQS_N8
+B11
+1.2V
+197
+DDR4_DIMM_DQS_P8
+B12
+1.2V
+7
+DDR4_DIMM_DBI_N0
+F13
+1.2V
+18
+DDR4_DIMM_DBI_N1
+J16
+1.2V
+29
+DDR4_DIMM_DBI_N2
+N19
+1.2V
+40
+DDR4_DIMM_DBI_N3
+C10
+1.2V
+99
+DDR4_DIMM_DBI_N4
+B15
+1.2V
+110
+DDR4_DIMM_DBI_N5
+J26
+1.2V
+continued...
+
+
+
+Board Reference - DIMM Pin
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+121
+DDR4_DIMM_DBI_N6
+J24
+1.2V
+132
+DDR4_DIMM_DBI_N7
+G23
+1.2V
+8
+DDR4_DIMM_TDQS_N9
+F14
+1.2V
+19
+DDR4_DIMM_TDQS_N10
+K16
+1.2V
+30
+DDR4_DIMM_TDQS_N11
+P19
+1.2V
+41
+DDR4_DIMM_TDQS_N12
+B10
+1.2V
+100
+DDR4_DIMM_TDQS_N13
+B16
+1.2V
+111
+DDR4_DIMM_TDQS_N14
+H26
+1.2V
+122
+DDR4_DIMM_TDQS_N15
+H24
+1.2V
+133
+DDR4_DIMM_TDQS_N16
+F23
+1.2V
+52
+DDR4_DIMM_TDQS_N17
+E14
+1.2V
+74
+DDR4_DIMM_CK_P0
+K17
+1.2V
+75
+DDR4_DIMM_CK_N0
+J17
+1.2V
+218
+DDR4_DIMM_CK_P1
+D22
+1.2V
+219
+DDR4_DIMM_CK_N1
+E22
+1.2V
+139
+DDR4_DIMM_SA0
+-
+Pull up to 2.5V
+140
+DDR4_DIMM_SA1
+-
+Pull up to 2.5V
+238
+DDR4_DIMM_SA2
+-
+Pull up to 2.5V
+141
+DDR4D_SCL
+H30
+1.8V
+285
+DDR4D_SDA
+D29
+1.8V
+
+HiLo Memory Interface
+The HiLo Memory interface is mapped to the FPGA’s 2A, 2B and 2C I/O blocks. The connector supports plugins for the following memory interfaces:
+DDR4 x72
+QDR-IV x72
+
+Table 16.HiLo Memory Interface Pin Connections
+
+Board Reference - HiLo Connector Pin Number
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+F1
+MEM_ADDR_CMD0
+BL34
+Adjustable
+H1
+MEM_ADDR_CMD1
+BK34
+Adjustable
+F2
+MEM_ADDR_CMD2
+BJ34
+Adjustable
+G2
+MEM_ADDR_CMD3
+BH34
+Adjustable
+H2
+MEM_ADDR_CMD4
+BH33
+Adjustable
+J2
+MEM_ADDR_CMD5
+BJ33
+Adjustable
+continued...
+
+
+
+Board Reference - HiLo Connector Pin Number
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+K2
+MEM_ADDR_CMD6
+BK35
+Adjustable
+G3
+MEM_ADDR_CMD7
+BL34
+Adjustable
+J3
+MEM_ADDR_CMD8
+BD33
+Adjustable
+L3
+MEM_ADDR_CMD9
+BC33
+Adjustable
+E4
+MEM_ADDR_CMD10
+BG33
+Adjustable
+F4
+MEM_ADDR_CMD11
+BF33
+Adjustable
+G4
+MEM_ADDR_CMD12
+BB33
+Adjustable
+H4
+MEM_ADDR_CMD13
+BB32
+Adjustable
+J4
+MEM_ADDR_CMD14
+BA32
+Adjustable
+K4
+MEM_ADDR_CMD15
+Aw32
+Adjustable
+M1
+MEM_ADDR_CMD16
+BF32
+Adjustable
+M2
+MEM_ADDR_CMD17
+BE32
+Adjustable
+N2
+MEM_ADDR_CMD18
+BD32
+Adjustable
+L4
+MEM_ADDR_CMD19
+BG32
+Adjustable
+P5
+MEM_ADDR_CMD20
+BD34
+Adjustable
+M5
+MEM_ADDR_CMD21
+BC34
+Adjustable
+P1
+MEM_ADDR_CMD22
+Aw34
+Adjustable
+R4
+MEM_ADDR_CMD23
+AV34
+Adjustable
+M4
+MEM_ADDR_CMD24
+BA34
+Adjustable
+R3
+MEM_ADDR_CMD25
+AY34
+Adjustable
+L2
+MEM_ADDR_CMD26
+AY32
+Adjustable
+K1
+MEM_ADDR_CMD27
+AW33
+Adjustable
+P2
+MEM_ADDR_CMD28
+AV33
+Adjustable
+N4
+MEM_ADDR_CMD29
+BL32
+Adjustable
+P4
+MEM_ADDR_CMD30
+BG35
+Adjustable
+N3
+MEM_ADDR_CMD31
+BH35
+Adjustable
+V2
+MEM_CLK_P
+BF34
+Adjustable
+V1
+MEM_CLK_N
+BE34
+Adjustable
+B10
+MEM_DMA0
+BF40
+Adjustable
+C4
+MEM_DMA1
+BD38
+Adjustable
+B17
+MEM_DMA2
+BE37
+Adjustable
+F17
+MEM_DMA3
+BH36
+Adjustable
+A4
+MEM_DQA0
+BJ39
+Adjustable
+B4
+MEM_DQA1
+BH40
+Adjustable
+continued...
+
+
+
+Board Reference - HiLo Connector Pin Number
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+B5
+MEM_DQA2
+BH39
+Adjustable
+B6
+MEM_DQA3
+BG40
+Adjustable
+A8
+MEM_DQA4
+BK40
+Adjustable
+B8
+MEM_DQA5
+BL40
+Adjustable
+B9
+MEM_DQA6
+BE40
+Adjustable
+A10
+MEM_DQA7
+BE39
+Adjustable
+B1
+MEM_DQA8
+BL38
+Adjustable
+B2
+MEM_DQA9
+BG38
+Adjustable
+C2
+MEM_DQA10
+BF38
+Adjustable
+C3
+MEM_DQA11
+BD39
+Adjustable
+E3
+MEM_DQA12
+BC38
+Adjustable
+D4
+MEM_DQA13
+BC39
+Adjustable
+D1
+MEM_DQA14
+BJ37
+Adjustable
+D2
+MEM_DQA15
+BL37
+Adjustable
+A12
+MEM_DQA16
+BD37
+Adjustable
+B12
+MEM_DQA17
+BF37
+Adjustable
+B13
+MEM_DQA18
+BG37
+Adjustable
+B14
+MEM_DQA19
+BB36
+Adjustable
+C15
+MEM_DQA20
+BC36
+Adjustable
+A16
+MEM_DQA21
+AW37
+Adjustable
+B16
+MEM_DQA22
+AY37
+Adjustable
+A18
+MEM_DQA23
+AW36
+Adjustable
+C16
+MEM_DQA24
+BA35
+Adjustable
+D16
+MEM_DQA25
+BB35
+Adjustable
+E16
+MEM_DQA26
+BC35
+Adjustable
+F16
+MEM_DQA27
+BF35
+Adjustable
+D17
+MEM_DQA28
+AY35
+Adjustable
+C18
+MEM_DQA29
+BD36
+Adjustable
+D18
+MEM_DQA30
+BE36
+Adjustable
+E18
+MEM_DQA31
+BE35
+Adjustable
+E2
+MEM_DQA32
+BK37
+Adjustable
+G16
+MEM_DQA33
+BG36
+Adjustable
+A6
+MEM_DQSA_P0
+BK39
+Adjustable
+A7
+MEM_DQSA_N0
+BL39
+Adjustable
+continued...
+
+
+
+Board Reference - HiLo Connector Pin Number
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+A2
+MEM_DQSA_P1
+BH38
+Adjustable
+A3
+MEM_DQSA_N1
+BJ38
+Adjustable
+A14
+MEM_DQSA_P2
+BA37
+Adjustable
+A15
+MEM_DQSA_N2
+BB37
+Adjustable
+F18
+MEM_DQSA_P3
+BJ36
+Adjustable
+G18
+MEM_DQSA_N3
+BK36
+Adjustable
+A11
+MEM_QKA_P0
+BF39
+Adjustable
+B18
+MEN_QKA_P1
+AY36
+Adjustable
+R6
+MEM_DQ_ADDR_CMD0
+BE31
+Adjustable
+T1
+MEM_DQ_ADDR_CMD1
+BG31
+Adjustable
+R2
+MEM_DQ_ADDR_CMD2
+BD31
+Adjustable
+T2
+MEM_DQ_ADDR_CMD3
+BB31
+Adjustable
+U2
+MEM_DQ_ADDR_CMD4
+BC31
+Adjustable
+U3
+MEM_DQ_ADDR_CMD5
+BH31
+Adjustable
+T4
+MEM_DQ_ADDR_CMD6
+BK32
+Adjustable
+U4
+MEM_DQ_ADDR_CMD7
+BJ32
+Adjustable
+T5
+MEM_DQ_ADDR_CMD8
+BL33
+Adjustable
+V4
+MEM_DQ_ADDR_CMD_P
+BK31
+Adjustable
+V5
+MEM_DQ_ADDR_CMD_N
+BJ31
+Adjustable
+V1
+MEM_CLK_P
+BF34
+Adjustable
+V2
+MEM_CLK_N
+BE34
+Adjustable
+M16
+MEM_DMB0
+BL24
+Adjustable
+U16
+MEM_DMB1
+BD28
+Adjustable
+U11
+MEM_DMB2
+BL30
+Adjustable
+U6
+MEM_DMB3
+BE30
+Adjustable
+H16
+MEM_DQB0
+BE27
+Adjustable
+J16
+MEM_DQB1
+BJ26
+Adjustable
+K16
+MEM_DQB2
+BK24
+Adjustable
+L16
+MEM_DQB3
+BF27
+Adjustable
+H17
+MEM_DQB4
+BH26
+Adjustable
+K17
+MEM_DQB5
+BL25
+Adjustable
+K18
+MEM_DQB6
+BJ24
+Adjustable
+L18
+MEM_DQB7
+BG27
+Adjustable
+M17
+MEM_DQB8
+BF28
+Adjustable
+continued...
+
+
+
+Board Reference - HiLo Connector Pin Number
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+N18
+MEM_DQB9
+BG28
+Adjustable
+P17
+MEM_DQB10
+Bk27
+Adjustable
+P18
+MEM_DQB11
+BJ27
+Adjustable
+R18
+MEM_DQB12
+BC28
+Adjustable
+T16
+MEM_DQB13
+BL27
+Adjustable
+T17
+MEM_DQB14
+BB28
+Adjustable
+T18
+MEM_DQB15
+BD27
+Adjustable
+U15
+MEM_DQB16
+BH29
+Adjustable
+T14
+MEM_DQB17
+BA29
+Adjustable
+U14
+MEM_DQB18
+BA28
+Adjustable
+V14
+MEM_DQB19
+BJ29
+Adjustable
+T13
+MEM_DQB20
+BK30
+Adjustable
+T12
+MEM_DQB21
+BC29
+Adjustable
+U12
+MEM_DQB22
+BD29
+Adjustable
+V12
+MEM_DQB23
+BL29
+Adjustable
+T10
+MEM_DQB24
+AV30
+Adjustable
+U10
+MEM_DQB25
+AY29
+Adjustable
+V10
+MEM_DQB26
+BA30
+Adjustable
+T9
+MEM_DQB27
+AW29
+Adjustable
+T8
+MEM_DQB28
+AV29
+Adjustable
+U8
+MEM_DQB29
+AY30
+Adjustable
+U7
+MEM_DQB30
+BH30
+Adjustable
+V6
+MEM_DQB31
+BG30
+Adjustable
+R16
+MEM_DQB32
+BL28
+Adjustable
+T6
+MEM_DQB33
+BF30
+Adjustable
+H18
+MEM_DQSB_P0
+BK26
+Adjustable
+J18
+MEM_DQSB_N0
+BK25
+Adjustable
+U18
+MEM_DQSB_P1
+BJ28
+Adjustable
+V18
+MEM_DQSB_N1
+BH28
+Adjustable
+V16
+MEM_DQSB_P2
+BF29
+Adjustable
+V17
+MEM_DQSB_N2
+BE29
+Adjustable
+V8
+MEM_DQSB_P3
+BB30
+Adjustable
+continued...
+
+
+
+Board Reference - HiLo Connector Pin Number
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+V9
+MEM_DQSB_N3
+BC30
+Adjustable
+M18
+MEM_QKB_P0
+BG26
+Adjustable
+V13
+MEM_QKB_P1
+BK29
+Adjustable
+
+High Bandwidth Memory (HBM2)
+
+The integrated 3D stack High-Bandwidth DRAM Memory (HBM2) is a "near memory" implementation where the high-density stacked DRAM is integrated very close to the FPGA in the same package.
+In this configuration, the in-package memory is able to deliver up to 512 GBps of total aggregate bandwidth which represents over 10 times increase in bandwidth compared to traditional "far memory" implemented in separate devices on the board.
+The Intel Stratix 10 MX FPGA on this development kit has two 4 GB on-package 3D stacked HBM2 DRAM memories. Each of these DRAM stacks has:
+8 GB total density (4 GB x2)
+256 GB/sec total aggregate bandwidth
+8 independent channels, each 128 bit wide
+Data transfer rates up to 2 Gbps, per signal, between core fabric and HBM2 DRAM
+128 bits Wide x 8 ChannelsUIBeSRAMEMIBDRAM (HBM2)128 bits Wide x 8 ChannelsUIBeSRAMEMIBDRAM (HBM2)Full-rate transfer to core fabric
+128 bits Wide x 8 Channels
+UIB
+eSRAM
+EMIB
+DRAM (HBM2)
+128 bits Wide x 8 Channels
+UIB
+eSRAM
+EMIB
+DRAM (HBM2)
+
+
+
+128
+128
+128
+128
+128
+128
+128
+128
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+There are two Universal Interface Blocks (UIB).
+
+
+CLK_UIB0_N/P: programmable LVDS clock inputs to UIB tiles 0 of the device.
+CLK_UIB1_N/P: programmable LVDS clock inputs to UIB tiles 1 of the device.
+240 Ohm 1% external reference resistors
+Test points on top-side of the board for ATB nodes access
+H-Tile(24 Channels)Core FabricHBM24 GByteH-Tile(24 Channels)H-Tile(24 Channels)MX 1650 UF53 (F2597A) MX 2100 UF53 (F2597A)4 GByteHBM2Package SubstrateH-Tile(24 Channels)H-Tile(24 Channels)Core FabricHBM24 GByteH-Tile(24 Channels)H-Tile(24 Channels)MX 1650 UF53 (F2597A) MX 2100 UF53 (F2597A)4 GByteHBM2Package SubstrateH-Tile(24 Channels)EMIBEMIBEMIBEMIBatb0/atb1/atb2/atb3 - Each UIB has four ATB test points.
+H-Tile
+(24 Channels)
+Core Fabric
+HBM24 GByte
+H-Tile
+(24 Channels)
+H-Tile
+(24 Channels)
+MX 1650 UF53 (F2597A) MX 2100 UF53 (F2597A)
+4 GByte
+HBM2
+Package Substrate
+H-Tile
+(24 Channels)
+H-Tile
+(24 Channels)
+Core Fabric
+HBM24 GByte
+H-Tile
+(24 Channels)
+H-Tile
+(24 Channels)
+MX 1650 UF53 (F2597A) MX 2100 UF53 (F2597A)
+4 GByte
+HBM2
+Package Substrate
+H-Tile
+(24 Channels)
+EMIB
+EMIB
+EMIB
+EMIB
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+EMIBEMIBEMIBEMIBESRAM has the following pins:
+EMIB
+EMIB
+EMIB
+EMIB
+CLK_ESRAM0_N/P: LVDS input reference clock for ESRAM Block0
+CLK_ESRAM1_N/P: LVDS input reference clock for ESRAM Block1
+2K Ohm 1% external reference resistors
+atb0/atb1 – access pads for probing
+
+
+
+
+
+ESRAM_01ESRAM_01Top SiP Strip
+ESRAM_01
+ESRAM_01
+uibfillnd4h_t0
+PGD
+uibfillnd4h_t1
+
+
+UIB_01UIB_01TMD
+UIB_01
+UIB_01
+
+
+UIB01:Test Debug [3:0] = [U27, V28, U28, T27]UIB01:Test Debug [3:0] = [U27, V28, U28, T27]
+UIB01:
+Test Debug [3:0] = [U27, V28, U28, T27]
+UIB01:
+Test Debug [3:0] = [U27, V28, U28, T27]
+
+
+
+Intel Stratix 10 MX FPGAIntel Stratix 10 MX FPGA
+Intel Stratix 10 MX FPGA
+Intel Stratix 10 MX FPGA
+
+
+
+
+
+
+
+EDM
+Bottom SiP Strip
+
+UIB_00UIB_00
+UIB_00
+UIB_00
+ESRAM_00ESRAM_00UIB00:Test Debug [3:0] = [AP26, AT29, AT28, AR26]UIB00:Test Debug [3:0] = [AP26, AT29, AT28, AR26]uibfillnd4h_b0uibfillnd4h_b1
+ESRAM_00
+ESRAM_00
+UIB00:
+Test Debug [3:0] = [AP26, AT29, AT28, AR26]
+UIB00:
+Test Debug [3:0] = [AP26, AT29, AT28, AR26]
+
+
+QSFP
+The Intel Stratix 10 MX FPGA development kit includes two Quad Small Form-Factor Pluggable (QSFP) connectors (J4, J5). Each connector is mapped to the FPGA’s 28 Gbps transceivers. There are four transceivers per connector supporting up to 100 Gbps data rate.
+Table 17.QSFP_1 (J5) Pin Connections
+
+Board Reference
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+28
+ZQSFP1_3V3_INT_L
+A4 (MAX10 U24)
+3.3V
+QSFP interrupt
+31
+ZQSFP1_3V3_LPMODE
+B6 (MAX10 U24)
+3.3V
+QSFP low power mode
+27
+ZQSFP1_3V3_MODPRS
+_L
+A6 (MAX10 U24)
+3.3V
+Module present
+9
+ZQSFP1_3V3_RESET_ L
+A7 (MAX10 U24)
+3.3V
+Module reset
+8
+ZQSFP1_3V3_MODSEL
+_L
+B5 (MAX10 U24)
+3.3V
+Module select
+11
+ZQSFP_I2C_SCL
+BJ16 via U15
+1.8v
+QSFP serial 2-wire clock
+12
+ZQSFP_I2C_SDA
+BD16 via U15
+1.8v
+QSFP serial 2-wire data
+18
+ZQSFP1_RX0_N
+AL6
+1.4V PCML
+QSFP receiver data
+continued...
+
+
+
+Board Reference
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+21
+ZQSFP1_RX1_N
+AK8
+1.4V PCML
+QSFP receiver data
+15
+ZQSFP1_RX2_N
+AH8
+1.4V PCML
+QSFP receiver data
+24
+ZQSFP1_RX3_N
+AG6
+1.4V PCML
+QSFP receiver data
+17
+ZQSFP1_RX0_P
+AL5
+1.4V PCML
+QSFP receiver data
+22
+ZQSFP1_RX1_P
+AK7
+1.4V PCML
+QSFP receiver data
+14
+ZQSFP1_RX2_P
+AH7
+1.4V PCML
+QSFP receiver data
+25
+ZQSFP1_RX3_P
+AG5
+1.4V PCML
+QSFP receiver data
+37
+ZQSFP1_TX0_N
+AM4
+1.4V PCML
+QSFP transmitter data
+2
+ZQSFP1_TX1_N
+AL2
+1.4V PCML
+QSFP transmitter data
+34
+ZQSFP1_TX2_N
+AJ2
+1.4V PCML
+QSFP transmitter data
+5
+ZQSFP1_TX3_N
+AH4
+1.4V PCML
+QSFP transmitter data
+36
+ZQSFP1_TX0_P
+AM3
+1.4V PCML
+QSFP transmitter data
+3
+ZQSFP1_TX1_P
+AL1
+1.4V PCML
+QSFP transmitter data
+33
+ZQSFP1_TX2_P
+AJ1
+1.4V PCML
+QSFP transmitter data
+6
+ZQSFP1_TX3_P
+AH3
+1.4V PCML
+QSFP transmitter data
+
+Table 18.QSFP_0 (J4) Pin Connections
+
+Board Reference
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+28
+ZQSFP0_3V3_INT_L
+E8 (MAX10 U24)
+3.3 V
+QSFP interrupt
+31
+ZQSFP0_3V3_LPMODE
+A11 (MAX10 U24)
+3.3 V
+QSFP low power mode
+27
+ZQSFP0_3V3_MODPRS
+_L
+A10 (MAX10 U24)
+3.3 V
+Module present
+9
+ZQSFP0_3V3_RESET_ L
+B10 (MAX10 U24)
+3.3 V
+Module reset
+8
+ZQSFP0_3V3_MODSEL
+_L
+A3 (MAX10 U24)
+3.3 V
+Module select
+11
+ZQSFP_I2C_SCL
+BJ16 via U15
+1.8 V
+QSFP serial 2-wire clock
+12
+ZQSFP_I2C_SDA
+BD16 via U15
+1.8 V
+QSFP serial 2-wire data
+18
+ZQSFP0_RX0_N
+AM44
+1.4V PCML
+QSFP receiver data
+21
+ZQSFP0_RX1_N
+AK44
+1.4V PCML
+QSFP receiver data
+15
+ZQSFP0_RX2_N
+AF44
+1.4V PCML
+QSFP receiver data
+24
+ZQSFP0_RX3_N
+AH44
+1.4V PCML
+QSFP receiver data
+17
+ZQSFP0_RX0_P
+AM45
+1.4V PCML
+QSFP receiver data
+22
+ZQSFP0_RX1_P
+AK45
+1.4V PCML
+QSFP receiver data
+continued...
+
+
+
+Board Reference
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+14
+ZQSFP0_RX2_P
+AF45
+1.4V PCML
+QSFP receiver data
+25
+ZQSFP0_RX3_P
+AH45
+1.4V PCML
+QSFP receiver data
+37
+ZQSFP0_TX0_N
+AN50
+1.4V PCML
+QSFP transmitter data
+2
+ZQSFP0_TX1_N
+AL50
+1.4V PCML
+QSFP transmitter data
+34
+ZQSFP0_TX2_N
+AG50
+1.4V PCML
+QSFP transmitter data
+5
+ZQSFP0_TX3_N
+AJ50
+1.4V PCML
+QSFP transmitter data
+36
+ZQSFP0_TX0_P
+AN51
+1.4V PCML
+QSFP transmitter data
+3
+ZQSFP0_TX1_P
+AL51
+1.4V PCML
+QSFP transmitter data
+33
+ZQSFP0_TX2_P
+AG51
+1.4V PCML
+QSFP transmitter data
+6
+ZQSFP0_TX3_P
+AJ51
+1.4V PCML
+QSFP transmitter data
+
+
+I2C
+
+
+I2C supports communication between integrated circuits on a board. It is a simple two-wire bus that consists of a serial data line (SDA) and a serial clock (SCL). The Intel MAX 10 and the Intel Stratix 10 devices use the I2C for reading and writing to the various components on the board such as programmable clock generators, VID regulators, ADC and temperature sensors. You can use the Intel Stratix 10 or Intel MAX 10 as the I2C host to access these devices, change clock frequencies or get status information of the board such as voltage and temperature readings.
+
+1.8V2.5VAddr = A0hDDR4 DIMM J1Addr = 47hQSFP_1QSFP_01.8V3.3VVID3.3VJ13S10_SDM_SCL/SDA1.8V3.3VCORE_PMBUS_SCL/SDAS10_PMBUS_ENMAIN_PMBUS_ENJ12Enpirion Dongle3.3VI2C_3V3_SCL/SDA3V3_I2C_ENAddr = 74hAddr = 70hSi5338ASi5338ARef ClkClockU16U18Addr = 73hSi5341Clock U191.8VPCIe End Point Edge Connector J6MAIN_I2C_SCL/SDAGPIOGPIOSDMS10 MX GPIOFPGAU2GPIOLT DongleLTC3884 + LTC3874 VCC 0.85VMAX10USB Blaster/ System Control U241.8V to 3.3VI2C Level Shifter U213.3V to 1.8VI2C Level Shifter U101.8V to 3.3VI2C Level Shifter U151.8V to 2.5VI2C Level Shifter U11.8V to 3.3VI2C Level Shifter U221.8V to 3.3VI2C Level Shifter U201.8V2.5VAddr = A0hDDR4 DIMM J1Addr = 47hQSFP_1QSFP_01.8V3.3VVID3.3VJ13S10_SDM_SCL/SDA1.8V3.3VCORE_PMBUS_SCL/SDAS10_PMBUS_ENMAIN_PMBUS_ENJ12Enpirion Dongle3.3VI2C_3V3_SCL/SDA3V3_I2C_ENAddr = 74hAddr = 70hSi5338ASi5338ARef ClkClockU16U18Addr = 73hSi5341Clock U191.8VPCIe End Point Edge Connector J6MAIN_I2C_SCL/SDAGPIOGPIOSDMS10 MX GPIOFPGAU2GPIOLT DongleLTC3884 + LTC3874 VCC 0.85VMAX10USB Blaster/ System Control U241.8V to 3.3VI2C Level Shifter U213.3V to 1.8VI2C Level Shifter U101.8V to 3.3VI2C Level Shifter U151.8V to 2.5VI2C Level Shifter U11.8V to 3.3VI2C Level Shifter U221.8V to 3.3VI2C Level Shifter U20Figure 11.I2C Block Diagram
+1.8V
+2.5V
+Addr = A0h
+DDR4 DIMM J1
+Addr = 47h
+QSFP_1
+QSFP_0
+1.8V
+3.3V
+VID
+3.3V
+J13
+S10_SDM_SCL/SDA
+1.8V3.3V
+CORE_PMBUS_SCL/SDA
+S10_PMBUS_EN
+MAIN_PMBUS_EN
+J12
+Enpirion Dongle
+3.3V
+I2C_3V3_SCL/SDA
+3V3_I2C_EN
+Addr = 74hAddr = 70h
+Si5338ASi5338A
+Ref ClkClock
+U16U18
+Addr = 73h
+Si5341
+Clock U19
+1.8V
+PCIe End Point Edge Connector J6
+MAIN_I2C_SCL/SDA
+GPIO
+GPIO
+SDM
+S10 MX GPIO
+FPGA
+U2
+GPIO
+LT Dongle
+LTC3884 + LTC3874 VCC 0.85V
+
+MAX10
+USB Blaster/ System Control U24
+1.8V to 3.3V
+I2C Level Shifter U21
+3.3V to 1.8V
+I2C Level Shifter U10
+1.8V to 3.3V
+I2C Level Shifter U15
+1.8V to 2.5V
+I2C Level Shifter U1
+1.8V to 3.3V
+I2C Level Shifter U22
+1.8V to 3.3V
+I2C Level Shifter U20
+1.8V
+2.5V
+Addr = A0h
+DDR4 DIMM J1
+Addr = 47h
+QSFP_1
+QSFP_0
+1.8V
+3.3V
+VID
+3.3V
+J13
+S10_SDM_SCL/SDA
+1.8V3.3V
+CORE_PMBUS_SCL/SDA
+S10_PMBUS_EN
+MAIN_PMBUS_EN
+J12
+Enpirion Dongle
+3.3V
+I2C_3V3_SCL/SDA
+3V3_I2C_EN
+Addr = 74hAddr = 70h
+Si5338ASi5338A
+Ref ClkClock
+U16U18
+Addr = 73h
+Si5341
+Clock U19
+1.8V
+PCIe End Point Edge Connector J6
+MAIN_I2C_SCL/SDA
+GPIO
+GPIO
+SDM
+S10 MX GPIO
+FPGA
+U2
+GPIO
+LT Dongle
+LTC3884 + LTC3874 VCC 0.85V
+
+MAX10
+USB Blaster/ System Control U24
+1.8V to 3.3V
+I2C Level Shifter U21
+3.3V to 1.8V
+I2C Level Shifter U10
+1.8V to 3.3V
+I2C Level Shifter U15
+1.8V to 2.5V
+I2C Level Shifter U1
+1.8V to 3.3V
+I2C Level Shifter U22
+1.8V to 3.3V
+I2C Level Shifter U20
+
+
+
+
+
+
+
+
+
+Addr = 20h
+
+
+
+Addr = 4Ch
+
+Addr = 4Eh
+Addr = 31h
+MAX10 PWR MGR U27
+
+PCIe Root Port
+J7
+
+MAX1619
+Temp Sense U28
+
+EM2130H 3.3V U43
+EM2120H 1.2V U51
+
+
+Table 19.Intel MAX 10 I2C Signals
+
+Schematic Signal Name
+Intel MAX 10 Pin Number
+I/O Standard
+Description
+MAIN_I2C_SCL
+F8
+1.8 V
+I2C serial clock from Intel MAX 10 (U24)
+MAIN_I2C_SDA
+B12
+1.8 V
+I2C serial data from Intel MAX 10
+(U24)
+PCIE_EP_3V3_I2C_SCL
+K1
+3.3 V
+I2C serial clock from Intel MAX 10
+(U24)
+PCIE_EP_3V3_I2C_SDA
+L2
+3.3 V
+I2C serial data from Intel MAX 10
+(U24)
+I2C_3V3_SCL
+N9
+3.3 V
+I2C serial data from Intel MAX 10
+(U27)
+I2C_3V3_SDA
+M12
+3.3 V
+I2C serial data from Intel MAX 10
+(U27)
+Table 20.Intel Stratix 10 MX FPGA I2C Signals
+
+Schematic Signal Name
+Intel Stratix 10 MX FPGA Pin Number
+I/O Standard
+Description
+S10_SDM_SCL
+BA38
+1.8V
+Intel Stratix 10 FPGA I2C from SDM IO pin (default)
+S10_SDM_SDA
+AW38
+1.8V
+Intel Stratix 10 FPGA I2C from SDM IO pin (default)
+DDR4_DIMM_SCL
+H30
+1.8V
+Intel Stratix 10 FPGA I2C from GPIO pin
+DDR4_DIMM_SDA
+D29
+1.8V
+Intel Stratix 10 FPGA I2C from GPIO pin
+Table 21.Intel Stratix 10 MX FPGA I2C Signals to Intel MAX 10 Intel FPGA Download Cable II
+
+Schematic Signal Name
+Intel Stratix 10 MX FPGA Pin Number
+I/O Standard
+Description
+MAIN_I2C_SCL
+BE14
+1.8V
+Not connected by default
+MAIN_I2C_SDA
+BF13
+1.8V
+Not connected by default
+Table 22.Intel Stratix 10 MX FPGA I2C Signals to QSFP Module
+
+Schematic Signal Names
+Intel Stratix 10 MX FPGA Pin Number
+I/O Standard
+Description
+ZQSFP_S10_I2C_SCL
+BJ16
+1.8V
+Intel Stratix 10 FPGA I2C from GPIO pin
+ZQSFP_S10_I2C_SDA
+BD16
+1.8V
+Intel Stratix 10 FPGA I2C from GPIO pin
+
+
+Table 23.Intel Stratix 10 MX FPGA I2C Signals to PCIe End Point Connector
+
+Schematic Signal Name
+Intel Stratix 10 MX FPGA Pin Number
+PCIe Connector (J6) Pin Number
+I/O Standard
+Description
+PCIE_EP_I2C_SCL
+BH15
+B5
+1.8V Via U10
+Dedicated I2C to PCIe Connector
+PCIE_EP_I2C_SDA
+BH14
+B6
+1.8V Via U10
+Dedicated I2C to PCIe Connector
+Table 24.I2C Device Address
+
+Type
+Address
+Device
+Intel Stratix 10 MX FPGA I2C Address
+0xA0
+DDR4 DIMM (J1)
+
+0x47
+LTC3884
+
+0x20
+Intel MAX 10 Power (U27)
+
+0x4C
+MAX1619 (U28)
+
+0x4E
+EM2130H (U43)
+
+0x31
+EM2120H (U51)
+
+TBD
+QSFP0 (J5)
+
+TBD
+QSFP1 (J4)
+
+TBD
+PCIe Root Port (J7)
+
+TBD
+PCIe End Point (J6)
+Intel MAX 10 I2C Address
+0x74
+Si5338A (U16)
+
+0x70
+Si5338A (U18)
+
+0x73
+Si5342 (U19)
+
+Flash Memory
+Flash
+The Intel Stratix 10 MX FPGA development kit supports one 2 Gb CFI-compatible NOR- type device (P/N: MT25Qu02GCBB3E12) for non-volatile storage of FPGA configuration data, board information, test application data and user code space. This device is controlled by the FPGA’s SDM.
+Table 25.Flash Memory (U14) Pin Connections
+
+Board Reference
+Schematic Signal Name
+FPGA Pin Number
+I/O Standard
+Description
+D3
+AS_DATA0
+BH41
+1.8V
+Data
+D2
+AS_DATA1
+BG42
+1.8V
+Data
+C4
+AS_DATA2
+BF42
+1.8V
+Data
+D4
+AS_DATA3
+BC40
+1.8V
+Data
+B2
+AS_CLK
+AT37
+1.8V
+Clock from FPGA
+C2
+AS_CS0_MSEL0
+AR37
+1.8V
+Chip Select signal
+
+
+Flash Programming
+You can use the Intel Quartus Prime Programmer to program the flash with your Programmer Object File (.pof).
+
+Ensure the following conditions are met before you proceed
+The Intel Quartus Prime Programmer and the Intel FPGA Download Cable II driver are installed on the host computer.
+If you are using an external JTAG programmer, ensure the Intel FPGA Download Cable II is connected to the board through the 10-pin female connector. Verify that the Intel FPGA Download Cable II LED for proper connection to the host computer through a micro-USB cable.
+Power to the board is on, and no other applications that use the JTAG chain are running.
+The design running in the FPGA does not drive the FM bus.
+
+Execute the steps below to program the Flash Memory
+Start the Intel Quartus Prime Programmer.
+Click Auto Detect to display the devices in the JTAG chain.
+Select the flash attached to the Intel Stratix 10 MX FPGA and then click Change File and select the path to the desired .pof. If the flash is not detected, configure the FPGA with any configuration image which does not drive the flash signals and then go to step 2.
+Turn on the Program/Configure option for the added file.
+Click Start to program the selected file to flash. Programming is complete when the progress bar reaches 100%. If flash programming fails, change the TCK frequency to a lower frequency (16 MHz or 6 MHz). Run the command below in the Nios II command shell. jtag --setparam <cable> JtagClock
+<frequency><Units>. For example: jtagconfig --setparam 1 JtagClock 16M and then go to Step 4.
+Attention: Using the Intel Quartus Prime Programmer to program a device on the board causes other JTAG- based applications such as the Board Test System and the Power Monitor to lose their connection to the board.
+Restart those applications after programming is complete.
+
+HiLo Daughter Cards
+The Intel Stratix 10 MX FPGA development kit provides a full-featured hardware development platform for prototyping and testing high-speed interfaces to an Intel Stratix 10 MX FPGA.
+Table 26.Supported Daughter Cards
+
+Memory Type
+Transfer Rate (Mbps)
+Maximum Frequency (MHz)
+DDR4
+2666
+1333
+QDR-IV
+2133
+1066
+
+
+DDR4
+Byte 0-1DDR4 SDRAM U5DDR4 SDRAM U4DDR4 SDRAM U3DDR4 SDRAM U2DDR4 SDRAM U1Byte 2-3Byte 4-5Byte 6-7Byte 8VDD/2.5 VEMIFH I L OConnector DDR4 x 72Byte 0-1DDR4 SDRAM U5DDR4 SDRAM U4DDR4 SDRAM U3DDR4 SDRAM U2DDR4 SDRAM U1Byte 2-3Byte 4-5Byte 6-7Byte 8VDD/2.5 VEMIFH I L OConnector DDR4 x 72DQ/DQS/DMDQ/DQS/DMAddr/Ctrl/clkAddr/Ctrl/clkFigure 12.HiLo DDR4 Block Diagram
+Byte 0-1
+
+DDR4 SDRAM U5
+
+DDR4 SDRAM U4
+
+DDR4 SDRAM U3
+
+DDR4 SDRAM U2
+
+DDR4 SDRAM U1
+Byte 2-3
+Byte 4-5
+Byte 6-7
+
+
+Byte 8
+VDD/2.5 V
+EMIF
+
+H I L O
+Connector DDR4 x 72
+Byte 0-1
+
+DDR4 SDRAM U5
+
+DDR4 SDRAM U4
+
+DDR4 SDRAM U3
+
+DDR4 SDRAM U2
+
+DDR4 SDRAM U1
+Byte 2-3
+Byte 4-5
+Byte 6-7
+
+
+Byte 8
+VDD/2.5 V
+EMIF
+
+H I L O
+Connector DDR4 x 72
+DQ/DQS/DM
+DQ/DQS/DM
+Addr/Ctrl/clk
+Addr/Ctrl/clk
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+QDR-IV
+QDR-IV x 36 SRAM devices enable you to maximize bandwidth with separate read and write ports.
+
+
+Figure 13.HiLo QDR-IV Block Diagram
+
+
+
+
+
+
+
+
+
+
+
+
+QDRIV_ODT_A/0-A24 QDRIV_ODT_ANIV QDRIV_ODT_ANIV QDRIV_ODT_ANIV QDRIV_ODT_CFG_1 QDRIV_ODT_RST_1 QDRIV_ODT_RWA/B_L QDRIV_ODT_LKB0/_L QDRIV_ODT_LDA/B_L QDRIV_ODT_CK QDRIV_ODT_CK_L QDRIV_ODT_QVLDA/0 QDRIV_ODT_QVLDA1 QDRIV_ODT_QVLDB0 QDRIV_ODT_QVLDB1 QDRIV_ODT_DQA0-35 QDRIV_ODT_DQB0-35VDD_V1P3V3P3QDRIV_OUT_VREFVDDQ_V1P2HILO CONNECTORA0-A24ANIV APPEnCFGn RESETnRWA/Bn LKB0/1nLDA/Bn CK_P CK_N QVLDA0 QVLDA1 QVLDB0 QVLDB1DQA0-35 DQB0-35VDD VDDQ (1.2 - 1.8_V) V3P3_VTTVLDOINREFOUTVINTPS51200DRCQDRIV_ODT_A/0-A24 QDRIV_ODT_ANIV QDRIV_ODT_ANIV QDRIV_ODT_ANIV QDRIV_ODT_CFG_1 QDRIV_ODT_RST_1 QDRIV_ODT_RWA/B_L QDRIV_ODT_LKB0/_L QDRIV_ODT_LDA/B_L QDRIV_ODT_CK QDRIV_ODT_CK_L QDRIV_ODT_QVLDA/0 QDRIV_ODT_QVLDA1 QDRIV_ODT_QVLDB0 QDRIV_ODT_QVLDB1 QDRIV_ODT_DQA0-35 QDRIV_ODT_DQB0-35VDD_V1P3V3P3QDRIV_OUT_VREFVDDQ_V1P2HILO CONNECTORA0-A24ANIV APPEnCFGn RESETnRWA/Bn LKB0/1nLDA/Bn CK_P CK_N QVLDA0 QVLDA1 QVLDB0 QVLDB1DQA0-35 DQB0-35VDD VDDQ (1.2 - 1.8_V) V3P3_VTTVLDOINREFOUTVINTPS51200DRCQDR-IV x 36A0-A24ANIVVDDAP PE_LCFG_LRESET_LVREFRWA/B_LLKB0/1_LLDA/B_LCKVDDQCK_LQVLDA0 QVLDA1 QVLDB0 QVLDB1DQA0-35 DQB0-35QDRIV_OVDDQQDR-IV x 36A0-A24ANIVVDDAP PE_LCFG_LRESET_LVREFRWA/B_LLKB0/1_LLDA/B_LCKVDDQCK_LQVLDA0 QVLDA1 QVLDB0 QVLDB1DQA0-35 DQB0-35QDRIV_OVDDQVDD_V1P3
+QDRIV_ODT_A/0-A24
+ QDRIV_ODT_ANIV
+ QDRIV_ODT_ANIV
+ QDRIV_ODT_ANIV
+ QDRIV_ODT_CFG_1
+ QDRIV_ODT_RST_1
+ QDRIV_ODT_RWA/B_L
+ QDRIV_ODT_LKB0/_L
+ QDRIV_ODT_LDA/B_L
+ QDRIV_ODT_CK
+ QDRIV_ODT_CK_L
+ QDRIV_ODT_QVLDA/0
+ QDRIV_ODT_QVLDA1
+ QDRIV_ODT_QVLDB0
+ QDRIV_ODT_QVLDB1
+ QDRIV_ODT_DQA0-35
+ QDRIV_ODT_DQB0-35
+
+VDD_V1P3
+V3P3
+QDRIV_OUT_VREF
+VDDQ_V1P2
+HILO CONNECTOR
+A0-A24
+ANIV AP
+PEn
+CFGn RESETn
+RWA/Bn LKB0/1n
+LDA/Bn CK_P CK_N QVLDA0 QVLDA1 QVLDB0 QVLDB1
+DQA0-35 DQB0-35
+
+
+VDD VDDQ (1.2 - 1.8_V) V3P3_VTT
+VLDOIN
+REFOUT
+VINTPS51200DRC
+QDRIV_ODT_A/0-A24
+ QDRIV_ODT_ANIV
+ QDRIV_ODT_ANIV
+ QDRIV_ODT_ANIV
+ QDRIV_ODT_CFG_1
+ QDRIV_ODT_RST_1
+ QDRIV_ODT_RWA/B_L
+ QDRIV_ODT_LKB0/_L
+ QDRIV_ODT_LDA/B_L
+ QDRIV_ODT_CK
+ QDRIV_ODT_CK_L
+ QDRIV_ODT_QVLDA/0
+ QDRIV_ODT_QVLDA1
+ QDRIV_ODT_QVLDB0
+ QDRIV_ODT_QVLDB1
+ QDRIV_ODT_DQA0-35
+ QDRIV_ODT_DQB0-35
+
+VDD_V1P3
+V3P3
+QDRIV_OUT_VREF
+VDDQ_V1P2
+HILO CONNECTOR
+A0-A24
+ANIV AP
+PEn
+CFGn RESETn
+RWA/Bn LKB0/1n
+LDA/Bn CK_P CK_N QVLDA0 QVLDA1 QVLDB0 QVLDB1
+DQA0-35 DQB0-35
+
+
+VDD VDDQ (1.2 - 1.8_V) V3P3_VTT
+VLDOIN
+REFOUT
+VINTPS51200DRC
+QDR-IV x 36
+A0-A24
+ANIVVDD
+AP PE_L
+CFG_L
+RESET_LVREF
+RWA/B_L
+LKB0/1_L
+LDA/B_L
+CKVDDQ
+CK_L
+QVLDA0 QVLDA1 QVLDB0 QVLDB1
+DQA0-35 DQB0-35
+
+
+
+
+
+QDRIV_O
+
+
+
+
+VDDQ
+
+
+
+
+
+QDR-IV x 36
+A0-A24
+ANIVVDD
+AP PE_L
+CFG_L
+RESET_LVREF
+RWA/B_L
+LKB0/1_L
+LDA/B_L
+CKVDDQ
+CK_L
+QVLDA0 QVLDA1 QVLDB0 QVLDB1
+DQA0-35 DQB0-35
+
+
+
+
+
+QDRIV_O
+
+
+
+
+VDDQ
+
+
+
+
+
+
+
+DT_VREF
+
+_V1P2
+
+
+Clocks
+REFCLK_ZQSFP1:644.53125Mhz, LVDS REFCLK_PCIE_RT: 100Mhz, LVDSTo PCle RT CONN: 100Mhz, LVDSCLK_UIB1: 100Mhz, LVDS CLK_ESARM1: 100Mhz, LVDSCLK_SYS: 100Mhz, LVDSCLK_DDR4_DIMM: 133.333Mhz, LVDSS10 MXCLK_DDR4_COMP: 133.333Mhz, LVDSCLK_HILO: 133.333Mhz, LVDSDSDPcie Hard IPTransceiversMDSCLK_CORE_BAK: 100Mhz, LVDS CLK_FPGA: 500Mhz, LVDSCLK_OSC_1:125Mhz, LVCMOSCLK_PWR_M10: 50Mhz, LVCMOSREFCLK_PCIE_EP_BAK:100Mhz, LVDSCLK_UBII_M10: 50Mhz, LVCMOS, LVMhz3125REFCLK_ZQSFP0: 644.5LVDShz,REFCLK_PCIE_EP: 1001N1M1L1K1F1E1D1CS, LVCLK_ESARM0: 100Mhz2A2N2M2B2L2C2K2F3L3A3KCLK_UIB0: 100Mhz, LV3B3J3I3CPcie Hard IP (CvP) Transceivers4N4M4L4K4F4E4D4CSI5338 U18SI5341 U16SI510 U17SI5338 U19UBII MAX10 U24PWR MAX10 U27Top HBM2Bot HBM2REFCLK_ZQSFP1:644.53125Mhz, LVDS REFCLK_PCIE_RT: 100Mhz, LVDSTo PCle RT CONN: 100Mhz, LVDSCLK_UIB1: 100Mhz, LVDS CLK_ESARM1: 100Mhz, LVDSCLK_SYS: 100Mhz, LVDSCLK_DDR4_DIMM: 133.333Mhz, LVDSS10 MXCLK_DDR4_COMP: 133.333Mhz, LVDSCLK_HILO: 133.333Mhz, LVDSDSDPcie Hard IPTransceiversMDSCLK_CORE_BAK: 100Mhz, LVDS CLK_FPGA: 500Mhz, LVDSCLK_OSC_1:125Mhz, LVCMOSCLK_PWR_M10: 50Mhz, LVCMOSREFCLK_PCIE_EP_BAK:100Mhz, LVDSCLK_UBII_M10: 50Mhz, LVCMOS, LVMhz3125REFCLK_ZQSFP0: 644.5LVDShz,REFCLK_PCIE_EP: 1001N1M1L1K1F1E1D1CS, LVCLK_ESARM0: 100Mhz2A2N2M2B2L2C2K2F3L3A3KCLK_UIB0: 100Mhz, LV3B3J3I3CPcie Hard IP (CvP) Transceivers4N4M4L4K4F4E4D4CSI5338 U18SI5341 U16SI510 U17SI5338 U19UBII MAX10 U24PWR MAX10 U27Top HBM2Bot HBM2Figure 14.Intel Stratix 10 MX FPGA Development Kit Clock Inputs and Default Frequencies
+REFCLK_ZQSFP1:644.53125Mhz, LVDS REFCLK_PCIE_RT: 100Mhz, LVDS
+To PCle RT CONN: 100Mhz, LVDS
+CLK_UIB1: 100Mhz, LVDS CLK_ESARM1: 100Mhz, LVDS
+CLK_SYS: 100Mhz, LVDS
+CLK_DDR4_DIMM: 133.333Mhz, LVDS
+S10 MX
+CLK_DDR4_COMP: 133.333Mhz, LVDS
+
+CLK_HILO: 133.333Mhz, LVDS
+DS
+D
+Pcie Hard IP
+Transceivers
+M
+DS
+CLK_CORE_BAK: 100Mhz, LVDS CLK_FPGA: 500Mhz, LVDS
+CLK_OSC_1:125Mhz, LVCMOS
+CLK_PWR_M10: 50Mhz, LVCMOS
+REFCLK_PCIE_EP_BAK:100Mhz, LVDS
+CLK_UBII_M10: 50Mhz, LVCMOS
+, LV
+Mhz
+3125
+REFCLK_ZQSFP0: 644.5
+
+
+LVDS
+
+
+hz,
+
+
+REFCLK_PCIE_EP: 100
+1N
+1M
+1L
+1K
+1F
+1E
+1D
+1C
+S
+, LV
+CLK_ESARM0: 100Mhz
+2A
+2N
+2M
+2B
+2L
+2C
+2K
+2F
+3L
+3A
+3K
+
+
+
+
+
+
+
+
+
+CLK_UIB0: 100Mhz, LV
+3B
+3J
+3I
+3C
+Pcie Hard IP (CvP) Transceivers
+4N
+4M
+4L
+4K
+4F
+4E
+4D
+4C
+
+
+SI5338 U18
+
+
+
+
+
+
+
+
+
+
+
+SI5341 U16
+
+
+SI510 U17
+
+
+
+
+
+SI5338 U19
+UBII MAX10 U24
+PWR MAX10 U27
+
+Top HBM2
+
+Bot HBM2
+REFCLK_ZQSFP1:644.53125Mhz, LVDS REFCLK_PCIE_RT: 100Mhz, LVDS
+To PCle RT CONN: 100Mhz, LVDS
+CLK_UIB1: 100Mhz, LVDS CLK_ESARM1: 100Mhz, LVDS
+CLK_SYS: 100Mhz, LVDS
+CLK_DDR4_DIMM: 133.333Mhz, LVDS
+S10 MX
+CLK_DDR4_COMP: 133.333Mhz, LVDS
+
+CLK_HILO: 133.333Mhz, LVDS
+DS
+D
+Pcie Hard IP
+Transceivers
+M
+DS
+CLK_CORE_BAK: 100Mhz, LVDS CLK_FPGA: 500Mhz, LVDS
+CLK_OSC_1:125Mhz, LVCMOS
+CLK_PWR_M10: 50Mhz, LVCMOS
+REFCLK_PCIE_EP_BAK:100Mhz, LVDS
+CLK_UBII_M10: 50Mhz, LVCMOS
+, LV
+Mhz
+3125
+REFCLK_ZQSFP0: 644.5
+
+
+LVDS
+
+
+hz,
+
+
+REFCLK_PCIE_EP: 100
+1N
+1M
+1L
+1K
+1F
+1E
+1D
+1C
+S
+, LV
+CLK_ESARM0: 100Mhz
+2A
+2N
+2M
+2B
+2L
+2C
+2K
+2F
+3L
+3A
+3K
+
+
+
+
+
+
+
+
+
+CLK_UIB0: 100Mhz, LV
+3B
+3J
+3I
+3C
+Pcie Hard IP (CvP) Transceivers
+4N
+4M
+4L
+4K
+4F
+4E
+4D
+4C
+
+
+SI5338 U18
+
+
+
+
+
+
+
+
+
+
+
+SI5341 U16
+
+
+SI510 U17
+
+
+
+
+
+SI5338 U19
+UBII MAX10 U24
+PWR MAX10 U27
+
+Top HBM2
+
+Bot HBM2
+
+Table 27.On-board Clocks
+
+Source
+Schematic Signal Name
+Default Frequency
+I/O Standard
+Intel Stratix 10 FPGA Pin Number
+Application
+
+
+
+
+
+
+
+
+
+
+
+U16
+REFCLK_ZQSFP0_ P
+644.53125 MHz
+LVDS
+AJ43
+
+
+QSFP0 Reference Clock
+
+REFCLK_ZQSFP0_ N
+644.53125 MHz
+LVDS
+AJ42
+
+
+REFCLK_ZQSFP1_ P
+644.53125 MHz
+LVDS
+AJ9
+
+
+QSFP1 Reference Clock
+
+REFCLK_ZQSFP1_ N
+644.53125 MHz
+LVDS
+AJ10
+
+
+CLK_UIB0_P
+100 MHz
+LVDS
+AR26
+
+UIB0 Reference Clock
+
+CLK_UIB0_N
+100 MHz
+LVDS
+AP26
+
+
+CLK_UIB1_P
+100 MHz
+LVDS
+P27
+
+UIB1 Reference Clock
+
+CLK_UIB1_N
+100 MHz
+LVDS
+R27
+
+
+CLK_ESRAM0_P
+100 MHz
+LVDS
+AU31
+
+ESRAM0
+Reference Clock
+
+CLK_ESRAM0_N
+100 MHz
+LVDS
+AU32
+
+
+CLK_ESRAM1_P
+100 MHz
+LVDS
+V31
+
+ESRAM1
+Reference Clock
+
+CLK_ESRAM1_N
+100 MHz
+LVDS
+U31
+
+continued...
+
+
+
+Source
+Schematic Signal Name
+Default Frequency
+I/O Standard
+Intel Stratix 10 FPGA Pin Number
+Application
+
+CLK_SYS_100M_P
+100 MHz
+LVDS
+AU17
+
+System Clock
+
+CLK_SYS_100M_N
+100 MHz
+LVDS
+AU16
+
+
+REFCLK_PCIE_RT
+_P
+100 MHz
+LVDS
+AW9
+
+
+PCIe Root Port Reference Clock
+
+REFCLK_PCIE_RT
+_N
+100 MHz
+LVDS
+AW10
+
+
+REFCLK_PCIE_EP
+_P
+100 MHz
+LVDS
+AW43
+
+
+PCIe End Point Reference Clock
+
+REFCLK_PCIE_EP
+_N
+100 MHz
+LVDS
+AW42
+
+
+
+
+
+
+
+
+U18
+CLK_SYS_50M_P
+50 MHz
+LVDS
+BE17
+
+FPGA Clocks
+
+CLK_SYS_50M_N
+50 MHz
+LVDS
+BD17
+
+
+CLK_CORE_BAK_P
+100 MHz
+LVDS
+AT13
+
+FPGA Core Clocks
+
+CLK_CORE_BAK_N
+100 MHz
+LVDS
+AU13
+
+
+S10_OSC_CLK_1
+125 MHz
+LVCMOS
+AR35
+Configuration Clock
+
+REFCLK_PCIE_EP
+1_N
+100 MHz
+LVDS
+BA42
+
+
+PCIeTransceivers Clock
+
+REFCLK_PCIE_EP
+1_P
+100 MHz
+LVDS
+BA43
+
+
+
+
+
+
+
+U19
+CLK_HILO_MEM_N
+133.333 MHz
+LVDS
+AY31
+
+HiLo Memory Clocks
+
+CLK_HILO_MEM_P
+133.333 MHz
+LVDS
+AW31
+
+
+CLK_DDR4_COMP_ N
+133.333 MHz
+LVDS
+B41
+
+
+On-board DDR4 Memory clocks
+
+CLK_DDR4_COMP_ P
+133.333 MHz
+LVDS
+A42
+
+
+CLK_DDR4_DIMM_ N
+133.333 MHz
+LVDS
+C18
+
+
+DIMM Module Clocks
+
+CLK_DDR4_DIMM_ P
+133.333 MHz
+LVDS
+B18
+
+
+Power
+This section describes the Intel Stratix 10 MX FPGA development kit's power supply. A laptop style DC power adapter is provided with the development kit. Intel recommends that you use only the supplied power adapter. The power supply has an auto sensing input voltage of 100 ~ 240 V AC power and will output 12 V DC power at 20 A to the development board. The 12 V DC input power is then stepped down to various power rails used by the board components. An on-board multi-channel analog- to-digital converter (ADC) measures both the voltage and current for several specific board rails. The power utilization is displayed on a graphical user interface (GUI) that can graph power consumption versus time.
+
+
+Power Guidelines
+The Intel Stratix 10 FPGA development kit has two modes of operation as described below.
+In a standard PCIe compliant system
+In this mode, plug the board into an available PCI Express slot and connect the standard 2x4 power cords available from the PC's ATX power supply to J11 on the board. The PCIe slot together with the auxiliary PCIe power cords are required to power the entire board. If you do not connect the 2x4 auxiliary power connection, the board does not power on. The power switch SW3 is ignored when the board is used in the PCIe system.
+
+
+As a stand-alone evaluation board powered by included power supply
+In this mode, plug the included power supply into the 2x4 pin connector (J11) and the AC power cord of the power supply into a power outlet. This power supply provides the entire power to the board without the need to obtain power from the PCIe slot.
+The power switch SW3 controls powering of the board.
+
+
+
+Power Distribution System
+12V12VFigure 15.Power Distribution System Block Diagram
+12V
+12V
+
+
+
+
+150W PCIe or
+288W Ext Pwr Adapter  12.5A
+12V ATX 2x4Pwr Conn12V ATX 2x4Pwr Conn24.0A
+12V ATX 2x4
+Pwr Conn
+12V ATX 2x4
+Pwr Conn
+12V_GROUP1
+EN8 EN2
+
+EM2120LEM2120L
+EM2120L
+EM2120L
+LTC3884 + LTC3874LTC3884 + LTC38744-phase
+
+LTC3884 + LTC3874
+
+LTC3884 + LTC3874
+
+
+1.2V
+
+DDR-T DIMM
+VCCIO_UIB, 1.2VVCCIO_UIB, 1.2V
+VCCIO_UIB, 1.2V
+VCCIO_UIB, 1.2V
+
+
+
+Aux 12V Power Connector
+
+
+75W PCIe Slot 12V
+PCIe Slot Gold Fingers
+
+
+
+
+
+
+
+
+6.25A
+12V_G1
+
+LTC4359Ideal Diode CtlrLTC4359Ideal Diode CtlrLTC4365Selew Rate CtlrLTC4365Selew Rate Ctlr
+LTC4359
+Ideal Diode Ctlr
+LTC4359
+Ideal Diode Ctlr
+LTC4365
+Selew Rate Ctlr
+LTC4365
+Selew Rate Ctlr
+
+LTC4359Ideal Diode CtlrLTC4359Ideal Diode CtlrPOWER_ON
+LTC4359
+Ideal Diode Ctlr
+LTC4359
+Ideal Diode Ctlr
+
+
+12V_GROUP2
+
+
+EN3 EN5
+
+EN4
+0.85V
+
+S10_VCCERAM 0.9VS10_VCCERAM 0.9VEN63A0EN63A0S10_VCC/VCCP 0.85VS10_VCC/VCCP 0.85VFLTRFLTR0.9V
+S10_VCCERAM 0.9V
+S10_VCCERAM 0.9V
+EN63A0
+EN63A0
+S10_VCC/VCCP 0.85V
+S10_VCC/VCCP 0.85V
+FLTR
+FLTR
+
+
+VCCPLLDIG_SDM 0.9VVCCPLLDIG_SDM 0.9VEN63A0EN63A01.12V
+VCCPLLDIG_SDM 0.9V
+VCCPLLDIG_SDM 0.9V
+EN63A0
+EN63A0
+
+S10_VCCT_GXBRL 1.12VS10_VCCT_GXBRL 1.12V
+S10_VCCT_GXBRL 1.12V
+S10_VCCT_GXBRL 1.12V
+S10_VCCRR_GXBR 1.12VS10_VCCRR_GXBR 1.12VEN63A0EN63A01.12V
+S10_VCCRR_GXBR 1.12V
+S10_VCCRR_GXBR 1.12V
+EN63A0
+EN63A0
+
+EN63A0EN63A0S10_VCCRL_GXBL 1.12VS10_VCCRL_GXBL 1.12V1.12V
+EN63A0
+EN63A0
+S10_VCCRL_GXBL 1.12V
+S10_VCCRL_GXBL 1.12V
+
+
+12V_GROUP2
+Power ON/OFF CircuitPower ON/OFF Circuit12V_GROUP1
+
+Power ON/OFF Circuit
+
+Power ON/OFF Circuit
+
+
+
+( For bench use)
+
+LTC4359Ideal Diode CtlrLTC4359Ideal Diode Ctlr
+LTC4359
+Ideal Diode Ctlr
+LTC4359
+Ideal Diode Ctlr
+LTC4357Ideal Diode CtlrLTC4357Ideal Diode CtlrEN_12V_G1G2_L POWER_ON
+LTC4357
+Ideal Diode Ctlr
+LTC4357
+Ideal Diode Ctlr
+
+
+
+
+12V_G2
+
+
+ 
+EN6
+
+1.8V
+FLTRFLTR VCCADC 1.8VVCCADC 1.8V
+FLTR
+FLTR
+VCCADC 1.8V
+VCCADC 1.8V
+
+FLTRFLTR VCCA_PLL/VCCPLL_SDM 1.8VVCCA_PLL/VCCPLL_SDM 1.8V
+FLTR
+FLTR
+VCCA_PLL/VCCPLL_SDM 1.8V
+VCCA_PLL/VCCPLL_SDM 1.8V
+EY1501 X2EY1501 X2VCCPT/VCCBAT/VCCIO_SDM/VCCIO 1.8VVCCPT/VCCBAT/VCCIO_SDM/VCCIO 1.8V
+EY1501 X2
+EY1501 X2
+VCCPT/VCCBAT/VCCIO_SDM/VCCIO 1.8V
+VCCPT/VCCBAT/VCCIO_SDM/VCCIO 1.8V
+3.3V STBY / 1p8V_PRE3.3V STBY / 1p8V_PRE5V5VFLTRFLTRLTM4625LTM4625EN63A0EN63A0VCCH_GXB 1.8VVCCH_GXB 1.8V5V
+3.3V STBY / 1p8V_PRE
+3.3V STBY / 1p8V_PRE
+5V
+5V
+FLTR
+FLTR
+
+LTM4625
+
+LTM4625
+EN63A0
+EN63A0
+VCCH_GXB 1.8V
+VCCH_GXB 1.8V
+
+EN_SEQ
+
+
+1p2V_DDR4_DIMM/1p2V_DDR4_COMP (VDD/VDDQ)1p2V_DDR4_DIMM/1p2V_DDR4_COMP (VDD/VDDQ)MAX10 PWR SEQMAX10 PWR SEQEN0 EN1 EN2 EN3 EN4
+1p2V_DDR4_DIMM/1p2V_DDR4_COMP (VDD/VDDQ)
+1p2V_DDR4_DIMM/1p2V_DDR4_COMP (VDD/VDDQ)
+
+
+
+MAX10 PWR SEQ
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+MAX10 PWR SEQ
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+EN0
+
+
+
+3.3V
+  
+EN1
+
+PG
+2.5V
+
+
+
+
+EN63A0EN63A0TPS51200 X2TPS51200 X2EN6337EN63371.2V
+EN63A0
+EN63A0
+TPS51200 X2
+TPS51200 X2
+EN6337
+EN6337
+
+DDR4_VCCP DDR4_VCCSPDDDR4_VCCP DDR4_VCCSPD
+DDR4_VCCP DDR4_VCCSPD
+DDR4_VCCP DDR4_VCCSPD
+DDR4_DIMM_VTT/ DDR4_COMP_VTTDDR4_DIMM_VTT/ DDR4_COMP_VTT0.6V
+DDR4_DIMM_VTT/ DDR4_COMP_VTT
+DDR4_DIMM_VTT/ DDR4_COMP_VTT
+DDR4_DIMM_VREF/DDR4_COMP_VREFDDR4_DIMM_VREF/DDR4_COMP_VREF0.6V
+DDR4_DIMM_VREF/DDR4_COMP_VREF
+DDR4_DIMM_VREF/DDR4_COMP_VREF
+
+EN5  
+EN6
+
+EM2130H 30AEM2130H 30AEN7 EN8 EN9
+
+EM2130H 30A
+
+EM2130H 30A
+
+3.3V
+EN9
+3.3V
+QSFP1_VCC/QSFP1_VCCT/QSFP1_VCCRQSFP1_VCC/QSFP1_VCCT/QSFP1_VCCRTPS2557I LimiterTPS2557I Limiter3.3V3.3V3.3V
+QSFP1_VCC/QSFP1_VCCT/QSFP1_VCCR
+QSFP1_VCC/QSFP1_VCCT/QSFP1_VCCR
+TPS2557
+I Limiter
+TPS2557
+I Limiter
+3.3V
+3.3V
+QSFP2_VCC/QSFP2_VCCT/QSFP2_VCCRQSFP2_VCC/QSFP2_VCCT/QSFP2_VCCRTPS2557I LimiterTPS2557I Limiter3.3V
+QSFP2_VCC/QSFP2_VCCT/QSFP2_VCCR
+QSFP2_VCC/QSFP2_VCCT/QSFP2_VCCR
+TPS2557
+I Limiter
+TPS2557
+I Limiter
+
+
+EN6362EN6362HiLo VDD 1.25V/1.30V/1.35V/1.5VHiLo VDD 1.25V/1.30V/1.35V/1.5V
+EN6362
+EN6362
+HiLo VDD 1.25V/1.30V/1.35V/1.5V
+HiLo VDD 1.25V/1.30V/1.35V/1.5V
+
+
+EN9
+
+EN7
+HiLo VDDQ 1.25V/1.30V/1.35V/1.5VHiLo VDDQ 1.25V/1.30V/1.35V/1.5V
+HiLo VDDQ 1.25V/1.30V/1.35V/1.5V
+HiLo VDDQ 1.25V/1.30V/1.35V/1.5V
+
+VCCM, 2.5VVCCM, 2.5VEN6360EN6360EN6362EN63622.5V
+VCCM, 2.5V
+VCCM, 2.5V
+EN6360
+EN6360
+EN6362
+EN6362
+
+
+
+Power-up Sequence: (Power-down sequence is reverse of power-up sequence)
+
+
+0 5V/1p8V_PRE/3.3V_STBY/12V
+1 EN0: 3.3V
+EN1: DDR4_VCCP,
+DDR4_VCCSPD QSFP1,2_VCC, QSFP1,2_VCCT QSFP1,2_VCCR
+
+EN2:  S10_VCC/VCCP
+EN3:  S10_VCCERAM
+VCCPLLDIG_SDM EN4:    S10_VCCRR_GXB
+S10_VCCRL_GXBL EN5:    S10_VCCT_GXBRL
+
+
+
+Group 1
+EN6: VCCPT, VCCBAT VCCPLL_SDM VCCA_PLL VCCH_GXB VCCADC VCCIO_SDM VCCIO_1.8V
+
+
+
+5EN7:VCCM6EN8:VCCIO_UIBEN9:VCCIO_1.2_DDR4DDR4_VTT, DDR4_VREFVCCIO_1.2_DDR4, DDR4_VDDHILO VDD/VDDQ5EN7:VCCM6EN8:VCCIO_UIBEN9:VCCIO_1.2_DDR4DDR4_VTT, DDR4_VREFVCCIO_1.2_DDR4, DDR4_VDDHILO VDD/VDDQGroup 2
+5
+EN7:
+VCCM
+6
+EN8:
+VCCIO_UIB
+
+EN9:
+VCCIO_1.2_DDR4
+
+DDR4_VTT, DDR4_VREF
+
+VCCIO_1.2_DDR4, DDR4_VDD
+
+HILO VDD/VDDQ
+
+5
+EN7:
+VCCM
+6
+EN8:
+VCCIO_UIB
+
+EN9:
+VCCIO_1.2_DDR4
+
+DDR4_VTT, DDR4_VREF
+
+VCCIO_1.2_DDR4, DDR4_VDD
+
+HILO VDD/VDDQ
+
+
+
+
+Group 3
+
+
+
+Table 28.Power Supply List
+
+Power Source Name
+Power Name
+Maximum Output Current (A)
+Description
+LTC3884 (U44)
+VCC (0.85V) VCCP (0.85V)
+132
+Core Logic Power Periphery Power
+EM2120L (U51)
+VCCIO_UIB (1.2V)
+12
+Power for HBM’s Universal Interface Block
+EN63A0 (U46)
+S10_VCCERAM (0.9V) VCCPLLDIG_SDM (0.9V)
+4.6
+Embedded memory and digital transceiver power
+continued...
+
+
+
+Power Source Name
+Power Name
+Maximum Output Current (A)
+Description
+EN63A0 (U49)
+S10_VCCT_GXB (1.12V)
+2.1
+Transmitter Power
+EN63A0 (U48)
+S10_VCCRR_GXB (1.12V)
+4.0
+Receiver Power Right side
+EN63A0 (U47)
+S10_VCCRL_GXB (1.12V)
+4.0
+Receiver Power Left side
+EN63A0 (U50)
+VCCH_GXB(1.8V) VCCADC (1.8V) VCCA_PLL (1.8V) VCC_PLL_SDM (1.8V) VCCPT (1.8V) VCCBAT (1.8V) VCCIO_SDM (1.8V) VCCIO (1.8v)
+
+
+
+
+11
+Analog power for Receivers ADC power
+PLL Analog Global power PLL Power to SDM block Charge-pump power
+Battery Back-up power for encryption key
+Configuration pins power IO Power
+LTM4625 (U40)
+5V
+
+
+5.0
+
+
+System 5V Rail
+EY1501 (U41)
+3V3_STBY (3.3V)
+
+
+EY1501 (U42)
+1p8V_PRE_STBY (1.8V)
+
+
+EN6337 (U58)
+2p5V (2.5V) DDR4_VCCP (2.5V) DDR4_VCCSPD (2.5V)
+1.0
+
+System 2.5V Rail
+EN6362 (U57)
+HiLo VDD (1.25V/1.30V/ 1.35V/1.5V)
+6.0
+VDD power for HiLo
+EN6362 (U56)
+HiLo VDDQ (1.25V/1.30V/ 1.35V/1.5V)
+2.0
+VDDQ power for HiLo
+EN6360 (U60)
+VCCM (2.5V)
+2.6
+Embedded HBM2 memory power
+EM2130H(U43)
+3p3V (3.3V)
+30
+System 3.3V rail
+TPS51200 (U54)
+0p6V_DDR4_DIMM_VTT (0.6V)
+1mA
+Termination power for DIMM
+TPS51200 (U55)
+0p6V_DDR4_COMP_VTT (0.6V)
+1mA
+Termination power for on- board DDR4
+12V_G1, 12V_G2
+12V
+20
+System 12V rail
+
+Power Sequence
+The Power Sequencing function is implemented using an Intel MAX 10 device while sequencing 5 rails. The following voltage rails are sequenced up in the following group order from 1-3. Sequence down is the reverse order from 3-1.
+Group 1: VCC, VCCP, VCCERAM, VCCPLLDIG_SDM, VCCR_GXB, VCCT_GXB
+Group 2: VCCPT, VCCBAT, VCCIO_SDM, VCCIO_1.8V, VCCH_GXB, VCCA_PLL, VCCPLL_SDM, VCCADC
+Group 3: VCCIO_1.2_DDR4, VCCM, VCCIO_UIB, VCCIO_SDM, VCCFUSEWR_SDM
+Note:Please refer to AN 692: Power Sequencing Considerations for Intel Cyclone 10 GX, Intel Arria 10, and Intel Stratix 10 Devices for additional information on Intel Stratix 10 FPGA power sequencing,
+
+
+Power Measurement
+Power measurements are provided for six FPGA power rails by using an ADC and sense resistors. The sense resistors are connected in series to the power regulator output. The I2C interface of the ADC or the regulators are used to sense the voltages. The I2C are connected to the Intel MAX 10 device for reading the voltage. Current reading is achieved by a LTC2497 reading the voltage drop across the sense resistor and software converts the voltage readings to current for each measured rail.
+The following power rails are monitored:
+VCC, VCCP (Power sensing by I2C on LTC3884)
+VCCRERAM (Sense resistor R424, monitoring via LTC2497, U28)
+VCCRL (Sense resistor R437, monitoring via LTC2497, U28)
+VCCRR (Sense resistor R450, monitoring via LTC2497, U28)
+VCCT (Sense resistor R463, monitoring via LTC2497, U28)
+VCCIO_UIB (Power sensing by I2C on EM2120L, U51)
+3.3V (Power sensing by I2C on EM2130H, U43)
+Figure 16.Power Measurement
++ Isense -
+VoutRsensePower RallI2CADCMAX10Voltage RegulatorVoutRsensePower RallI2CADCMAX10Voltage Regulator
+Vout
+Rsense
+Power Rall
+I2C
+
+ADC
+
+MAX10
+Voltage Regulator
+Vout
+Rsense
+Power Rall
+I2C
+
+ADC
+
+MAX10
+Voltage Regulator
+Isense = dV/Rsense
+
+Power Fast Discharging
+The Intel Stratix 10 MX FPGA development kit implements a Fast Discharging circuit to facilitate a rapid discharging the capacitors of certain power rails during system power down sequence. This is to ensure the voltages are at minimum levels in case the system needs to be powered up again. The design is implemented using a Field Effect Transistor (FET), which is turned on to discharge of its respective power rail to ground through a Bleeding resistor during system power down.
+The following rails are implemented with Fast Discharging:
+1p2V_DDR4
+1p2V_VCCIO_UIB
+HiLo_VDD
+
+
+HiLo_VDDQ
+3p3V
+2p5V
+VCCM
+1p8V
+S10_VCCRL_GXB
+S10_VCCRR_GXB
+S10_VCCT_GXB
+S10_VCCERAM
+
+Thermal Limitations and Protection
+The Intel Stratix 10 MX FPGA development kit is designed to operate in a typical laboratory environment with an ambient temperature of approximately 25 °C. The cooling solution provided with the development kit allows sufficient cooling for the board to operate up to a maximum power consumption of 243 W under this environment.
+A MAX1619 device is connected to the Intel Stratix 10 MX FPGA internal temperature diode to continuously monitor the FPGA internal temperature. In the meantime, a dedicated FPGA TSD real-time monitor solution under ~\ip\onchip_sensors\ is added to each transceiver or EMIF example design to monitor the temperatures of both FPGA core and each transceiver tile.
+Based on the data from both MAX1619, and the Intel Stratix 10 MX FPGA will run at its maximum speed whenever any temperature is over 60 °C or immediately power off the board whenever the temperature crosses 100 °C.
+
+Caution:Remember to unplug the power supply when the board is powered off when the temperature crosses 100 °C. Plug the power supply back again to ensure that the board can be normally turned on/off again.
+
+Cooling Design
+The Intel Stratix 10 MX FPGA development kit utilizes air-cooled design to maintain proper cooling of the board at maximum loads. Air is forced to blow from the front to the rear of the enclosure by two 40 mm x 40 mm fans. It requires a total airflow of 22 CFM to cool the board with maximum power of 243 W at 25 °C. Top cover is required during operations for proper cooling of the board.
+
+Caution:Please ensure that the fan cable is connected during operation.
+
+
+
+
+
+
+Mechanical Information
+The Intel Stratix 10 MX FPGA development kit is a PCIe form factor with the following board dimensions:
+Width = 4.376 inches
+Length = 10.8 inches
+Height = 1.37 inches
+
+
+Figure 17.Assembly View
+
+
+Top Cover Removal
+The Intel Stratix 10 MX FPGA development kit is designed to operate with the top cover enclosed during normal operations.
+To gain access to the top side of the board for tasks such as replacing DIMM module, HiLo module, or probing of test points, the top cover can be removed by following the instructions below:
+Loosen the two thumb screws on the rear of the enclose
+Lift the top cover upward until it stops
+Slide the top cover backward and lift again to remove
+
+
+Figure 18.Top Cover Removal for Intel Stratix 10 MX FPGA development kit
+Steps for removing the top cover
+
+1122Slide top cover backward
+1
+1
+2
+2
+Loosen thumb screws
+
+
+
+
+
+3 Lift top cover upward3 Lift top cover upward
+3 Lift top cover upward
+3 Lift top cover upward
+
+
+Note: Top cover is required for proper cooling of the board
+
+Figure 19.Intel Stratix 10 MX FPGA development kit with top cover removed
+
+
+
+UG-20151 | 2020.06.15
+  Send Feedback
+
+
+
+
+Board Test System
+
+The Intel Stratix 10 MX FPGA Development Kit includes an application called Board Test System (BTS) to test the functionality of this board. The BTS provides an easy-to- use Graphical User Interface (GUI) to alter functional settings and observe results. You can use the BTS to test board components, modify functional parameters, observe performance and measure power usage.
+The BTS communicates over the JTAG bus to a test design running in the Intel Stratix 10 MX FPGA device. You can use the BTS to reconfigure the FPGA with test designs specific to the functionality that you are testing.
+The BTS is also useful as a reference for designing systems.
+Figure 20.BTS GUI Home
+
+
+
+
+
+
+
+
+Intel Corporation. All rights reserved. Agilex, Altera, Arria, Cyclone, Enpirion, Intel, the Intel logo, MAX, Nios, Quartus and Stratix words and logos are trademarks of Intel Corporation or its subsidiaries in the U.S. and/or other countries. Intel warrants performance of its FPGA and semiconductor products to current specifications in accordance with Intel's standard warranty, but reserves the right to make changes to any products and services at any time without notice. Intel assumes no responsibility or liability arising out of the application or use of any information, product, or service described herein except as expressly agreed to in writing by Intel. Intel customers are advised to obtain the latest version of device specifications before relying on any published information and before placing orders for products or services.
+*Other names and brands may be claimed as the property of others.
+
+
+ISO 9001:2015
+Registered
+
+
+Figure 21.About BTS
+
+Preparing the Board
+Several designs are provided to test the major board features. Each design provides data for one or more tabs in the application. The Configure Menu identifies the appropriate design to download to the FPGA for each tab.
+After successful FPGA configuration, the appropriate tab appears that allows you to exercise the related board features. Highlights appear in the board picture around the corresponding components.
+The BTS communicates over the JTAG bus to a test design running in the FPGA. The BTS and Power Monitor share the JTAG bus with other applications like the Nios II debugger and the Signal Tap II Embedded Logic Analyzer. Because the BTS is designed based on the Intel Quartus Prime software, be sure to close other applications before you use the BTS.
+The BTS relies on the Intel Quartus Prime software's specific library. Before running the BTS, open the Intel Quartus Prime software to automatically set the environment variable $QUARTUS_ROOTDIR. The BTS uses this environment variable to locate the Intel Quartus Prime library. The version of Intel Quartus Prime software set in the QUARTUS_ROOTDIR environment variable should be newer than version 14.1. For example, the Development Kit Installer version 15.1 requires that the Intel Quartus Prime software 14.1 or later version to be installed.
+Also, to ensure that the FPGA is configured successfully, you should install the latest Intel Quartus Prime software that can support the silicon on the development kit. For this board, we recommend you install Intel Quartus Prime version 18.0.1b261.
+Please refer to the README.txt file under \examples\board_test_system
+directory.
+
+Running the Board Test System
+
+
+Before you begin
+With the power to the board turned off, follow these steps:
+Connect the USB cable to your PC and the board.
+Check whether the board switches and jumpers are set according to your preferences.
+Turn on the power to the board.
+To ensure operating stability, keep the USB cable connected and the board powered on when running the demonstration application. The BTS cannot run correctly unless the USB cable is attached and the board is powered on.
+
+To run the BTS
+Navigate to the <package dir>\examples\board_test_system directory and run the BoardTestSystem.exe application.
+A GUI appears, displaying the application tab corresponding to the design running in the FPGA. If the design loaded in the FPGA is not supported by the BTS GUI, you receive a message prompting you to configure your board with a valid BTS design. Refer to the Configure Menu on configuring your board.
+If some design is running in the FPGA, the BTS GUI loads the design file (.sof) in the image folder to check the current running design in the FPGA, therefore the design running in the FPGA must be the same as the design file in the image folder.
+
+Using the Board Test System
+This section describes each tab in the BTS.
+
+The Configure Menu
+Use the Configure Menu to select the design you want to use. Each design example tests different board features. Select a design from this menu and the corresponding tabs become active for testing.
+
+
+Figure 22.The Configure Menu
+
+To configure the FPGA with a test system design, perform the following steps:
+On the Configure menu, click the configure command that corresponds to the functionality you wish to test.
+In the dialog box that appears, click Configure to download the corresponding design to the FPGA.
+When configuration finishes, close Intel Quartus Prime if it's already open. The design begins running in the FPGA. The corresponding GUI application tabs that interface with the design are now enabled.
+
+Note:If you use the Intel Quartus Prime Programmer for configuration, rather than the BTS GUI, you may need to restart the GUI.
+
+The Sys Info Tab
+The Sys Info tab shows the board's current configuration. The tab displays the contents of the Intel MAX 10 registers, the JTAG chain, the board's MAC address, and other details stored on the board.
+Figure 23.The Sys Info Tab
+
+
+
+
+
+The following sections describe the controls of the Sys Info tab.
+Board Information
+The Board Information control displays static information about your board:
+Board Name: Indicates the official name of the board given by the BTS.
+Board Revision: Indicates the revision of the board.
+MAX Ver: Indicates the version of Intel MAX 10 code currently running on the board.
+JTAG Chain
+The JTAG chain shows all the devices currently in the JTAG chain.
+
+The QSFP Tab
+This tab allows you to perform loopback tests on the QSFP ports.
+
+
+Figure 24.The QSFP Tab
+The following sections describe the controls on the QSFP Tab
+Status
+Displays the following status information during a loopback test:
+PLL Lock: Shows the PLL locked or unlocked state.
+Pattern sync: Shows the pattern synced or not synced state. The pattern is considered synced when the start of the data sequence is detected.
+Details: Shows the PLL lock and pattern sync status:
+
+Port
+Allows you to specify which interface to test. The following port tests are available:
+
+
+QSFP0 x4
+QSFP1 x4
+PMA Setting
+Allows you to make changes to the PMA parameters that affect the active transceiver interface. The following settings are available for analysis:
+Serial Loopback: Routes signals between the transmitter and the receiver.
+VOD: Specifies the voltage output differential of the transmitter buffer.
+Pre-emphasis tap:
+1st pre: Specifies the amount of pre-emphasis on the pre-tap of the transmitter buffer.
+1st post: Specifies the amount of pre-emphasis on the first post tap of the transmitter buffer.
+Equalizer: Specifies the CLTE EQ Gain for the receiver.
+AC Gain: Specifies the CLTE AC Gain for the receiver.
+VGA: Specifies the VGA gain value.
+
+
+Data Type
+Specifies the type of data contained in the transactions. The following data types are available for analysis:
+PRBS 7: Selects pseudo-random 7-bit sequences.
+PRBS 15: Selects pseudo-random 15-bit sequences.
+PRBS 23: Selects pseudo-random 23-bit sequences.
+PRBS 31: Selects pseudo-random 31-bit sequences.
+HF: Selects highest frequency divide-by-2 data pattern 10101010.
+LF: Selects lowest frequency divide-by-33 data pattern.
+
+
+Error Control
+Displays data errors detected during analysis and allows you to insert errors:
+Detected errors: Displays the number of data errors detected in the hardware.
+Inserted errors: Displays the number of errors inserted into the transmit data stream.
+Insert: Inserts a one-word error into the transmit data stream each time you click the button. Insert is only enabled during transaction performance analysis.
+Clear: Resets the Detected errors and Inserted errors counters to zeroes.
+Loopback
+Start: Initiates the selected ports transaction performance analysis. Always click Clear before Start.
+Stop: Terminates transaction performance analysis.
+TX and RX performance bars: Show the percentage of maximum theoretical data rate that the requested transactions are able to achieve.
+
+The PCIE Tab
+This tab allows you to run a PCIe loopback test on your board. You can also load the design and use an oscilloscope to measure an eye diagram of the PCIe transmit signals.
+Figure 25.The PCIE Tab
+
+
+The following sections describe the controls on the PCIE tab.
+Status
+Displays the following status information during a loopback test:
+PLL Lock: Shows the PLL locked or unlocked state.
+Pattern sync: Shows the pattern synced or not synced state. The pattern is considered synced when the start of the data sequence is detected.
+Details: Shows the PLL lock and pattern sync status:
+
+Port
+PCIe x16 Gen3
+PMA Setting
+Allows you to make changes to the PMA parameters that affect the active transceiver interface. The following settings are available for analysis:
+
+
+Serial Loopback: Routes signals between the transmitter and the receiver.
+VOD: Specifies the voltage output differential of the transmitter buffer.
+Pre-emphasis tap:
+1st pre: Specifies the amount of pre-emphasis on the pre-tap of the transmitter buffer.
+1st post: Specifies the amount of pre-emphasis on the first post tap of the transmitter buffer.
+Equalizer: Specifies the CLTE EQ Gain for the receiver.
+AC Gain: Specifies the CLTE AC Gain for the receiver.
+VGA: Specifies the VGA gain value.
+All PMA settings should be changed as given in the figure below:
+
+
+
+
+
+Data Type
+Specifies the type of data contained in the transactions. The following data types are available for analysis:
+PRBS 7: Selects pseudo-random 7-bit sequences.
+PRBS 15: Selects pseudo-random 15-bit sequences.
+PRBS 23: Selects pseudo-random 23-bit sequences.
+PRBS 31: Selects pseudo-random 31-bit sequences.
+HF: Selects highest frequency divide-by-2 data pattern 10101010.
+LF: Selects lowest frequency divide-by-33 data pattern.
+Error Control
+Displays data errors detected during analysis and allows you to insert errors:
+
+
+Detected errors: Displays the number of data errors detected in the hardware.
+Inserted errors: Displays the number of errors inserted into the transmit data stream.
+Insert error: Inserts a one-word error into the transmit data stream each time you click the button. Insert error is only enabled during transaction performance analysis.
+Clear: Resets the detected errors and inserted errors counters to zeroes.
+Loopback
+Start: Initiates the selected port's transaction performance analysis. Always click Clear before Start.
+Stop: Terminates transaction performance analysis.
+TX and RX performance bars: Show the percentage of maximum theoretical data rate that the requested transactions are able to achieve.
+
+The Component DDR4 Tab
+This tab allows you to read and write Component DDR4 memory on your board.
+Figure 26.The Component DDR4 Tab
+The following sections describe the controls on the Component DDR4 tab.
+
+
+Start
+Initiates DDR4 memory transaction performance analysis.
+Stop
+Terminates transaction performance analysis.
+Performance Indicator
+These controls display current transaction performance analysis information collected since you last clicked Start:
+Write, Read and Total performance bars: Show the percentage of maximum theoretical data rate that the requested transactions are able to achieve.
+Write (MBps), Read (MBps) and Total (MBps): Show the number of bytes analyzed per second.
+Data Bus: 72 bits(8 bits ECC) wide and the frequency is 1066 MHz double data rate. 2133 Mbps per pin. Equating to a theoretical maximum bandwidth of 136,512 Mbps or 17,064 MBps.
+Error Control
+This control displays data errors detected during analysis and allows you to insert errors:
+Detected errors: Displays the number of data errors detected in the hardware.
+Inserted errors: Displays the number of errors inserted into the transaction stream.
+Insert: Inserts a one-word error into the transaction stream each time you click the button. Insert Error is only enabled during transaction performance analysis.
+Clear: Resets the detected error and inserted error counters to zeroes.
+Address Range
+Determines the number of addresses to use in each iteration of reads and writes.
+
+The HiLo DDR4 Tab
+This tab allows you to read and write HiLo DDR4 memory on your board.
+
+
+Figure 27.The HiLo DDR4 Tab
+The following sections describe the controls on the DDR4 tab.
+Start
+Initiates DDR4 memory transaction performance analysis.
+Stop
+Terminates transaction performance analysis.
+Performance Indicators
+These controls display current transaction performance analysis information collected since you last clicked Start:
+Write, Read and Total performance bars: Show the percentage of maximum theoretical data rate that the requested transactions are able to achieve.
+Write (MBps), Read (MBps) and Total (MBps): Show the number of bytes analyzed per second.
+Data Bus: 72 bits (8 bits ECC) wide and the frequency is 1066 MHz double data rate. 2133 Mbps per pin. Equating to a theoretical maximum bandwidth of 136,512 Mbps or 17,064 MBps.
+Error Control
+This control displays data errors detected during analysis and allows you to insert errors:
+
+
+Detected errors: Displays the number of data errors detected in the hardware.
+Inserted errors: Displays the number of errors inserted into the transaction stream.
+Insert: Inserts a one-word error into the transaction stream each time you click the button. Insert Error is only enabled during transaction performance analysis.
+Clear: Resets the detected error and inserted error counters to zeroes.
+Address Range
+Determines the number of addresses to use in each iteration of reads and writes.
+
+The DDR4 Dimm Tab
+This tab allows you to read and write Dual Inline Memory Module (DIMM) DDR4 memory on your board.
+Figure 28.The DDR4 Dimm Tab
+The following sections describe the controls on the DDR4 tab.
+Start
+Initiates DDR4 memory transaction performance analysis.
+Stop
+Terminates transaction performance analysis.
+
+
+Performance Indicators
+These controls display current transaction performance analysis information collected since you last clicked Start:
+Write, Read and Total performance bars: Show the percentage of maximum theoretical data rate that the requested transactions are able to achieve.
+Write (MBps), Read (MBps) and Total (MBps): Show the number of bytes analyzed per second.
+Data Bus: 72 bits (8 bits ECC) wide and the frequency is 1066 MHz double data rate. 2133 Mbps per pin. Equating to a theoretical maximum bandwidth of 136,512 Mbps or 17,064 MBps.
+Error Control
+This control displays data errors detected during analysis and allows you to insert errors:
+Detected errors: Displays the number of data errors detected in the hardware.
+Inserted errors: Displays the number of errors inserted into the transaction stream.
+Insert: Inserts a one-word error into the transaction stream each time you click the button. Insert Error is only enabled during transaction performance analysis.
+Clear: Resets the detected error and inserted error counters to zeroes.
+Address Range
+Determines the number of addresses to use in each iteration of reads and writes.
+
+The HBM2 Top Tab
+This tab allows you to read and write the top bank of HBM2 on your board.
+
+
+Figure 29.The HBM2 Top Tab
+The following sections describe the controls on the HBM2 tab.
+Status Indicators
+HBM2 Size: Indicates the memory size of HBM2.
+Test Status: Indicates the status of the overall test, the table shows each channel status of HBM2.
+
+The HBM2 Bottom Tab
+This tab allows you to read and write the bottom bank of HBM2 on your board.
+
+
+Figure 30.The HBM2 Bottom Tab
+The following sections describe the controls on the HBM2 tab.
+Status Indicators
+HBM2 Size: Indicates the memory size of HBM2.
+Test Status: Indicates the status of the overall test, the table shows each channel status of HBM2.
+
+Power Monitor
+The Power Monitor measures and reports current power information and communicates with the Intel MAX 10 device on the board through the JTAG bus. A power monitor circuit attached to the Intel MAX 10 device allows you to measure the power that the Intel Stratix 10 MX FPGA is consuming.
+To start the application, click the Power Monitor icon in the BTS. You can also run the Power Monitor as a stand-alone application. The PowerMonitor.exe resides in the <package dir>\examples\board_test_system directory.
+Note:You cannot run the stand-alone power application and the BTS simultaneously. Also, you cannot run power and clock interface at the same time.
+
+
+Figure 31.Power Monitor Interface
+The controls on the Power Monitor are described below.
+Test Settings
+Power Rails: Indicates the currently selected power rail. After selecting the desired rail, click Reset to refresh the screen with updated board readings.
+Scale: Specifies the amount to scale the power graph. Select a smaller number to zoom-in to see finer detail. Select a larger number to zoom-out to view the entire range of recorded values.
+Speed: Specifies how often to refresh the graph.
+Power Information
+Displays the root mean square (RMS) current, maximum and minimum numerical power readings in mA.
+Graph
+Displays the mA power consumption of your board over time. The green line indicates the current value. The red line indicates the maximum value read since the last reset. The yellow line indicates the minimum value read since the last reset.
+General Information
+Displays the Intel MAX 10 version and current temperature of the FPGA and the board.
+
+
+Reset
+Clears the graph, resets the minimum and maximum values and restarts the Power Monitor.
+
+Clock Controller
+The Clock Controller application sets the Si5338 programmable oscillators to any frequency between 0.16 MHz and 710 MHz.
+The Clock Controller application sets the Si5341 programmable oscillators to any frequency between 0.1 MHz and 712.5 MHz.
+The Clock Control communicates with the Intel MAX 10 on the board through the JTAG bus. The programmable oscillator are connected to the Intel MAX 10 device through a 2-wire serial bus.
+Figure 32.Clock Controller - Si5338
+
+
+Figure 33.Clock Controller - Si5341
+Si5338 tab and Si5341 tab display the same GUI controls for each clock generators. Each tab allows for separate control. The Si5338 is capable of synthesizing four independent user-programmable clock frequencies up to 710 MHz.
+The controls of the clock controller are described below:
+F_vco
+Displays the generating signal value of the voltage-controlled oscillator.
+Register
+Display the current frequencies for each oscillator.
+Frequency
+Allows you to specify the frequency of the clock MHz.
+Read
+Reads the current frequency setting for the oscillator associated with the active tab.
+
+
+Default
+Sets the frequency for the oscillator associated with the active tab back to its default value. This can also be accomplished by power cycling the board.
+Set
+Sets the programmable oscillator frequency for the selected clock to the value in the CLK0 to CLK3 controls for the Si5338. Frequency changes might take several milliseconds to take effect. You might see glitches on the clock during this time. Intel recommends resetting the FPGA logic after changing frequencies.
+Import
+Import register map file generated from Silicon Laboratories ClockBuilder Desktop.
+
+
+UG-20151 | 2020.06.15
+  Send Feedback
+
+
+
+
+Additional Information
+
+Add SmartVID settings in the QSF file
+Intel Stratix 10 FPGA silicon assembled on the Intel Stratix 10 MX FPGA Development Kit enables SmartVID feature by default.
+You may encounter the following error message when you switch from using the example design to your own design:
+Error(19192): File <filename>.sof is incomplete - Power management settings are not set up appropriately on VID part"
+To prevent Intel Quartus Prime from generating an error message due to incomplete SmartVID settings, you must put constraints listed below into the Intel Quartus Prime project QSF file.
+Open your Intel Quartus Prime project QSF file, copy and paste the constraints listed below in the QSF file.
+Before, you compile your project with correct SmartVID settings, ensure that there are no other similar settings with different values.
+Constraints
+set_global_assignment -name VID_OPERATION_MODE "PMBUS MASTER" set_global_assignment -name USE_PWRMGT_SCL SDM_IO14 set_global_assignment -name USE_PWRMGT_SDA SDM_IO11 set_global_assignment -name USE_CONF_DONE SDM_IO16 set_global_assignment -name USE_INIT_DONE SDM_IO0 set_global_assignment -name PWRMGT_BUS_SPEED_MODE "100 KHZ" set_global_assignment -name PWRMGT_SLAVE_DEVICE0_ADDRESS 47 set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ONset_global_assignment -name VID_OPERATION_MODE "PMBUS MASTER" set_global_assignment -name USE_PWRMGT_SCL SDM_IO14 set_global_assignment -name USE_PWRMGT_SDA SDM_IO11 set_global_assignment -name USE_CONF_DONE SDM_IO16 set_global_assignment -name USE_INIT_DONE SDM_IO0 set_global_assignment -name PWRMGT_BUS_SPEED_MODE "100 KHZ" set_global_assignment -name PWRMGT_SLAVE_DEVICE0_ADDRESS 47 set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
+set_global_assignment -name VID_OPERATION_MODE "PMBUS MASTER" set_global_assignment -name USE_PWRMGT_SCL SDM_IO14 set_global_assignment -name USE_PWRMGT_SDA SDM_IO11 set_global_assignment -name USE_CONF_DONE SDM_IO16 set_global_assignment -name USE_INIT_DONE SDM_IO0 set_global_assignment -name PWRMGT_BUS_SPEED_MODE "100 KHZ" set_global_assignment -name PWRMGT_SLAVE_DEVICE0_ADDRESS 47 set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
+set_global_assignment -name VID_OPERATION_MODE "PMBUS MASTER" set_global_assignment -name USE_PWRMGT_SCL SDM_IO14 set_global_assignment -name USE_PWRMGT_SDA SDM_IO11 set_global_assignment -name USE_CONF_DONE SDM_IO16 set_global_assignment -name USE_INIT_DONE SDM_IO0 set_global_assignment -name PWRMGT_BUS_SPEED_MODE "100 KHZ" set_global_assignment -name PWRMGT_SLAVE_DEVICE0_ADDRESS 47 set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
+The Intel Stratix 10 device family offers SmartVID standard power devices in all speed grades. Lower power fixed-voltage devices are also available in all speed grades except for the fastest speed grade. Please refer to Intel Stratix 10 Power Management User Guide for additional information.
+Related Information
+Intel Stratix 10 Power Management User Guide
+
+
+
+
+
+
+
+
+
+
+Intel Corporation. All rights reserved. Agilex, Altera, Arria, Cyclone, Enpirion, Intel, the Intel logo, MAX, Nios, Quartus and Stratix words and logos are trademarks of Intel Corporation or its subsidiaries in the U.S. and/or other countries. Intel warrants performance of its FPGA and semiconductor products to current specifications in accordance with Intel's standard warranty, but reserves the right to make changes to any products and services at any time without notice. Intel assumes no responsibility or liability arising out of the application or use of any information, product, or service described herein except as expressly agreed to in writing by Intel. Intel customers are advised to obtain the latest version of device specifications before relying on any published information and before placing orders for products or services.
+*Other names and brands may be claimed as the property of others.
+
+
+ISO 9001:2015
+Registered
+
+
+Safety and Regulatory Information
+
+ENGINEERING DEVELOPMENT PRODUCT - NOT FOR RESALE OR LEASE
+This development kit is intended for laboratory development and engineering use only. This development kit is designed to allow:
+Product developers and system engineers to evaluate electronic components, circuits, or software associated with the development kit to determine whether to incorporate such items in a finished product.
+Software developers to write software applications for use with the end product.
+This kit is not a finished product and when assembled may not be resold or otherwise marketed unless all required Federal Communications Commission (FCC) equipment authorizations are first obtained.
+Operation is subject to the condition that this product not cause harmful interference to licensed radio stations and that this product accept harmful interference.
+Unless the assembled kit is designed to operate under Part 15, Part 18 or Part 95 of the United States Code of Federal Regulations (CFR) Title 47, the operator of the kit must operate under the authority of an FCC licenseholder or must secure an experimental authorization under Part 5 of the United States CFR Title 47.
+Safety Assessment and CE mark requirements have been completed, however, other certifications that may be required for installation and operation in your region have not been obtained.
+
+Safety Warnings
+
+Power Supply Hazardous Voltage
+AC mains voltages are present within the power supply assembly. No user serviceable parts are present inside the power supply.
+
+
+Power Connect and Disconnect
+The AC power supply cord is the primary disconnect device from mains (AC power) and used to remove all DC power from the board/system. The socket outlet must be installed near the equipment and must be readily accessible.
+
+
+System Grounding (Earthing)
+To avoid shock, you must ensure that the power cord is connected to a properly wired and grounded receptacle. Ensure that any equipment to which this product is attached is also connected to properly wired and grounded receptacles.
+
+
+Power Cord Requirements
+The connector that plugs into the wall outlet must be a grounding-type male plug designed for use in your region. It must have marks showing certification by an agency in your region. The connector that plugs into the AC receptacle on the power supply must be an IEC 320, sheet C13, female connector. If the power cord supplied with the system does not meet requirements for use in your region, discard the cord and do not use it with adapters.
+
+
+
+Lightning/Electrical Storm
+Do not connect/disconnect any cables or perform installation/maintenance of this product during an electrical storm.
+Risk of Fire
+To reduce the risk of fire, keep all flammable materials a safe distance away from the boards and power supply. You must configure the development kit on a flame retardant surface.
+
+Safety Cautions
+
+
+Caution:Hot Surfaces and Sharp Edges. Integrated Circuits and heat sinks may be hot if the system has been running. Also, there might be sharp edges on some boards. Contact should be avoided.
+
+Thermal and Mechanical Injury
+Certain components such as heat sinks, power regulators, and processors may be hot. Heatsink fans are not guarded. Power supply fan may be accessible through guard.
+Care should be taken to avoid contact with these components.
+
+
+
+
+
+
+Cooling Requirements
+Maintain a minimum clearance area of 5 centimeters (2 inches) around the side, front and back of the board for cooling purposes. Do not block power supply ventilation holes and fan.
+Electro-Magnetic Interference (EMI)
+This equipment has not been tested for compliance with emission limits of FCC and similar international regulations. Use of this equipment in a residential location is prohibited. This equipment generates, uses and can radiate radio frequency energy which may result in harmful interference to radio communications. If this equipment does cause harmful interference to radio or television reception, which can be determined by turning the equipment on and off, the user is required to take measures to eliminate this interference.
+Telecommunications Port Restrictions
+The wireline telecommunications ports (modem, xDSL, T1/E1) on this product must not be connected to the Public Switched Telecommunication Network (PSTN) as it might result in disruption of the network. No formal telecommunication certification to FCC, R&TTE Directive, or other national requirements have been obtained.
+
+Electrostatic Discharge (ESD) Warning
+A properly grounded ESD wrist strap must be worn during operation/installation of the boards, connection of cables, or during installation or removal of daughter cards.
+Failure to use wrist straps can damage components within the system.
+
+
+Attention:Please return this product to Intel for proper disposition. If it is not returned, refer to local environmental regulations for proper recycling. Do not dispose of this product in unsorted municipal waste.
+
+Ecology Conformance Marking for WEEE and China RoHS
+
+
+
+
+A.3. Compliance and Conformity Statement
+CE EMI Conformity Caution
+This development kit is delivered conforming to relevant standards mandated by Directive 2014/30/EU. Because of the nature of programmable logic devices, it is possible for the user to modify the development kit in such a way as to generate electromagnetic interference (EMI) that exceeds the limits established for this equipment. Any EMI caused as a result of modifications to the delivered material is the responsibility of the user of this development kit.
+
+
+
+UG-20151 | 2020.06.15
+  Send Feedback
+
+
+
+
+Revision History
+
+Revision History
+Table 29.Revision History for Intel Stratix 10 MX FPGA Development Kit User Guide
+
+Document Version
+Changes
+2020.06.15
+Updated Add SmartVID settings in the QSF file on page 90 [Constraints script updated] Constraints Updated:
+PWRMGT_BUS_SPEED_MODE "100 KHZ"
+PWRMGT_SLAVE_DEVICE0_ADDRESS 47
+2020.02.12
+Updated Development Kit block diagram in General Development Kit Description on page 4 [Correction: DDR4 is 16Gb x5]
+2019.11.29
+Add support for production versions of development board:
+Intel Stratix 10 MX FPGA H-Tile (8 GB)
+Intel Stratix 10 MX FPGA H-Tile (16 GB)
+Remove support for ES version of development board
+2019.09.20
+Updated SW2 DIP JTAG Switch Default Settings (Board Bottom) Table in Default Switch and Jumper Settings on page 11
+2019.08.22
+Added Add SmartVID settings in the QSF file on page 90
+2018.10.12
+Engineering Silicon (ES) Release.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Intel Corporation. All rights reserved. Agilex, Altera, Arria, Cyclone, Enpirion, Intel, the Intel logo, MAX, Nios, Quartus and Stratix words and logos are trademarks of Intel Corporation or its subsidiaries in the U.S. and/or other countries. Intel warrants performance of its FPGA and semiconductor products to current specifications in accordance with Intel's standard warranty, but reserves the right to make changes to any products and services at any time without notice. Intel assumes no responsibility or liability arising out of the application or use of any information, product, or service described herein except as expressly agreed to in writing by Intel. Intel customers are advised to obtain the latest version of device specifications before relying on any published information and before placing orders for products or services.
+*Other names and brands may be claimed as the property of others.
+
+
+ISO 9001:2015
+Registered

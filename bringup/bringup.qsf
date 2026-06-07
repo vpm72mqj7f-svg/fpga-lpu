@@ -1,0 +1,106 @@
+# =============================================================================
+# bringup.qsf — Quartus Prime Pro Settings File
+# Target: Intel Stratix 10 MX FPGA Development Kit
+# Device: 1SM21BHU2F53E1VG
+# Board: DK-DEV-1SMX-H-A (Rev B)
+# =============================================================================
+
+# ---- Device Selection ----
+set_global_assignment -name DEVICE 1SM21BHU2F53E1VG
+set_global_assignment -name FAMILY "Stratix 10"
+set_global_assignment -name DEVICE_FILTER_PACKAGE FBGA
+set_global_assignment -name DEVICE_FILTER_PIN_COUNT 2597
+set_global_assignment -name DEVICE_FILTER_SPEED_GRADE 1
+set_global_assignment -name TOP_LEVEL_ENTITY bringup_top
+
+# ---- SmartVID Settings (REQUIRED for Production Device) ----
+# Ref: UG-20151, Section "Add SmartVID settings in the QSF file"
+# Without these, Quartus errors with: "File .sof is incomplete - Power management
+# settings are not set up appropriately on VID part"
+set_global_assignment -name VID_OPERATION_MODE "PMBUS MASTER"
+set_global_assignment -name USE_PWRMGT_SCL SDM_IO14
+set_global_assignment -name USE_PWRMGT_SDA SDM_IO11
+set_global_assignment -name USE_CONF_DONE SDM_IO16
+set_global_assignment -name USE_INIT_DONE SDM_IO0
+set_global_assignment -name PWRMGT_BUS_SPEED_MODE "100 KHZ"
+set_global_assignment -name PWRMGT_SLAVE_DEVICE0_ADDRESS 47
+set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
+
+# ---- Configuration Mode ----
+# AS x4 Fast Mode (MSEL[2:0] = 001), default on this board
+set_global_assignment -name STRATIX10_CONFIGURATION_SCHEME "ACTIVE SERIAL X4"
+set_global_assignment -name USE_AS_FOR_CONFIG ON
+
+# ---- Source Files ----
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/bringup_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_ffn_engine.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/reset_controller.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/led_controller.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/pll_controller.sv
+
+# ---- SDC Constraints ----
+set_global_assignment -name SDC_FILE bringup.sdc
+
+# ---- Clocks — Board Reference (from schematic) ----
+# Clock Source          | Signal Name           | Frequency      | FPGA Pin
+# ----------------------+-----------------------+----------------+----------
+# Si5341A U16           | CLK_SYS_100M_P/N      | 100 MHz LVDS   | AU17/AU16
+# Si5341A U16           | CLK_UIB0_P/N          | 100 MHz LVDS   | AR26/AP26
+# Si5341A U16           | CLK_UIB1_P/N          | 100 MHz LVDS   | P27/R27
+# Si5341A U16           | CLK_ESRAM0_P/N        | 100 MHz LVDS   | AU31/AU32
+# Si5341A U16           | CLK_ESRAM1_P/N        | 100 MHz LVDS   | V31/U31
+# Si5338A U18           | CLK_SYS_50M_P/N       | 50 MHz LVDS    | BE17/BD17
+# Si5338A U18           | CLK_CORE_BAK_P/N      | 100 MHz LVDS   | AT13/AU13
+# Si510   U17           | S10_OSC_CLK_1         | 125 MHz LVCMOS | AR35
+# Si5341A U16           | REFCLK_PCIE_EP_P/N    | 100 MHz LVDS   | AW43/AW42
+# Si5338A U18           | REFCLK_PCIE_EP1_P/N   | 100 MHz LVDS   | BA43/BA42
+# Si5341A U16           | REFCLK_PCIE_RT_P/N    | 100 MHz LVDS   | AW9/AW10
+
+# ---- System Clock (primary: 100 MHz from Si5341A U16) ----
+set_location_assignment PIN_AU17 -to clk_sys_100m_p
+set_instance_assignment -name IO_STANDARD LVDS -to clk_sys_100m_p
+
+# ---- User LEDs (Active Low: ON=logic 0) ----
+set_location_assignment PIN_BG12 -to led[0]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to led[0]
+set_location_assignment PIN_BF12 -to led[1]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to led[1]
+set_location_assignment PIN_BG11 -to led[2]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to led[2]
+set_location_assignment PIN_BH11 -to led[3]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to led[3]
+
+# ---- Reset Inputs ----
+# CPU Reset (S10 pushbutton)
+set_location_assignment PIN_BL14 -to cpu_reset_n
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_reset_n
+
+# ---- PCIe Endpoint Interface (Bank 1C, 1D, 1E) ----
+# PCIe EP Reference Clock (from motherboard via edge connector)
+set_location_assignment PIN_AW43 -to pcie_ep_refclk_p
+set_instance_assignment -name IO_STANDARD LVDS -to pcie_ep_refclk_p
+
+# PCIe EP PERST (from edge connector)
+set_location_assignment PIN_AH39 -to pcie_ep_perst_n
+set_instance_assignment -name IO_STANDARD "1.8 V" -to pcie_ep_perst_n
+
+# ---- HBM2 Reference Resistor Pins ----
+# UIB0 RZQ: 240 Ohm 1% external reference
+set_location_assignment PIN_AT29 -to hbm2_uib0_rzq
+# UIB1 RZQ
+set_location_assignment PIN_U28 -to hbm2_uib1_rzq
+
+# ---- I/O Standard Defaults ----
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
+
+# ---- Synthesis Settings ----
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name SYNTH_GATED_CLOCK_CONVERSION ON
+set_global_assignment -name SYNTH_CLOCK_MUX_PROTECTION ON
+
+# ---- Fitter Settings ----
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+
+# ---- Power Estimation ----
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "HEAT SINK WITH MEDIUM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"

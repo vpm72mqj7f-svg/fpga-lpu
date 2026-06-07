@@ -1,0 +1,6 @@
+六月 04, 2026 10:59:37 上午 com.intel.bts.BtsView <init>
+信息: Board version: Rev D, chip version: PRD
+六月 04, 2026 10:59:38 上午 com.intel.bts.ClientApp attachServer
+信息: [C:\intelFPGA_pro\23.4\quartus/sopc_builder/bin/system-console, --server]
+六月 04, 2026 10:59:38 上午 com.intel.bts.ClientApp attachServer
+严重: java.io.IOException: Cannot run program "C:\intelFPGA_pro\23.4\quartus/sopc_builder/bin/system-console": CreateProcess error=2, 系统找不到指定的文件。
