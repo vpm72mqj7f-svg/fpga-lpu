@@ -1,0 +1,11 @@
+# =============================================================================
+# v4_flash.qpf — DeepSeek V4-Flash FFN Engine
+# Target: Intel Stratix 10 MX Development Kit (1SM21BHU2F53E1VG)
+# Model: 285B params, hidden=7168, inter=3072, 27 layers
+#        384 routed + 1 shared expert, FP8
+# =============================================================================
+
+PROJECT_REVISION = "v4_flash"
+PROJECT_OUTPUT_DIRECTORY = "output_files"
+
+QUARTUS_VERSION = "18.1"

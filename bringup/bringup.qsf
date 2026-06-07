@@ -28,8 +28,7 @@ set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
 
 # ---- Configuration Mode ----
 # AS x4 Fast Mode (MSEL[2:0] = 001), default on this board
-set_global_assignment -name STRATIX10_CONFIGURATION_SCHEME "ACTIVE SERIAL X4"
-set_global_assignment -name USE_AS_FOR_CONFIG ON
+# Note: Configuration scheme set by MSEL pins on-board; not needed in QSF for 21.3+
 
 # ---- Source Files ----
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/bringup_top.sv

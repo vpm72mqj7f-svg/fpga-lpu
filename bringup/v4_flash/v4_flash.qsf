@@ -1,0 +1,71 @@
+# =============================================================================
+# v4_flash.qsf — DeepSeek V4-Flash FFN (285B, hidden=7168, inter=3072)
+# Board: DK-DEV-1SMX-H-A, 1SM21BHU2F53E1VG
+# =============================================================================
+
+set_global_assignment -name DEVICE 1SM21BHU2F53E1VG
+set_global_assignment -name FAMILY "Stratix 10"
+set_global_assignment -name DEVICE_FILTER_PACKAGE FBGA
+set_global_assignment -name DEVICE_FILTER_PIN_COUNT 2597
+set_global_assignment -name DEVICE_FILTER_SPEED_GRADE 1
+set_global_assignment -name TOP_LEVEL_ENTITY v4_flash_top
+
+# SmartVID (Production device required)
+set_global_assignment -name VID_OPERATION_MODE "PMBUS MASTER"
+set_global_assignment -name USE_PWRMGT_SCL SDM_IO14
+set_global_assignment -name USE_PWRMGT_SDA SDM_IO11
+set_global_assignment -name USE_CONF_DONE SDM_IO16
+set_global_assignment -name USE_INIT_DONE SDM_IO0
+set_global_assignment -name PWRMGT_BUS_SPEED_MODE "100 KHZ"
+set_global_assignment -name PWRMGT_SLAVE_DEVICE0_ADDRESS 47
+set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
+
+# Source files
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/v4_flash_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/v4_flash_ffn_engine.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/reset_controller.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/led_controller.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/pll_controller.sv
+
+# SDC
+set_global_assignment -name SDC_FILE ../bringup.sdc
+
+# === Board Pin Assignments (same as bringup) ===
+
+# System Clock: 100 MHz LVDS (Si5341A U16)
+set_location_assignment PIN_AU17 -to clk_sys_100m_p
+set_instance_assignment -name IO_STANDARD LVDS -to clk_sys_100m_p
+
+# User LEDs (Active Low)
+set_location_assignment PIN_BG12 -to led[0]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to led[0]
+set_location_assignment PIN_BF12 -to led[1]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to led[1]
+set_location_assignment PIN_BG11 -to led[2]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to led[2]
+set_location_assignment PIN_BH11 -to led[3]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to led[3]
+
+# CPU Reset
+set_location_assignment PIN_BL14 -to cpu_reset_n
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_reset_n
+
+# PCIe EP Reference Clock
+set_location_assignment PIN_AW43 -to pcie_ep_refclk_p
+set_instance_assignment -name IO_STANDARD LVDS -to pcie_ep_refclk_p
+
+# PCIe EP PERST (USE_AS_3V_GPIO during bringup)
+set_location_assignment PIN_AH39 -to pcie_ep_perst_n
+set_instance_assignment -name IO_STANDARD "1.8 V" -to pcie_ep_perst_n
+set_instance_assignment -name USE_AS_3V_GPIO ON -to pcie_ep_perst_n
+
+# Default
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+
+# Loop limit for large model loops (HIDDEN=7168 > default 5000)
+set_global_assignment -name VERILOG_NON_CONSTANT_LOOP_LIMIT 10000
+
+# Power
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "HEAT SINK WITH MEDIUM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
