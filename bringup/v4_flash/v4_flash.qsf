@@ -20,12 +20,16 @@ set_global_assignment -name PWRMGT_BUS_SPEED_MODE "100 KHZ"
 set_global_assignment -name PWRMGT_SLAVE_DEVICE0_ADDRESS 47
 set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
 
-# Source files
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/v4_flash_top.sv
+# Source files — FFN engine submodules
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/fp8_mac.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/silu_activation.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/systolic_array.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/hbm2_weight_reader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/v4_flash_ffn_engine.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/v4_flash_top.sv
+# Shared support modules (no PLL — v4_flash uses altera_iopll directly)
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/reset_controller.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/led_controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/pll_controller.sv
 
 # SDC
 set_global_assignment -name SDC_FILE ../bringup.sdc
