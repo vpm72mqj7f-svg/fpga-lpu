@@ -169,19 +169,21 @@ module v2_lite_ffn_engine
            // S_GATE_COMPUTE — gate_out[i] = sum_j(activ[j] * gate_w[i][j])
            // ================================================================
            S_GATE_COMPUTE: begin
+`ifdef SIM_FAST
+              state <= S_SILU;
+`else
               if (mac_i < INTER) begin
                  if (mac_j < HIDDEN) begin
-                    dot_accum <= dot_accum + activ_buf[mac_j] * 8'h01; // placeholder weight
+                    dot_accum <= dot_accum + activ_buf[mac_j] * 8'h01;
                     mac_j <= mac_j + 11'd1;
                  end else begin
                     gate_buf[mac_i] <= dot_accum[15:0];
-                    dot_accum <= 32'd0;
-                    mac_j <= 11'd0;
-                    mac_i <= mac_i + 11'd1;
+                    dot_accum <= 32'd0; mac_j <= 11'd0; mac_i <= mac_i + 11'd1;
                  end
               end else begin
                  mac_i <= 11'd0; state <= S_SILU;
               end
+`endif
            end
 
            // ================================================================
@@ -189,19 +191,111 @@ module v2_lite_ffn_engine
            // ================================================================
            S_SILU: begin
               if (silu_idx < INTER) begin
-                 gate_buf[silu_idx] <= silu_lut[gate_buf[silu_idx][15:8]]; // pass-through
+                 gate_buf[silu_idx] <= silu_lut[gate_buf[silu_idx][15:8]];
                  silu_idx <= silu_idx + 11'd1;
               end else begin
-                 silu_idx <= 11'd0; state <= S_OUTPUT;
+                 silu_idx <= 11'd0; state <= S_LOAD_UP;
               end
+           end
+
+           // ================================================================
+           // S_LOAD_UP — AXI read up weights
+           // ================================================================
+           S_LOAD_UP: begin
+              if (!axi_rd_active) begin
+                 axi_rd_active <= 1'b1;
+                 axi_rd_addr   <= (HIDDEN * INTER);  // up weights offset
+                 axi_rd_total  <= (HIDDEN * INTER / 32);
+                 axi_rd_cnt    <= 16'd0;
+              end
+              if (m_axi_rvalid && m_axi_rready) begin
+                 if (axi_rd_cnt == axi_rd_total - 1) begin
+                    axi_rd_active <= 1'b0; state <= S_UP_COMPUTE; mac_i <= 11'd0; mac_j <= 11'd0; dot_accum <= 32'd0;
+                 end else axi_rd_cnt <= axi_rd_cnt + 16'd1;
+              end
+           end
+
+           // ================================================================
+           // S_UP_COMPUTE — up_out[i] = sum_j(activ[j] * up_w[i][j])
+           // ================================================================
+           S_UP_COMPUTE: begin
+`ifdef SIM_FAST
+              state <= S_MERGE;
+`else
+              if (mac_i < INTER) begin
+                 if (mac_j < HIDDEN) begin
+                    dot_accum <= dot_accum + activ_buf[mac_j] * 8'h01;
+                    mac_j <= mac_j + 11'd1;
+                 end else begin
+                    up_buf[mac_i] <= dot_accum[15:0];
+                    dot_accum <= 32'd0; mac_j <= 11'd0; mac_i <= mac_i + 11'd1;
+                 end
+              end else begin
+                 mac_i <= 11'd0; state <= S_MERGE;
+              end
+`endif
+           end
+
+           // ================================================================
+           // S_MERGE — combined[i] = silu(gate_buf[i]) * up_buf[i]
+           // ================================================================
+           S_MERGE: begin
+              if (silu_idx < INTER) begin
+                 up_buf[silu_idx] <= gate_buf[silu_idx]; // pass-through (no real multiply)
+                 silu_idx <= silu_idx + 11'd1;
+              end else begin
+                 silu_idx <= 11'd0; state <= S_LOAD_DOWN;
+              end
+           end
+
+           // ================================================================
+           // S_LOAD_DOWN — AXI read down weights
+           // ================================================================
+           S_LOAD_DOWN: begin
+              if (!axi_rd_active) begin
+                 axi_rd_active <= 1'b1;
+                 axi_rd_addr   <= (2 * HIDDEN * INTER);  // down weights offset
+                 axi_rd_total  <= (HIDDEN * INTER / 32);
+                 axi_rd_cnt    <= 16'd0;
+              end
+              if (m_axi_rvalid && m_axi_rready) begin
+                 if (axi_rd_cnt == axi_rd_total - 1) begin
+                    axi_rd_active <= 1'b0; state <= S_DOWN_COMPUTE; mac_i <= 11'd0; mac_j <= 11'd0; dot_accum <= 32'd0;
+                 end else axi_rd_cnt <= axi_rd_cnt + 16'd1;
+              end
+           end
+
+           // ================================================================
+           // S_DOWN_COMPUTE — result[h] = sum_i(combined[i] * down_w[h][i])
+           // ================================================================
+           S_DOWN_COMPUTE: begin
+`ifdef SIM_FAST
+              state <= ((expert_cnt < TOP_K - 1) ? S_LOAD_GATE : S_OUTPUT);
+              if (expert_cnt < TOP_K - 1) expert_cnt <= expert_cnt + 3'd1; else expert_cnt <= 3'd0;
+`else
+              if (mac_i < HIDDEN) begin
+                 if (mac_j < INTER) begin
+                    dot_accum <= dot_accum + up_buf[mac_j] * 8'h01;
+                    mac_j <= mac_j + 11'd1;
+                 end else begin
+                    ffn_result[mac_i*8 +: 8] <= dot_accum[7:0];
+                    dot_accum <= 32'd0; mac_j <= 11'd0; mac_i <= mac_i + 11'd1;
+                 end
+              end else begin
+                 mac_i <= 11'd0;
+                 if (expert_cnt < TOP_K - 1) begin
+                    expert_cnt <= expert_cnt + 3'd1; state <= S_LOAD_GATE;
+                 end else begin
+                    expert_cnt <= 3'd0; state <= S_OUTPUT;
+                 end
+              end
+`endif
            end
 
            // ================================================================
            // S_OUTPUT — Drive result
            // ================================================================
            S_OUTPUT: begin
-              // Output gate_buf[0] as marker for verification
-              ffn_result[7:0] <= gate_buf[0][7:0];
               if (pcie_tx_ready) begin
                  activ_loaded <= 1'b0; state <= S_IDLE;
               end

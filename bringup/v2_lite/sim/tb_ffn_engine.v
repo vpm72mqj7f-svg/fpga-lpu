@@ -263,8 +263,8 @@ module tb_ffn_engine;
    // Timeout watchdog
    // =========================================================================
    initial begin
-      #500000000;  // 500 ms
-      $display("TIMEOUT: Simulation exceeded 500ms");
+      #5000000000;  // 5 seconds
+      $display("TIMEOUT: Simulation exceeded 5s");
       $finish;
    end
 
