@@ -13,10 +13,16 @@ module tb_ffn_engine;
    // =========================================================================
    // Parameters
    // =========================================================================
+`ifdef SIM_SMALL
+   parameter HIDDEN      = 16;
+   parameter INTER       = 8;
+   parameter TOP_K       = 1;
+`else
    parameter HIDDEN      = 2048;
    parameter INTER       = 1408;
-   parameter NUM_EXPERTS = 66;
    parameter TOP_K       = 6;
+`endif
+   parameter NUM_EXPERTS = 66;
    parameter DATA_W      = 8;
 
    // =========================================================================
@@ -204,7 +210,7 @@ module tb_ffn_engine;
       // ---- Init ----
       rst_ = 1'b0;
       pcie_rx_valid = 1'b0;
-      pcie_rx_data  = 16384'b0;
+      pcie_rx_data  = 0;
       pcie_tx_ready = 1'b0;
       repeat(10) @(posedge clk);
 
