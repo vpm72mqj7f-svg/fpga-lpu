@@ -194,8 +194,21 @@ module v2_lite_ffn_engine
            // 256 bytes per burst, 64 bursts = 16KB test read
            // ============================================================
            S_LOAD_WEIGHT: begin
-              // Skip AXI for bringup — go directly to compute
-              state <= S_COMPUTE;
+              if (!axi_rd_active) begin
+                 axi_rd_active <= 1'b1;
+                 axi_rd_addr   <= 32'd0;
+                 axi_rd_total  <= 16'd8;   // 8 beats (1 burst)
+                 axi_rd_cnt    <= 16'd0;
+              end
+
+              if (m_axi_rvalid && m_axi_rready) begin
+                 if (axi_rd_cnt == axi_rd_total - 1) begin
+                    axi_rd_active <= 1'b0;
+                    state <= S_COMPUTE;
+                 end else begin
+                    axi_rd_cnt <= axi_rd_cnt + 16'd1;
+                 end
+              end
            end
 
            // ============================================================

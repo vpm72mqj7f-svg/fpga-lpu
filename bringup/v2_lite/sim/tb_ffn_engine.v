@@ -42,7 +42,7 @@ module tb_ffn_engine;
    wire [7:0]   m_axi_arlen;
    wire [2:0]   m_axi_arsize;
    wire         m_axi_arvalid;
-   reg          m_axi_arready;
+   wire         m_axi_arready;
    reg  [255:0] m_axi_rdata;
    reg  [1:0]   m_axi_rresp;
    reg          m_axi_rvalid;
@@ -157,44 +157,36 @@ module tb_ffn_engine;
       end
    end
 
-   // Zero-latency SRAM: respond on same cycle as arvalid
+   // Zero-latency SRAM model (verified standalone)
    reg [2:0] rbeat;
 
    always @(posedge clk or negedge rst_) begin
       if (!rst_) begin
-         m_axi_arready <= 1'b1;
-         m_axi_rvalid  <= 1'b0;
-         m_axi_rdata   <= 256'd0;
-         m_axi_rresp   <= 2'd0;
-         m_axi_rlast   <= 1'b0;
-         rbeat         <= 3'd0;
+         m_axi_rdata  <= 256'd0; m_axi_rresp <= 2'd0; m_axi_rvalid <= 1'b0;
+         m_axi_rlast  <= 1'b0; rbeat <= 3'd0;
       end else begin
-         // Default: deassert after one beat
-         if (m_axi_rvalid && m_axi_rready) m_axi_rvalid <= 1'b0;
-
-         // On arvalid, respond with first data
-         if (m_axi_arvalid && m_axi_arready) begin
+         // Respond to arvalid
+         if (m_axi_arvalid && !m_axi_rvalid) begin
+            rbeat  <= 3'd0;
             m_axi_rdata  <= sram[0];
             m_axi_rvalid <= 1'b1;
             m_axi_rlast  <= 1'b0;
-            rbeat <= 3'd0;
-            m_axi_arready <= 1'b0;
          end
 
-         // Stream subsequent beats
+         // Stream beats on handshake
          if (m_axi_rvalid && m_axi_rready) begin
-            rbeat <= rbeat + 3'd1;
-            if (rbeat == 3'd6) begin  // last of 8 beats
+            if (rbeat == 3'd7) begin
+               m_axi_rvalid <= 1'b0;
                m_axi_rlast  <= 1'b0;
-               m_axi_arready <= 1'b1;  // ready for next burst
             end else begin
-               m_axi_rdata <= sram[rbeat + 3'd1];
+               rbeat  <= rbeat + 3'd1;
+               m_axi_rdata  <= sram[rbeat + 3'd1];
                m_axi_rvalid <= 1'b1;
-               if (rbeat == 3'd5) m_axi_rlast <= 1'b1;
             end
          end
       end
    end
+   assign m_axi_arready = 1'b1;
 
    // =========================================================================
    // Test sequence
