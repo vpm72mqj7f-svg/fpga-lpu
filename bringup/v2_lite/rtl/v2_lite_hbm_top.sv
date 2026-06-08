@@ -66,11 +66,20 @@ module v2_lite_hbm_top #(
     wire        ffn_busy;
     wire        ffn_done;
 
-    // HBM2 AXI4 tied off
+    // AXI4 SRAM (behavioral HBM2 sim model — replaced with real HBM2 IP for synthesis)
     wire [31:0]  ffn_araddr;  wire [7:0] ffn_arlen; wire [2:0] ffn_arsize;
-    wire         ffn_arvalid; wire ffn_arready = 1'b0;
-    wire [255:0] ffn_rdata = 256'd0; wire [1:0] ffn_rresp = 2'd0;
-    wire         ffn_rvalid = 1'b0; wire ffn_rready; wire ffn_rlast = 1'b0;
+    wire         ffn_arvalid; wire ffn_arready;
+    wire [255:0] ffn_rdata;   wire [1:0] ffn_rresp;
+    wire         ffn_rvalid;  wire ffn_rready; wire ffn_rlast;
+
+    axi_sram_sim #(.ADDR_W(32), .DATA_W(256), .ID_W(9), .DEPTH(65536))
+    u_hbm_sim (
+        .clk(core_clk_iopll_ref_clk_clk), .rst_n(rst_n),
+        .s_axi_araddr(ffn_araddr), .s_axi_arlen(ffn_arlen), .s_axi_arsize(ffn_arsize),
+        .s_axi_arid(9'd0), .s_axi_arvalid(ffn_arvalid), .s_axi_arready(ffn_arready),
+        .s_axi_rdata(ffn_rdata), .s_axi_rresp(ffn_rresp), .s_axi_rid(),
+        .s_axi_rvalid(ffn_rvalid), .s_axi_rready(ffn_rready), .s_axi_rlast(ffn_rlast)
+    );
 
     wire [6:0]   ffn_expert_id [0:TOP_K-1];
     genvar ei;
