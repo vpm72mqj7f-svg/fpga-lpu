@@ -1,4 +1,4 @@
-set_global_assignment -name TOP_LEVEL_ENTITY v2_lite_top
+set_global_assignment -name TOP_LEVEL_ENTITY qts_hbm_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 18.0.1
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "15:38:22  JULY 17, 2018"
 set_global_assignment -name LAST_QUARTUS_VERSION "18.1.1 Pro Edition"
@@ -12,13 +12,26 @@ set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 256
 set_global_assignment -name EDA_SIMULATION_TOOL "<None>"
 set_global_assignment -name EDA_OUTPUT_DATA_FORMAT NONE -section_id eda_simulation
 
+## UIB PLL REFCLK assignment for TOP HBM
+
+set_location_assignment PIN_P27 -to hbm_0_example_design_pll_ref_clk_clk -comment 100MHz
+set_location_assignment PIN_R27 -to "hbm_0_example_design_pll_ref_clk_clk(n)" -comment 100MHz
+
+## UIB PLL REFCLK assignment for BOTTOM HBM
+
+#set_location_assignment PIN_AR26 -to hbm_0_example_design_pll_ref_clk_clk
+#set_location_assignment PIN_AP26 -to "hbm_0_example_design_pll_ref_clk_clk(n)"
+
+set_instance_assignment -name IO_STANDARD LVDS -to hbm_0_example_design_pll_ref_clk_clk -entity qts_hbm_top
+set_instance_assignment -name IO_STANDARD LVDS -to "hbm_0_example_design_pll_ref_clk_clk(n)" -entity qts_hbm_top
+
 ## RECLK input to Core clk
 
 set_location_assignment PIN_AU17 -to core_clk_iopll_ref_clk_clk -comment 100MHz
 set_location_assignment PIN_AU16 -to "core_clk_iopll_ref_clk_clk(n)" -comment 100MHz
 
-set_instance_assignment -name IO_STANDARD LVDS -to core_clk_iopll_ref_clk_clk -entity v2_lite_top
-set_instance_assignment -name IO_STANDARD LVDS -to "core_clk_iopll_ref_clk_clk(n)" -entity v2_lite_top
+set_instance_assignment -name IO_STANDARD LVDS -to core_clk_iopll_ref_clk_clk -entity qts_hbm_top
+set_instance_assignment -name IO_STANDARD LVDS -to "core_clk_iopll_ref_clk_clk(n)" -entity qts_hbm_top
 
 ## LED STATUS OUTPUT
 set_location_assignment PIN_BG12 -to led[0] -comment "LED 0"
@@ -74,12 +87,30 @@ set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
 
 set_global_assignment -name FLOW_ENABLE_HYPER_RETIMER_FAST_FORWARD ON
 set_global_assignment -name SDC_FILE hbm_top.sdc
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/v2_lite_top.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/v2_lite_ffn_engine.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/fp8_mac.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/silu_activation.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/systolic_array.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/hbm2_weight_reader.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/reset_controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/led_controller.sv
-set_global_assignment -name SDC_FILE ../bringup.sdc
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_hbm_0_example_design.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_core_clk_iopll.ip
+set_global_assignment -name IP_FILE ip/q_sys_gpio/q_sys_gpio_master_0.ip
+set_global_assignment -name SDC_FILE jtag_example.sdc
+set_global_assignment -name VERILOG_FILE qts_hbm_top.v
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg7_1.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg7_0.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg6_1.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg6_0.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg5_1.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg5_0.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg4_1.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg4_0.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg3_1.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg3_0.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg2_1.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg2_0.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg1_1.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg1_0.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg0_1.ip
+set_global_assignment -name IP_FILE ip/ed_synth/ed_synth_tg0_0.ip
+set_global_assignment -name QSYS_FILE ed_synth.qsys
+set_global_assignment -name IP_FILE ip/q_sys_gpio/q_sys_gpio_clock_in.ip
+set_global_assignment -name IP_FILE ip/q_sys_gpio/q_sys_gpio_reset_in.ip
+set_global_assignment -name QSYS_FILE q_sys_gpio.qsys
+set_global_assignment -name IP_FILE ip/q_sys_gpio/q_sys_gpio_product_info_0.ip
+set_global_assignment -name IP_FILE ip/q_sys_gpio/q_sys_gpio_pio_0.ip
