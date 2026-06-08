@@ -32,3 +32,5 @@ sim/*.log
 # Temp files
 *.swp
 *~
+qts_hbm_bottom_extracted/
+qts_hbm_top_extracted/
