@@ -180,8 +180,8 @@ module tb_v2_lite_hbm_top;
     // Timeout watchdog
     // =========================================================================
     initial begin
-        #200000000;  // 200 ms timeout
-        $display("TIMEOUT: Simulation exceeded 200ms");
+        #500000000;  // 500 ms timeout (FFN engine reads ~2.88M weights per expert via AXI)
+        $display("TIMEOUT: Simulation exceeded 500ms");
         $finish;
     end
 endmodule

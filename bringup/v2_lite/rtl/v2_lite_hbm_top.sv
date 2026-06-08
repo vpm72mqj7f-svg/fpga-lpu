@@ -104,25 +104,30 @@ module v2_lite_hbm_top #(
     reg [3:0] bstate;
     reg       ffn_done_latched;
     reg       ffn_pass;
+    reg       ffn_rx_sent;
 
     always @(posedge core_clk_iopll_ref_clk_clk or negedge rst_n) begin
         if (!rst_n) begin
             bstate <= B_IDLE; ffn_rx_valid <= 1'b0; ffn_tx_ready <= 1'b0;
-            ffn_done_latched <= 1'b0; ffn_pass <= 1'b0;
+            ffn_done_latched <= 1'b0; ffn_pass <= 1'b0; ffn_rx_sent <= 1'b0;
         end else begin
             case (bstate)
                 B_IDLE:  bstate <= B_WAIT;
                 B_WAIT:  bstate <= B_SEND;
                 B_SEND: begin
                     integer i;
-                    ffn_rx_valid <= 1'b1;
-                    // Use injected test activations from debug buffer
-                    for (i = 0; i < HIDDEN; i = i + 1)
-                        ffn_rx_data[i*DATA_W +: DATA_W] <= activ_buf[i];
-                    bstate <= B_BUSY;
+                    if (!ffn_rx_sent) begin
+                        ffn_rx_valid <= 1'b1;
+                        for (i = 0; i < HIDDEN; i = i + 1)
+                            ffn_rx_data[i*DATA_W +: DATA_W] <= activ_buf[i];
+                        if (ffn_rx_ready) begin
+                            ffn_rx_valid <= 1'b0;
+                            ffn_rx_sent  <= 1'b1;
+                            bstate <= B_BUSY;
+                        end
+                    end else bstate <= B_BUSY;
                 end
                 B_BUSY: begin
-                    ffn_rx_valid <= 1'b0;
                     if (ffn_done) begin ffn_done_latched <= 1'b1; ffn_tx_ready <= 1'b1; bstate <= B_CHECK; end
                 end
                 B_CHECK: begin
