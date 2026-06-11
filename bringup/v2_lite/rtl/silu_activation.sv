@@ -14,14 +14,22 @@
 module silu_activation #(
     parameter int DATA_W    = 16,     // fp16 input/output
     parameter int NUM_ELEMS = 64,     // V2-Lite: 64 parallel elements per cycle
-    parameter int LUT_ADDR_W = 8      // 256-entry LUT
+    parameter int LUT_ADDR_W = 8,     // 256-entry LUT
+    parameter logic [31:0] VERSION = 32'h0B061B02  // {day,month,year-2000,build#}
 ) (
     input  logic                     clk,
     input  logic                     rst_n,
     input  logic                     valid_in,
     input  logic [DATA_W-1:0]        data_in [NUM_ELEMS],
     output logic [DATA_W-1:0]        data_out [NUM_ELEMS],
-    output logic                     valid_out
+    output logic                     valid_out,
+
+    // ---- Debug ----
+    output logic                     dbg_stage1_valid,
+    output logic                     dbg_stage2_valid,
+    output logic [DATA_W-1:0]        dbg_sample_in,
+    output logic [DATA_W-1:0]        dbg_sample_sigmoid,
+    output logic [DATA_W-1:0]        dbg_sample_out
 );
 
     // =========================================================================
@@ -201,5 +209,14 @@ module silu_activation #(
     always_ff @(posedge clk) begin
         valid_out <= s2_valid;
     end
+
+    // =========================================================================
+    // Debug: sample lane 0 signals
+    // =========================================================================
+    assign dbg_stage1_valid = s1_valid;
+    assign dbg_stage2_valid = s2_valid;
+    assign dbg_sample_in     = data_in[0];
+    assign dbg_sample_sigmoid = s1_sigmoid[0];
+    assign dbg_sample_out    = data_out[0];
 
 endmodule

@@ -30,7 +30,8 @@
 module fp8_mac #(
     parameter int NUM_LANES = 64,     // V2-Lite: 64 lanes
     parameter int DATA_W    = 8,      // FP8 E4M3
-    parameter int ACCUM_W   = 16      // fp16 accumulator (1+5+10)
+    parameter int ACCUM_W   = 16,     // fp16 accumulator (1+5+10)
+    parameter logic [31:0] VERSION = 32'h0B061B02  // {day,month,year-2000,build#}
 ) (
     input  logic                         clk,
     input  logic                         rst_n,
@@ -38,7 +39,11 @@ module fp8_mac #(
     input  logic [DATA_W-1:0]            a [NUM_LANES-1:0],   // activation (fp8)
     input  logic [DATA_W-1:0]            b [NUM_LANES-1:0],   // weight (fp8)
     output logic [ACCUM_W-1:0]           sum [NUM_LANES-1:0], // per-lane accum (fp16)
-    output logic                         valid_out
+    output logic                         valid_out,
+    output logic                         dbg_stage1_valid,
+    output logic                         dbg_stage2_valid,
+    output logic [5:0]                   dbg_overflow_lane,
+    output logic                         dbg_overflow_sticky
 );
 
     // =========================================================================
@@ -506,5 +511,36 @@ module fp8_mac #(
     //   Estimated: 1.3ns (meets 2.0ns at 500 MHz on S10 speed grade -2)
     //   If timing closure is challenging, split Stage 2 into two sub-stages
     //   (normalize product in S2, accumulate in S3).
+
+    // =========================================================================
+    // Debug: pipeline status + overflow detection
+    // =========================================================================
+    assign dbg_stage1_valid = s1_valid;
+    assign dbg_stage2_valid = s2_valid;
+
+    // Detect overflow: sum saturated to max 16-bit (lane-level)
+    logic _overflow_any;
+    logic [5:0] _overflow_lane;
+    always_comb begin
+        _overflow_any = 1'b0;
+        _overflow_lane = 6'd0;
+        for (int li = 0; li < NUM_LANES; li++) begin
+            if (s2_valid && (&sum[li][ACCUM_W-2:0]) && sum[li][ACCUM_W-1] == 1'b0) begin
+                _overflow_any = 1'b1;
+                _overflow_lane = li[5:0];
+            end
+        end
+    end
+
+    logic _overflow_sticky;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            _overflow_sticky <= 1'b0;
+        else if (_overflow_any)
+            _overflow_sticky <= 1'b1;
+    end
+
+    assign dbg_overflow_lane   = _overflow_lane;
+    assign dbg_overflow_sticky = _overflow_sticky;
 
 endmodule
