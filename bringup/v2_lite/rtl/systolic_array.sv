@@ -169,28 +169,28 @@ module systolic_array #(
             end
 
             // Stage 1-2: DSP multiply (8b signed × 8b signed → 16b, 2 pipe stages)
-            wire signed [15:0] product_full;
+            // Use multstyle = "dsp" for Quartus DSP inference (replaces
+            // explicit altera_mult_add IP which requires many Intel-specific
+            // parameters). The 2-stage pipeline is equivalent to PIPE_STAGES=2.
+            logic signed [15:0] s1_product;
             logic signed [15:0] s2_product;
-            logic               s2_v;
+            logic               s1_v, s2_v;
 
-            altera_mult_add #(
-                .A_WIDTH(DATA_W),
-                .B_WIDTH(DATA_W),
-                .PIPE_STAGES(2)
-            ) u_dsp_mult (
-                .clock (clk),
-                .a     (s0_a),
-                .b     (s0_b),
-                .result(product_full)
-            );
+            // Stage 1: registered multiply → DSP input registers
+            (* multstyle = "dsp" *) logic signed [15:0] product_raw;
+            always_ff @(posedge clk) begin
+                s1_product <= $signed(s0_a) * $signed(s0_b);
+                s1_v       <= 1'b1;
+            end
 
+            // Stage 2: pipeline register → DSP output register
             always_ff @(posedge clk or negedge rst_n) begin
                 if (!rst_n) begin
                     s2_product <= 16'sd0;
                     s2_v       <= 1'b0;
                 end else begin
-                    s2_product <= product_full[15:0];
-                    s2_v       <= s0_v;
+                    s2_product <= s1_product;
+                    s2_v       <= s1_v;
                 end
             end
 
