@@ -211,9 +211,14 @@ set_global_assignment -name ENABLE_UNUSED_RX_CLOCK_WORKAROUND ON
 # ============================================================================
 # Source Files — Top + FFN
 # ============================================================================
-set_global_assignment -name VERILOG_FILE v2_lite_full_top.v
+set_global_assignment -name SYSTEMVERILOG_FILE v2_lite_full_top.sv
 set_global_assignment -name VERILOG_FILE v2_lite_isp_debug.v
-set_global_assignment -name VERILOG_FILE v2_lite_ffn_engine.v
+# [DSP MIGRATION] old LUT-based FFN replaced by .sv version
+# set_global_assignment -name VERILOG_FILE v2_lite_ffn_engine.v
+set_global_assignment -name SYSTEMVERILOG_FILE v2_lite_ffn_engine.sv
+set_global_assignment -name SYSTEMVERILOG_FILE systolic_array.sv
+set_global_assignment -name SYSTEMVERILOG_FILE hbm2_weight_reader.sv
+set_global_assignment -name SYSTEMVERILOG_FILE silu_activation.sv
 set_global_assignment -name VERILOG_FILE random_start.v
 
 # ============================================================================
@@ -312,3 +317,31 @@ set_global_assignment -name SIGNALTAP_FILE v2_lite_full.stp
 # Search Path
 # ============================================================================
 set_global_assignment -name SEARCH_PATH ip/
+
+# ============================================================================
+# Design Partitions — Incremental Compilation
+# ============================================================================
+set_global_assignment -name FLOW_ENABLE_INCREMENTAL_COMPILATION ON
+
+# Root partition
+set_instance_assignment -name PARTITION root_partition -to "|"
+set_instance_assignment -name PARTITION_COLOR 16777215 -to "|"
+
+# HBM2 Qsys — rarely changes after calibration (POST_FIT preserved)
+set_instance_assignment -name PARTITION u_hbm -to "u_hbm"
+set_instance_assignment -name PARTITION_PRESERVE PLACEMENT_AND_ROUTING -to "u_hbm"
+set_instance_assignment -name PARTITION_COLOR 16711935 -to "u_hbm"
+
+# PCIe Qsys — rarely changes after PLL lock (POST_FIT preserved)
+set_instance_assignment -name PARTITION u_pcie -to "u_pcie"
+set_instance_assignment -name PARTITION_PRESERVE PLACEMENT_AND_ROUTING -to "u_pcie"
+set_instance_assignment -name PARTITION_COLOR 65535 -to "u_pcie"
+
+# FFN custom RTL — frequently changes (SOURCE, rebuilt every time)
+set_instance_assignment -name PARTITION u_ffn -to "u_ffn"
+set_instance_assignment -name PARTITION_COLOR 16776960 -to "u_ffn"
+
+# ISP debug — moderate changes (POST_FIT with PLACEMENT preserved)
+set_instance_assignment -name PARTITION u_isp -to "u_isp"
+set_instance_assignment -name PARTITION_PRESERVE PLACEMENT -to "u_isp"
+set_instance_assignment -name PARTITION_COLOR 65280 -to "u_isp"
