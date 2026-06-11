@@ -171,6 +171,13 @@ module v2_lite_ffn_engine #(
     logic [DSP_LANES*DATA_W-1:0] weight_data;
     logic                        weight_ready;
 
+    // HBM2 reader debug wires
+    logic [2:0]  hbm2r_dbg_fsm;
+    logic        hbm2r_dbg_buf_sel;
+    logic [6:0]  hbm2r_dbg_rd_addr, hbm2r_dbg_wr_addr;
+    logic        hbm2r_dbg_streaming, hbm2r_dbg_filling;
+    logic [31:0] hbm2r_perf_bytes, hbm2r_perf_bursts, hbm2r_perf_beats;
+
     hbm2_weight_reader #(
         .AXI_DATA_W(256),
         .AXI_ADDR_W(32),
@@ -196,7 +203,16 @@ module v2_lite_ffn_engine #(
         .base_addr       (hbm2_base_addr),
         .total_words     (hbm2_words),
         .busy            (hbm2_busy),
-        .done            (hbm2_done)
+        .done            (hbm2_done),
+        .dbg_fsm_state   (hbm2r_dbg_fsm),
+        .dbg_buf_sel     (hbm2r_dbg_buf_sel),
+        .dbg_rd_addr     (hbm2r_dbg_rd_addr),
+        .dbg_wr_addr     (hbm2r_dbg_wr_addr),
+        .dbg_streaming   (hbm2r_dbg_streaming),
+        .dbg_filling     (hbm2r_dbg_filling),
+        .perf_bytes_read (hbm2r_perf_bytes),
+        .perf_bursts_done(hbm2r_perf_bursts),
+        .perf_beats_read (hbm2r_perf_beats)
     );
 
     // =========================================================================
@@ -212,6 +228,8 @@ module v2_lite_ffn_engine #(
     logic [ACCUM_W-1:0]              sa_gate_up_result_data;
     logic [$clog2(INTER)-1:0]        sa_gate_up_result_row;
     logic                             sa_gate_up_result_last;
+
+    logic [31:0] sa_gu_perf_rows, sa_gu_perf_proj, sa_gu_perf_cycles;
 
     systolic_array #(
         .INPUT_DIM(HIDDEN),
@@ -240,7 +258,14 @@ module v2_lite_ffn_engine #(
         .result_row      (sa_gate_up_result_row),
         .result_last     (sa_gate_up_result_last),
         .dbg_current_row (),
-        .dbg_cycle_cnt   ()
+        .dbg_cycle_cnt   (),
+        .dbg_fsm_state   (),
+        .dbg_preload_active(),
+        .dbg_stream_active(),
+        .dbg_cycle_in_row(),
+        .perf_rows_done  (sa_gu_perf_rows),
+        .perf_projections(sa_gu_perf_proj),
+        .perf_total_cycles(sa_gu_perf_cycles)
     );
 
     // =========================================================================
@@ -256,6 +281,8 @@ module v2_lite_ffn_engine #(
     logic [ACCUM_W-1:0]              sa_down_result_data;
     logic [$clog2(HIDDEN)-1:0]       sa_down_result_row;
     logic                             sa_down_result_last;
+
+    logic [31:0] sa_dn_perf_rows, sa_dn_perf_proj, sa_dn_perf_cycles;
 
     systolic_array #(
         .INPUT_DIM(INTER),
@@ -284,7 +311,14 @@ module v2_lite_ffn_engine #(
         .result_row      (sa_down_result_row),
         .result_last     (sa_down_result_last),
         .dbg_current_row (),
-        .dbg_cycle_cnt   ()
+        .dbg_cycle_cnt   (),
+        .dbg_fsm_state   (),
+        .dbg_preload_active(),
+        .dbg_stream_active(),
+        .dbg_cycle_in_row(),
+        .perf_rows_done  (sa_dn_perf_rows),
+        .perf_projections(sa_dn_perf_proj),
+        .perf_total_cycles(sa_dn_perf_cycles)
     );
 
     // =========================================================================
@@ -776,6 +810,9 @@ module v2_lite_ffn_engine #(
     assign dbg_merge_active = (state == S_MERGE_GATE_UP);
     assign dbg_hbm2_busy   = hbm2_busy;
     assign dbg_sa_active   = sa_gate_up_busy || sa_down_busy;
+    assign dbg_hbm2r_fsm   = hbm2r_dbg_fsm;
+    assign dbg_hbm2r_wr_watermark = hbm2r_dbg_wr_addr[6:4];
+    assign dbg_hbm2r_rd_watermark = hbm2r_dbg_rd_addr[6:4];
 
     // =========================================================================
     // Assertions (synthesis translate_off)

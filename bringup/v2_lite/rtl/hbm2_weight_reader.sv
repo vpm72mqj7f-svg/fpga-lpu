@@ -28,7 +28,8 @@ module hbm2_weight_reader #(
     parameter int AXI_ADDR_W   = 32,
     parameter int DATA_W       = 8,
     parameter int DSP_LANES    = 64,
-    parameter int MAX_BURST    = 256       // AXI4 max burst length
+    parameter int MAX_BURST    = 256,      // AXI4 max burst length
+    parameter logic [31:0] VERSION = 32'h0B061B01  // {day,month,year-2000,build#}
 ) (
     input  logic                        clk,              // 500 MHz
     input  logic                        rst_n,
@@ -56,7 +57,18 @@ module hbm2_weight_reader #(
     input  logic [AXI_ADDR_W-1:0]       base_addr,
     input  logic [15:0]                 total_words,      // FP8 elements to read
     output logic                        busy,
-    output logic                        done
+    output logic                        done,
+
+    // ---- Debug ----
+    output logic [2:0]                  dbg_fsm_state,
+    output logic                        dbg_buf_sel,
+    output logic [6:0]                  dbg_rd_addr,
+    output logic [6:0]                  dbg_wr_addr,
+    output logic                        dbg_streaming,
+    output logic                        dbg_filling,
+    output logic [31:0]                 perf_bytes_read,
+    output logic [31:0]                 perf_bursts_done,
+    output logic [31:0]                 perf_beats_read
 );
 
     // =========================================================================
@@ -315,5 +327,37 @@ module hbm2_weight_reader #(
             endcase
         end
     end
+
+    // =========================================================================
+    // Debug: Status assignments
+    // =========================================================================
+    assign dbg_fsm_state = state;
+    assign dbg_buf_sel   = buf_sel;
+    assign dbg_rd_addr   = bank_rd_addr;
+    assign dbg_wr_addr   = bank_wr_addr;
+    assign dbg_streaming = weight_valid;
+    assign dbg_filling   = (state == S_RDATA);
+
+    // =========================================================================
+    // Debug: Performance counters
+    // =========================================================================
+    logic [31:0] _perf_bytes, _perf_bursts, _perf_beats;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            _perf_bytes  <= 32'd0;
+            _perf_bursts <= 32'd0;
+            _perf_beats  <= 32'd0;
+        end else begin
+            if (m_axi_rvalid && m_axi_rready) begin
+                _perf_bytes <= _perf_bytes + 32'd32;  // 256-bit = 32 bytes
+                _perf_beats <= _perf_beats + 32'd1;
+                if (m_axi_rlast)
+                    _perf_bursts <= _perf_bursts + 32'd1;
+            end
+        end
+    end
+    assign perf_bytes_read  = _perf_bytes;
+    assign perf_bursts_done = _perf_bursts;
+    assign perf_beats_read  = _perf_beats;
 
 endmodule

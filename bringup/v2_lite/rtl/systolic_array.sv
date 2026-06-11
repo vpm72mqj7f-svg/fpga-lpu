@@ -29,7 +29,8 @@ module systolic_array #(
     parameter int OUTPUT_DIM = 1408,    // V2-Lite: number of output rows
     parameter int DSP_LANES  = 64,      // V2-Lite: column parallelism
     parameter int DATA_W     = 8,       // FP8 E4M3
-    parameter int ACCUM_W    = 24       // accumulator width (fp16 + headroom)
+    parameter int ACCUM_W    = 24,      // accumulator width (fp16 + headroom)
+    parameter logic [31:0] VERSION = 32'h0B061B01  // {day,month,year-2000,build#}
 ) (
     input  logic        clk,
     input  logic        rst_n,
@@ -63,7 +64,16 @@ module systolic_array #(
 
     // ---- Observability / debug ----
     output logic [$clog2(OUTPUT_DIM)-1:0]      dbg_current_row,
-    output logic [$clog2(INPUT_DIM/DSP_LANES):0] dbg_cycle_cnt
+    output logic [$clog2(INPUT_DIM/DSP_LANES):0] dbg_cycle_cnt,
+    output logic [3:0]                          dbg_fsm_state,
+    output logic                                dbg_preload_active,
+    output logic                                dbg_stream_active,
+    output logic [5:0]                          dbg_cycle_in_row,
+
+    // ---- Performance counters ----
+    output logic [31:0]                         perf_rows_done,
+    output logic [31:0]                         perf_projections,
+    output logic [31:0]                         perf_total_cycles
 );
 
     //=========================================================================
@@ -296,8 +306,32 @@ module systolic_array #(
     // Main Controller FSM
     //=========================================================================
     assign busy = (state != S_IDLE) && (state != S_DONE);
-    assign dbg_current_row = current_row;
-    assign dbg_cycle_cnt   = cycle_count;
+    assign dbg_current_row   = current_row;
+    assign dbg_cycle_cnt     = cycle_count;
+    assign dbg_fsm_state     = state;
+    assign dbg_preload_active = (state == S_WT_PRELOAD) || (state == S_WT_PRELOAD_WAIT);
+    assign dbg_stream_active  = (state == S_STREAM);
+    assign dbg_cycle_in_row   = cycle_count[5:0];
+
+    // Performance counters
+    logic [31:0] _perf_rows, _perf_proj, _perf_cycles;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            _perf_rows   <= 32'd0;
+            _perf_proj   <= 32'd0;
+            _perf_cycles <= 32'd0;
+        end else begin
+            if (busy)
+                _perf_cycles <= _perf_cycles + 32'd1;
+            if (state == S_STORE)
+                _perf_rows <= _perf_rows + 32'd1;
+            if (state == S_DONE)
+                _perf_proj <= _perf_proj + 32'd1;
+        end
+    end
+    assign perf_rows_done    = _perf_rows;
+    assign perf_projections  = _perf_proj;
+    assign perf_total_cycles = _perf_cycles;
 
     // Preload row calculation (next row, wraps to 0 after last)
     wire [ROW_ADDR_W-1:0] next_row_calc;
