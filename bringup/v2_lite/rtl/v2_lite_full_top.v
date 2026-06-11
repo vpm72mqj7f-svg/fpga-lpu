@@ -201,7 +201,7 @@ module v2_lite_full
    assign pcie_ep_i2c_sda = 1'bz;
 
    // ========================================================================
-   // FFN Engine with real HBM2 AXI connection
+   // FFN Engine — Production DSP-based SystemVerilog module
    // ========================================================================
    reg [7:0] rc; wire rn = (rc == 8'd255);
    always @(posedge core_clk_iopll_ref_clk_clk or negedge cpu_resetn)
@@ -218,21 +218,79 @@ module v2_lite_full
 
    reg fv, fr, fp, fs; reg [16383:0] fd;
    wire rdy, tv, busy, done; wire [16383:0] td;
-   wire [6:0] e0=0,e1=1,e2=2,e3=3,e4=4,e5=5;
 
-   v2_lite_ffn_engine u_ffn (
-       .clk(core_clk_iopll_ref_clk_clk), .rst_(rn),
-       .pcie_rx_valid(fv), .pcie_rx_data(fd), .pcie_rx_ready(rdy),
-       .pcie_tx_valid(tv), .pcie_tx_data(td), .pcie_tx_ready(fr),
-       .m_axi_araddr(ffn_araddr), .m_axi_arlen(ffn_arlen), .m_axi_arsize(ffn_arsize),
-       .m_axi_arvalid(ffn_arvalid), .m_axi_arready(ffn_arready),
-       .m_axi_rdata(ffn_rdata), .m_axi_rresp(ffn_rresp),
-       .m_axi_rvalid(ffn_rvalid), .m_axi_rready(ffn_rready), .m_axi_rlast(ffn_rlast),
-       .expert_id_0(e0),.expert_id_1(e1),.expert_id_2(e2),.expert_id_3(e3),.expert_id_4(e4),.expert_id_5(e5),
-       .busy(busy), .done(done)
+   // Expert ID: 6 entries of 7-bit each (unpacked array for SV module)
+   wire [6:0] ffn_expert_id [0:5];
+   assign ffn_expert_id[0] = 7'd0;
+   assign ffn_expert_id[1] = 7'd1;
+   assign ffn_expert_id[2] = 7'd2;
+   assign ffn_expert_id[3] = 7'd3;
+   assign ffn_expert_id[4] = 7'd4;
+   assign ffn_expert_id[5] = 7'd5;
+
+   // FFN production debug wires
+   wire [3:0]  ffn_dbg_fsm;
+   wire [2:0]  ffn_dbg_expert_cnt;
+   wire        ffn_dbg_gate_done, ffn_dbg_up_done, ffn_dbg_down_done;
+   wire        ffn_dbg_silu_active, ffn_dbg_merge_active;
+   wire        ffn_dbg_hbm2_busy, ffn_dbg_sa_active;
+   wire [2:0]  ffn_dbg_hbm2r_fsm, ffn_dbg_hbm2r_wr_wm, ffn_dbg_hbm2r_rd_wm;
+   wire [31:0] ffn_perf_token, ffn_perf_cycle, ffn_perf_expert, ffn_perf_axi_rbeat;
+   wire        ffn_err_merge_ovf, ffn_err_silu_ovf, ffn_err_axi_resp;
+
+   v2_lite_ffn_engine #(
+       .HIDDEN   (2048),
+       .INTER    (1408),
+       .NUM_EXPERTS (66),
+       .TOP_K    (6),
+       .DATA_W   (8),
+       .ACCUM_W  (24),
+       .DSP_LANES (64),
+       .VERSION  (32'h0B061A01)
+   ) u_ffn (
+       .clk               (core_clk_iopll_ref_clk_clk),
+       .rst_n             (rn),
+       .pcie_rx_valid     (fv),
+       .pcie_rx_data      (fd),
+       .pcie_rx_ready     (rdy),
+       .pcie_tx_valid     (tv),
+       .pcie_tx_data      (td),
+       .pcie_tx_ready     (fr),
+       .m_axi_araddr      (ffn_araddr),
+       .m_axi_arlen       (ffn_arlen),
+       .m_axi_arsize      (ffn_arsize),
+       .m_axi_arvalid     (ffn_arvalid),
+       .m_axi_arready     (ffn_arready),
+       .m_axi_rdata       (ffn_rdata),
+       .m_axi_rresp       (ffn_rresp),
+       .m_axi_rvalid      (ffn_rvalid),
+       .m_axi_rready      (ffn_rready),
+       .m_axi_rlast       (ffn_rlast),
+       .expert_id         (ffn_expert_id),
+       .busy              (busy),
+       .done              (done),
+       .dbg_fsm_state     (ffn_dbg_fsm),
+       .dbg_expert_cnt    (ffn_dbg_expert_cnt),
+       .dbg_gate_done     (ffn_dbg_gate_done),
+       .dbg_up_done       (ffn_dbg_up_done),
+       .dbg_down_done     (ffn_dbg_down_done),
+       .dbg_silu_active   (ffn_dbg_silu_active),
+       .dbg_merge_active  (ffn_dbg_merge_active),
+       .dbg_hbm2_busy     (ffn_dbg_hbm2_busy),
+       .dbg_sa_active     (ffn_dbg_sa_active),
+       .dbg_hbm2r_fsm     (ffn_dbg_hbm2r_fsm),
+       .dbg_hbm2r_wr_watermark (ffn_dbg_hbm2r_wr_wm),
+       .dbg_hbm2r_rd_watermark (ffn_dbg_hbm2r_rd_wm),
+       .perf_token_cnt    (ffn_perf_token),
+       .perf_cycle_cnt    (ffn_perf_cycle),
+       .perf_expert_cnt   (ffn_perf_expert),
+       .perf_axi_rbeat    (ffn_perf_axi_rbeat),
+       .err_merge_overflow(ffn_err_merge_ovf),
+       .err_silu_overflow (ffn_err_silu_ovf),
+       .err_axi_resp_err  (ffn_err_axi_resp)
    );
 
-   // FFN self-test FSM
+   // FFN self-test FSM (retained for bring-up verification)
    parameter [3:0] BI=0, BS=1, BB=2, BP=5;
    reg [3:0] bs;
    always @(posedge core_clk_iopll_ref_clk_clk or negedge rn) begin
@@ -265,6 +323,12 @@ module v2_lite_full
    (* keep *) wire [15:0] dbg_pcie_pll_bank = {pcie_pll_locked_p, pcie_pll_locked_o, pcie_pll_locked_n, pcie_pll_locked_m, pcie_pll_locked_l, pcie_pll_locked_k, pcie_pll_locked_j, pcie_pll_locked_i, pcie_pll_locked_h, pcie_pll_locked_g, pcie_pll_locked_f, pcie_pll_locked_e, pcie_pll_locked_d, pcie_pll_locked_c, pcie_pll_locked_b, pcie_pll_locked_a};
    (* keep *) wire        dbg_ffn_arvalid = ffn_arvalid;
    (* keep *) wire        dbg_ffn_arready = ffn_arready;
+   // Production debug (from DSP .sv engine)
+   (* keep *) wire [3:0]  dbg_ffn_fsm_prod = ffn_dbg_fsm;
+   (* keep *) wire [2:0]  dbg_ffn_expert_prod = ffn_dbg_expert_cnt;
+   (* keep *) wire        dbg_tok_cnt_bit0 = ffn_perf_token[0];
+   (* keep *) wire        dbg_cyc_cnt_bit0 = ffn_perf_cycle[0];
+   (* keep *) wire        dbg_err_any = ffn_err_merge_ovf | ffn_err_silu_ovf | ffn_err_axi_resp;
 
    // ========================================================================
    // LEDs: Status from all 3 subsystems
@@ -320,7 +384,27 @@ module v2_lite_full
        .ffn_tdata_lo      (dbg_ffn_td0),
        .ffn_tdata_hi      (dbg_ffn_td1),
        .ffn_arvalid       (dbg_ffn_arvalid),
-       .ffn_arready       (dbg_ffn_arready)
+       .ffn_arready       (dbg_ffn_arready),
+       // Production FFN engine debug (direct from DSP .sv module)
+       .ffn_dbg_fsm       (ffn_dbg_fsm),
+       .ffn_dbg_expert_cnt(ffn_dbg_expert_cnt),
+       .ffn_dbg_gate_done (ffn_dbg_gate_done),
+       .ffn_dbg_up_done   (ffn_dbg_up_done),
+       .ffn_dbg_down_done (ffn_dbg_down_done),
+       .ffn_dbg_silu_active(ffn_dbg_silu_active),
+       .ffn_dbg_merge_active(ffn_dbg_merge_active),
+       .ffn_dbg_hbm2_busy (ffn_dbg_hbm2_busy),
+       .ffn_dbg_sa_active (ffn_dbg_sa_active),
+       .ffn_dbg_hbm2r_fsm (ffn_dbg_hbm2r_fsm),
+       .ffn_dbg_hbm2r_wr_wm(ffn_dbg_hbm2r_wr_wm),
+       .ffn_dbg_hbm2r_rd_wm(ffn_dbg_hbm2r_rd_wm),
+       .ffn_perf_token    (ffn_perf_token),
+       .ffn_perf_cycle    (ffn_perf_cycle),
+       .ffn_perf_expert   (ffn_perf_expert),
+       .ffn_perf_axi_rbeat(ffn_perf_axi_rbeat),
+       .ffn_err_merge_ovf (ffn_err_merge_ovf),
+       .ffn_err_silu_ovf  (ffn_err_silu_ovf),
+       .ffn_err_axi_resp  (ffn_err_axi_resp)
    );
 
 

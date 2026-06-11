@@ -36,7 +36,8 @@ module v2_lite_isp_debug #(
     // hbm_temp & hbm_cattrip removed — dedicated IO buffer, can't fan out
     // TODO: read via HBM2 Qsys internal register access
 
-    // === FFN ===
+    // === FFN (production engine debug ports) ===
+    // Legacy wrapper signals (self-test FSM)
     input  wire [3:0]  ffn_state,
     input  wire        ffn_busy,
     input  wire        ffn_done,
@@ -44,7 +45,27 @@ module v2_lite_isp_debug #(
     input  wire [15:0] ffn_tdata_lo,
     input  wire [15:0] ffn_tdata_hi,
     input  wire        ffn_arvalid,
-    input  wire        ffn_arready
+    input  wire        ffn_arready,
+    // Production engine debug (direct from v2_lite_ffn_engine.sv)
+    input  wire [3:0]  ffn_dbg_fsm,
+    input  wire [2:0]  ffn_dbg_expert_cnt,
+    input  wire        ffn_dbg_gate_done,
+    input  wire        ffn_dbg_up_done,
+    input  wire        ffn_dbg_down_done,
+    input  wire        ffn_dbg_silu_active,
+    input  wire        ffn_dbg_merge_active,
+    input  wire        ffn_dbg_hbm2_busy,
+    input  wire        ffn_dbg_sa_active,
+    input  wire [2:0]  ffn_dbg_hbm2r_fsm,
+    input  wire [2:0]  ffn_dbg_hbm2r_wr_wm,
+    input  wire [2:0]  ffn_dbg_hbm2r_rd_wm,
+    input  wire [31:0] ffn_perf_token,
+    input  wire [31:0] ffn_perf_cycle,
+    input  wire [31:0] ffn_perf_expert,
+    input  wire [31:0] ffn_perf_axi_rbeat,
+    input  wire        ffn_err_merge_ovf,
+    input  wire        ffn_err_silu_ovf,
+    input  wire        ffn_err_axi_resp
 );
 
     // ========================================================================
@@ -88,41 +109,68 @@ module v2_lite_isp_debug #(
     assign hbm2_probe2 = {29'd0, ch_active, hbm_pll_locked, 1'b0 /*CATTRIP*/, 3'd0 /*TEMP*/};
 
     // ========================================================================
-    // FFN Counters (performance measurement)
+    // FFN Probe — 7 × 32-bit = 224-bit
     // ========================================================================
-    reg [15:0] ffn_token_cnt;
-    reg [31:0] ffn_cycle_cnt;
-    reg [15:0] ffn_ar_trans_cnt;
-    reg [15:0] ffn_r_beat_cnt;
-
-    wire ffn_done_pulse = ffn_done && !ffn_busy;  // one-shot on done
-
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            ffn_token_cnt   <= 16'd0;
-            ffn_cycle_cnt   <= 32'd0;
-            ffn_ar_trans_cnt <= 16'd0;
-            ffn_r_beat_cnt  <= 16'd0;
-        end else begin
-            ffn_cycle_cnt <= ffn_cycle_cnt + 32'd1;
-            if (ffn_done_pulse)
-                ffn_token_cnt <= ffn_token_cnt + 16'd1;
-            if (ffn_arvalid && ffn_arready)
-                ffn_ar_trans_cnt <= ffn_ar_trans_cnt + 16'd1;
-            // R beat counting needs rvalid & rready — not at top level yet
-            // TODO: expose FFN AXI read channel to top
-        end
-    end
-
     wire [31:0] ffn_probe0;  // STATUS
-    wire [31:0] ffn_probe1;  // PERF
-    wire [31:0] ffn_probe2;  // AXI_STATS
-    wire [31:0] ffn_probe3;  // DATA
+    wire [31:0] ffn_probe1;  // PERF_LO
+    wire [31:0] ffn_probe2;  // PERF_HI
+    wire [31:0] ffn_probe3;  // AXI_STATS
+    wire [31:0] ffn_probe4;  // SA_STATUS
+    wire [31:0] ffn_probe5;  // ERRORS
+    wire [31:0] ffn_probe6;  // HBM2R_STATUS
 
-    assign ffn_probe0 = {16'd0, 8'd0 /*ERROR_CODE*/, ffn_pass, ffn_done, ffn_busy, ffn_pass, ffn_state};
-    assign ffn_probe1 = {ffn_cycle_cnt[15:0], ffn_token_cnt};
-    assign ffn_probe2 = {ffn_r_beat_cnt, ffn_ar_trans_cnt};
-    assign ffn_probe3 = {ffn_tdata_hi, ffn_tdata_lo};
+    // probe0 STATUS: FFN FSM + submodule status
+    assign ffn_probe0 = {
+        6'd0,                        // [31:26] Reserved
+        ffn_dbg_down_done,           // [25]
+        ffn_dbg_up_done,             // [24]
+        ffn_dbg_gate_done,           // [23]
+        ffn_dbg_hbm2r_rd_wm,        // [22:20]
+        ffn_dbg_hbm2r_wr_wm,        // [19:17]
+        ffn_dbg_hbm2r_fsm,          // [16:14]
+        ffn_dbg_merge_active,        // [13]
+        1'b0,                        // [12] Reserved
+        ffn_busy,                    // [11]
+        ffn_dbg_sa_active,           // [10]
+        ffn_dbg_silu_active,         // [9]
+        ffn_dbg_hbm2_busy,           // [8]
+        ffn_dbg_expert_cnt,         // [7:5]
+        ffn_dbg_fsm                  // [4:0]  (10-state FSM, only [3:0] used)
+    };
+
+    // probe1 PERF_LO: token + cycle low bits
+    assign ffn_probe1 = ffn_perf_token;       // 32-bit token count
+
+    // probe2 PERF_HI: expert + cycle mid bits
+    assign ffn_probe2 = {ffn_perf_expert[15:0], ffn_perf_cycle[15:0]};
+
+    // probe3 AXI_STATS: AXI read beat count + AR transaction count
+    assign ffn_probe3 = ffn_perf_axi_rbeat;
+
+    // probe4 SA_STATUS: systolic array FSM + cycle counters
+    assign ffn_probe4 = {
+        12'd0,                        // [31:20] Reserved for SA down debug
+        8'd0,                         // [19:12] Reserved for SA gate debug
+        4'd0,                         // [11:8]  Reserved (future: sa_down_fsm)
+        4'd0,                         // [7:4]   Reserved (future: sa_gate_fsm)
+        ffn_dbg_fsm                   // [3:0]   FFN main FSM
+    };
+
+    // probe5 ERRORS: sticky error flags
+    assign ffn_probe5 = {
+        29'd0,                        // [31:3] Reserved
+        ffn_err_axi_resp,             // [2]
+        ffn_err_silu_ovf,             // [1]
+        ffn_err_merge_ovf             // [0]
+    };
+
+    // probe6 HBM2R_STATUS: HBM2 reader detailed status
+    assign ffn_probe6 = {
+        23'd0,                        // [31:9] Reserved
+        ffn_dbg_hbm2r_rd_wm,         // [8:6]
+        ffn_dbg_hbm2r_wr_wm,         // [5:3]
+        ffn_dbg_hbm2r_fsm            // [2:0]
+    };
 
     // ========================================================================
     // SYS Probe + Source
@@ -173,12 +221,13 @@ module v2_lite_isp_debug #(
     altsource_probe #(
         .sld_auto_instance_index ("YES"),
         .instance_id              ("FFN"),
-        .probe_width              (128),    // 4 × 32-bit
+        .probe_width              (224),    // 7 × 32-bit
         .source_width             (0),
         .source_initial_value     ("0"),
         .enable_metastability     ("YES")
     ) u_ffn_isp (
-        .probe      ({ffn_probe3, ffn_probe2, ffn_probe1, ffn_probe0}),
+        .probe      ({ffn_probe6, ffn_probe5, ffn_probe4,
+                      ffn_probe3, ffn_probe2, ffn_probe1, ffn_probe0}),
         .source     (),
         .source_ena (1'b1),
         .clr        (1'b0)

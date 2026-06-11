@@ -47,7 +47,8 @@ module v2_lite_ffn_engine #(
     parameter int TOP_K       = 6,
     parameter int DATA_W      = 8,       // FP8 E4M3
     parameter int ACCUM_W     = 24,      // accumulator width (fp16 + headroom)
-    parameter int DSP_LANES   = 64       // parallel MAC units
+    parameter int DSP_LANES   = 64,      // parallel MAC units
+    parameter logic [31:0] VERSION = 32'h0B061A01  // {day,month,year-2000,build#}
 ) (
     input  logic                         clk,              // 500 MHz core clock
     input  logic                         rst_n,
@@ -79,7 +80,32 @@ module v2_lite_ffn_engine #(
 
     // ---- Status ----
     output logic                         busy,
-    output logic                         done
+    output logic                         done,
+
+    // ---- Debug (JTAG ISP) ----
+    output logic [3:0]                   dbg_fsm_state,
+    output logic [2:0]                   dbg_expert_cnt,
+    output logic                         dbg_gate_done,
+    output logic                         dbg_up_done,
+    output logic                         dbg_down_done,
+    output logic                         dbg_silu_active,
+    output logic                         dbg_merge_active,
+    output logic                         dbg_hbm2_busy,
+    output logic                         dbg_sa_active,
+    output logic [2:0]                   dbg_hbm2r_fsm,          // HBM2 reader FSM state
+    output logic [2:0]                   dbg_hbm2r_wr_watermark, // buffer fill level MSBs
+    output logic [2:0]                   dbg_hbm2r_rd_watermark, // buffer drain level MSBs
+
+    // ---- Performance Counters (sticky, 32-bit) ----
+    output logic [31:0]                  perf_token_cnt,
+    output logic [31:0]                  perf_cycle_cnt,
+    output logic [31:0]                  perf_expert_cnt,
+    output logic [31:0]                  perf_axi_rbeat,
+
+    // ---- Error Flags (sticky) ----
+    output logic                         err_merge_overflow,
+    output logic                         err_silu_overflow,
+    output logic                         err_axi_resp_err
 );
 
     // =========================================================================
@@ -696,6 +722,60 @@ module v2_lite_ffn_engine #(
             endcase
         end
     end
+
+    // =========================================================================
+    // Debug: Performance Counters & Error Flags
+    // =========================================================================
+    logic [31:0] _perf_token_cnt, _perf_cycle_cnt, _perf_expert_cnt, _perf_axi_rbeat;
+    logic        _err_merge_overflow, _err_silu_overflow, _err_axi_resp_err;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            _perf_token_cnt   <= 32'd0;
+            _perf_cycle_cnt   <= 32'd0;
+            _perf_expert_cnt  <= 32'd0;
+            _perf_axi_rbeat   <= 32'd0;
+            _err_merge_overflow <= 1'b0;
+            _err_silu_overflow  <= 1'b0;
+            _err_axi_resp_err   <= 1'b0;
+        end else begin
+            _perf_cycle_cnt <= _perf_cycle_cnt + 32'd1;
+            if (done && state == S_OUTPUT)
+                _perf_token_cnt <= _perf_token_cnt + 32'd1;
+            if (state == S_NEXT_EXPERT)
+                _perf_expert_cnt <= _perf_expert_cnt + 32'd1;
+            if (m_axi_rvalid && m_axi_rready)
+                _perf_axi_rbeat <= _perf_axi_rbeat + 32'd1;
+            // Sticky error flags
+            if (state == S_MERGE_GATE_UP && merge_idx >= INTER)
+                _err_merge_overflow <= 1'b1;
+            if (state == S_SILU && silu_idx >= INTER + DSP_LANES)
+                _err_silu_overflow <= 1'b1;
+            if (m_axi_rvalid && m_axi_rready && (m_axi_rresp != 2'b00))
+                _err_axi_resp_err <= 1'b1;
+        end
+    end
+
+    assign perf_token_cnt    = _perf_token_cnt;
+    assign perf_cycle_cnt    = _perf_cycle_cnt;
+    assign perf_expert_cnt   = _perf_expert_cnt;
+    assign perf_axi_rbeat    = _perf_axi_rbeat;
+    assign err_merge_overflow = _err_merge_overflow;
+    assign err_silu_overflow  = _err_silu_overflow;
+    assign err_axi_resp_err   = _err_axi_resp_err;
+
+    // =========================================================================
+    // Debug: Status Signal Assignments (combinational)
+    // =========================================================================
+    assign dbg_fsm_state   = state;
+    assign dbg_expert_cnt  = expert_cnt;
+    assign dbg_gate_done   = gate_done;
+    assign dbg_up_done     = up_done;
+    assign dbg_down_done   = down_done;
+    assign dbg_silu_active = (state == S_SILU);
+    assign dbg_merge_active = (state == S_MERGE_GATE_UP);
+    assign dbg_hbm2_busy   = hbm2_busy;
+    assign dbg_sa_active   = sa_gate_up_busy || sa_down_busy;
 
     // =========================================================================
     // Assertions (synthesis translate_off)
