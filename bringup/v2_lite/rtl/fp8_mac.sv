@@ -251,10 +251,10 @@ module fp8_mac #(
                     // Denormalize: shift mantissa right to achieve exp_biased = 0
                     // right_shift = 1 - exp_biased_unadj
                     // where exp_biased_unadj = prod_exp_raw + lod_pos + 15
-                    automatic logic signed [6:0] exp_biased_unadj;
-                    automatic logic [4:0]         right_shift;
-                    automatic logic [11:0]        mant_shifted;
-                    automatic logic               guard, sticky, round_up;
+                    logic signed [6:0] exp_biased_unadj;
+                    logic [4:0]         right_shift;
+                    logic [11:0]        mant_shifted;
+                    logic               guard, sticky, round_up;
 
                     exp_biased_unadj = $signed(s1_prod_exp_raw[gi])
                                      + $signed({4'b0, s2_lod_pos})
@@ -265,7 +265,7 @@ module fp8_mac #(
                     mant_shifted = ({1'b0, s2_mant_norm} >> right_shift);
 
                     // Compute round bit from the shifted-out portion
-                    automatic logic [10:0] shifted_out;
+                    logic [10:0] shifted_out;
                     shifted_out = s2_mant_norm & ((11'b1 << right_shift) - 11'b1);
                     guard  = (right_shift > 0) ? shifted_out[right_shift-1] : 1'b0;
                     sticky = (right_shift > 1) ? |(shifted_out[right_shift-2:0]) : 1'b0;
@@ -285,7 +285,7 @@ module fp8_mac #(
 
                 end else begin
                     // --- FP16 normal ---
-                    automatic logic signed [6:0] exp_biased_tmp;
+                    logicsigned [6:0] exp_biased_tmp;
                     exp_biased_tmp = $signed(s1_prod_exp_raw[gi])
                                    + $signed({4'b0, s2_lod_pos})
                                    + 7'sd15;
@@ -385,7 +385,7 @@ module fp8_mac #(
                 else                       s2_sum_lod = 3'd0;
 
                 // Choose result sign
-                automatic logic result_sign;
+                logic result_sign;
                 if (s2_a_is_zero && s2_b_is_zero) begin
                     result_sign = 1'b0;  // +0
                 end else if (s2_a_is_zero) begin
@@ -404,8 +404,8 @@ module fp8_mac #(
                 end
 
                 // Normalize: shift mantissa so bit 11 becomes implicit 1 at bit 10
-                automatic logic signed [4:0] norm_shift;
-                automatic logic [FP16_EXP_W-1:0] larger_exp;
+                logicsigned [4:0] norm_shift;
+                logic[FP16_EXP_W-1:0] larger_exp;
 
                 larger_exp = (s2_exp_diff >= 0) ? s2_a_exp : s2_b_exp;
 
@@ -420,8 +420,8 @@ module fp8_mac #(
                     s2_mant_final = 11'b0;
                 end else if (norm_shift > 0) begin
                     // Need to shift right (sum overflowed)
-                    automatic logic guard_bit, sticky_bit, round_up;
-                    automatic logic [12:0] mant_shifted;
+                    logicguard_bit, sticky_bit, round_up;
+                    logic[12:0] mant_shifted;
                     mant_shifted = s2_mant_sum >> norm_shift;
                     guard_bit = (norm_shift >= 1) ? s2_mant_sum[norm_shift-1] : 1'b0;
                     sticky_bit = (norm_shift >= 2) ? |(s2_mant_sum[norm_shift-2:0]) : 1'b0;
@@ -438,14 +438,14 @@ module fp8_mac #(
                     end
                 end else if (norm_shift < 0) begin
                     // Need to shift left (cancellation)
-                    automatic logic [3:0] left_shift;
+                    logic [3:0] left_shift;
                     left_shift = (-norm_shift)[3:0];
                     s2_mant_final = s2_mant_sum[10:0] << left_shift;
                     s2_exp_final  = larger_exp - left_shift;
 
                     // Handle underflow to subnormal
                     if (larger_exp <= left_shift) begin
-                        automatic logic [3:0] right_shift;
+                        logic [3:0] right_shift;
                         right_shift = left_shift - larger_exp + 4'd1;
                         s2_mant_final = s2_mant_sum[10:0] >> right_shift;
                         s2_exp_final  = 5'h00;

@@ -1,6 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
-// v2_lite_full_top.v — PCIe Gen3x16 + HBM2 + FFN (Triple Merge)
+// v2_lite_full_top.sv — PCIe Gen3x16 + HBM2 + FFN (Triple Merge)
 // Generated: 2026-06-10, Quartus Prime Pro 26.1
+// Updated: 2026-06-11 — SystemVerilog for unpacked array port connections
 ////////////////////////////////////////////////////////////////////////////////
 `timescale 1 ps / 1 ps
 module v2_lite_full
@@ -219,14 +220,10 @@ module v2_lite_full
    reg fv, fr, fp, fs; reg [16383:0] fd;
    wire rdy, tv, busy, done; wire [16383:0] td;
 
-   // Expert ID: 6 entries of 7-bit each (unpacked array for SV module)
-   wire [6:0] ffn_expert_id [0:5];
-   assign ffn_expert_id[0] = 7'd0;
-   assign ffn_expert_id[1] = 7'd1;
-   assign ffn_expert_id[2] = 7'd2;
-   assign ffn_expert_id[3] = 7'd3;
-   assign ffn_expert_id[4] = 7'd4;
-   assign ffn_expert_id[5] = 7'd5;
+   // Expert IDs — use SV assignment pattern for unpacked array port
+   wire [6:0] ffn_expert_id_0 = 7'd0, ffn_expert_id_1 = 7'd1,
+              ffn_expert_id_2 = 7'd2, ffn_expert_id_3 = 7'd3,
+              ffn_expert_id_4 = 7'd4, ffn_expert_id_5 = 7'd5;
 
    // FFN production debug wires
    wire [3:0]  ffn_dbg_fsm;
@@ -266,7 +263,8 @@ module v2_lite_full
        .m_axi_rvalid      (ffn_rvalid),
        .m_axi_rready      (ffn_rready),
        .m_axi_rlast       (ffn_rlast),
-       .expert_id         (ffn_expert_id),
+       .expert_id         ('{ffn_expert_id_0, ffn_expert_id_1, ffn_expert_id_2,
+                             ffn_expert_id_3, ffn_expert_id_4, ffn_expert_id_5}),
        .busy              (busy),
        .done              (done),
        .dbg_fsm_state     (ffn_dbg_fsm),

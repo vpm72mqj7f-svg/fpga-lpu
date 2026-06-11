@@ -47,36 +47,26 @@ module silu_activation #(
     // Generate sigmoid LUT ROM (inferred as M20K)
     (* ramstyle = "M20K" *) logic [DATA_W-1:0] sigmoid_lut [2**LUT_ADDR_W-1:0];
 
-    // Initialize LUT with pre-computed sigmoid values in fp16 format
-    // fp16: 1 sign | 5 exponent (bias=15) | 10 mantissa
+    // synthesis translate_off
+    // Sim-only helper: compute sigmoid fp16 values for LUT initialization.
+    // The actual LUT values below are pre-computed constants — this function
+    // is kept for documentation and future LUT regeneration in simulation.
     function automatic logic [DATA_W-1:0] compute_sigmoid_fp16(
         input logic [LUT_ADDR_W-1:0] addr
     );
-        // Decode LUT address back to approximate fp16 value
-        // addr[7] = sign (0=positive, 1=negative)
-        // addr[6:4] = exponent top bits
-        // addr[3:0] = mantissa top bits
         logic sign;
         logic [4:0] exp;
         logic [9:0] mant;
         real x, sig;
-
         sign = addr[7];
         exp  = sign ? {1'b0, addr[6:3]} : {1'b0, addr[6:3]};
         mant = {addr[2:0], 7'd0};
-
-        // Reconstruct approximate fp16 value
-        if (exp == 5'd0)
-            x = 0.0;
-        else
-            x = (sign ? -1.0 : 1.0) * $bitstoreal({sign, exp, mant}) * 1.0;
-
-        // Compute sigmoid
+        if (exp == 5'd0) x = 0.0;
+        else x = (sign ? -1.0 : 1.0) * $bitstoreal({sign, exp, mant}) * 1.0;
         sig = 1.0 / (1.0 + $exp(-x));
-
-        // Encode as fp16
         return $realtobits(sig)[15:0];
     endfunction
+    // synthesis translate_on
 
     // LUT initialization (synthesizable via initial block for M20K ROM)
     // Using 256 pre-computed values for common fp16 range
