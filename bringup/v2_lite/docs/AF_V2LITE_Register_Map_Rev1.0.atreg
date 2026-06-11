@@ -1,0 +1,418 @@
+##################################################################
+# V2-Lite FPGA Register Map — Rev 1.0
+# Arrive Technologies format
+#
+# File name: AF_V2LITE_Register_Map_Rev1.0.atreg
+# Date: 2026-06-11
+# Device: Stratix 10 MX 1SM21BHU2F53E1VG
+# Top Module: v2_lite_full
+#
+# Comment out a line: (# or //#)
+# Delimiter character: (%%)
+
+##################################################################
+#Common rules for register:
+#Access types:
+#R/W : Read / Write
+#R/W/C: Read / Write 1 to clear (sticky bit)
+#R_O: Read Only, No clear on read
+#W_O: write only
+
+##################################################################
+#              Global Address Map                                 #
+#              0x0000 - 0x0FFF: SYS / Global                     #
+#              0x1000 - 0x1FFF: PCIe                             #
+#              0x2000 - 0x2FFF: HBM2                             #
+#              0x3000 - 0x3FFF: FFN                              #
+#              0x4000 - 0xFFFF: Reserved                         #
+
+
+##################################################################
+#                                                                #
+#   SYS Block Version                                             #
+#                                                                #
+##################################################################
+
+// Register Full Name: SYS Block Version
+// RTL Instant Name  : sys_version
+// Address      : 0x0000
+// Description  : SYS Block Version — day/month/year/number
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:24]   %% day    %% Build day         %% R_O %% 0x0B  %% 0x0B
+//  Field : [23:16]   %% month  %% Build month       %% R_O %% 0x06  %% 0x06
+//  Field : [15:08]   %% year   %% Build year-2000   %% R_O %% 0x1A  %% 0x1A
+//  Field : [07:00]   %% number %% Build number/day  %% R_O %% 0x01  %% 0x01
+
+##################################################################
+#                                                                #
+#   Scratchpad Register (CPU Bus Test)                           #
+#                                                                #
+##################################################################
+
+// Register Full Name: Scratchpad Register
+// RTL Instant Name  : sys_scratch
+// Address      : 0x0004
+// Description  : Scratchpad — use to test CPU bus read/write
+// Width        : 32
+// Register Type: {Config}
+//  Field : [31:00]   %% scratch %% Scratchpad value %% R/W %% 0x4154564E %% 0x4154564E
+
+##################################################################
+#                                                                #
+#   SYS Control                                                   #
+#                                                                #
+##################################################################
+
+// Register Full Name: SYS Control Register
+// RTL Instant Name  : sys_control
+// Address      : 0x0008
+// Description  : System control: FFN start, reset, LED override
+// Width        : 32
+// Register Type: {Config|Status}
+//  Field : [31:08]   %% Unused      %%                                 %%      %%       %%
+//  Field : [07:04]   %% led_override %% LED override (1=force on)      %% R/W  %% 0x0   %% 0x0
+//  Field : [03:03]   %% counter_rst  %% Reset FFN performance counters %% R/W/C %% 0x0   %% 0x0
+//  Field : [02:02]   %% ffn_reset    %% FFN soft reset (1=reset)       %% R/W  %% 0x0   %% 0x0
+//  Field : [01:01]   %% ffn_start    %% FFN start (pulse 0→1→0)        %% R/W  %% 0x0   %% 0x0
+//  Field : [00:00]   %% Unused       %%                                 %%      %%       %%
+
+##################################################################
+#                                                                #
+#   SYS Status                                                    #
+#                                                                #
+##################################################################
+
+// Register Full Name: SYS Status Register
+// RTL Instant Name  : sys_status
+// Address      : 0x000C
+// Description  : System status: LED state, PLL locks, reset state
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:20]   %% Unused      %%                                     %%      %%       %%
+//  Field : [19:19]   %% hbm_pll_lck %% HBM2 PLL locked                    %% R_O  %% 0x0   %% 0x0
+//  Field : [18:18]   %% atx_pll_lck %% ATX PLL locked                     %% R_O  %% 0x0   %% 0x0
+//  Field : [17:17]   %% pcie_link_up%% PCIe link up                        %% R_O  %% 0x0   %% 0x0
+//  Field : [16:16]   %% config_done %% FPGA configuration done             %% R_O  %% 0x1   %% 0x1
+//  Field : [15:04]   %% Unused      %%                                     %%      %%       %%
+//  Field : [03:00]   %% led_state   %% Current LED state                   %% R_O  %% 0x0   %% 0x0
+
+
+##################################################################
+#              PCIe Registers (0x1000 - 0x1FFF)                   #
+##################################################################
+
+##################################################################
+#                                                                #
+#   PCIe Block Version                                            #
+#                                                                #
+##################################################################
+
+// Register Full Name: PCIe Block Version
+// RTL Instant Name  : pcie_version
+// Address      : 0x1000
+// Description  : PCIe Block Version
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:24]   %% day    %% Build day         %% R_O %% 0x0B  %% 0x0B
+//  Field : [23:16]   %% month  %% Build month       %% R_O %% 0x06  %% 0x06
+//  Field : [15:08]   %% year   %% Build year-2000   %% R_O %% 0x1A  %% 0x1A
+//  Field : [07:00]   %% number %% Build number/day  %% R_O %% 0x01  %% 0x01
+
+##################################################################
+#                                                                #
+#   PCIe LTSSM State                                              #
+#                                                                #
+##################################################################
+
+// Register Full Name: PCIe LTSSM State
+// RTL Instant Name  : pcie_ltssm
+// Address      : 0x1004
+// Description  : Current LTSSM state from PCIe HIP
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:06]   %% Unused      %%                                     %%      %%       %%
+//  Field : [05:00]   %% ltssm_state %% 0=Detect 1=Poll 2=Config 3=L0 ...  %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   PCIe Link Status                                              #
+#                                                                #
+##################################################################
+
+// Register Full Name: PCIe Link Status
+// RTL Instant Name  : pcie_link_status
+// Address      : 0x1008
+// Description  : PCIe link speed, width, up status
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:22]   %% Unused      %%                                     %%      %%       %%
+//  Field : [21:16]   %% link_width  %% Negotiated link width (1/2/4/8/16)  %% R_O  %% 0x0   %% 0x0
+//  Field : [15:12]   %% Unused      %%                                     %%      %%       %%
+//  Field : [11:08]   %% link_speed  %% 1=Gen1 2=Gen2 3=Gen3                %% R_O  %% 0x0   %% 0x0
+//  Field : [07:01]   %% Unused      %%                                     %%      %%       %%
+//  Field : [00:00]   %% link_up     %% PCIe link is up (L0)                %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   PCIe PLL Lock Status (per-bank)                               #
+#                                                                #
+##################################################################
+
+// Register Full Name: PCIe PLL Lock Status
+// RTL Instant Name  : pcie_pll_status
+// Address      : 0x100C
+// Description  : Per-bank PLL lock status for all 16 lanes
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:16]   %% Unused      %%                                     %%      %%       %%
+//  Field : [15:00]   %% pll_locked  %% 1 per bank: PLL locked              %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   PCIe Error Counters                                           #
+#                                                                #
+##################################################################
+
+// Register Full Name: PCIe Error Counters
+// RTL Instant Name  : pcie_err_cnt
+// Address      : 0x1010
+// Description  : DL/TL error counters (sticky)
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:24]   %% tl_err     %% Transaction Layer errors   %% R/W/C %% 0x0   %% 0x0
+//  Field : [23:16]   %% dl_err     %% Data Link Layer errors     %% R/W/C %% 0x0   %% 0x0
+//  Field : [15:08]   %% phy_err    %% Physical Layer errors      %% R/W/C %% 0x0   %% 0x0
+//  Field : [07:00]   %% Unused     %%                             %%      %%       %%
+
+
+##################################################################
+#              HBM2 Registers (0x2000 - 0x2FFF)                   #
+##################################################################
+
+##################################################################
+#                                                                #
+#   HBM2 Block Version                                            #
+#                                                                #
+##################################################################
+
+// Register Full Name: HBM2 Block Version
+// RTL Instant Name  : hbm2_version
+// Address      : 0x2000
+// Description  : HBM2 Block Version
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:24]   %% day    %% Build day         %% R_O %% 0x0B  %% 0x0B
+//  Field : [23:16]   %% month  %% Build month       %% R_O %% 0x06  %% 0x06
+//  Field : [15:08]   %% year   %% Build year-2000   %% R_O %% 0x1A  %% 0x1A
+//  Field : [07:00]   %% number %% Build number/day  %% R_O %% 0x01  %% 0x01
+
+##################################################################
+#                                                                #
+#   HBM2 TG Status                                                #
+#                                                                #
+##################################################################
+
+// Register Full Name: HBM2 Traffic Generator Status
+// RTL Instant Name  : hbm2_tg_status
+// Address      : 0x2004
+// Description  : Per-channel TG pass/fail/timeout
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:16]   %% tg_fail    %% TG fail (1 per channel)       %% R_O %% 0x0   %% 0x0
+//  Field : [15:00]   %% tg_pass    %% TG pass (1 per channel)       %% R_O %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   HBM2 TG Timeout                                               #
+#                                                                #
+##################################################################
+
+// Register Full Name: HBM2 TG Timeout Status
+// RTL Instant Name  : hbm2_tg_timeout
+// Address      : 0x2008
+// Description  : Per-channel TG timeout flag
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:16]   %% Unused      %%                               %%      %%       %%
+//  Field : [15:00]   %% tg_timeout  %% TG timeout (1 per channel)    %% R_O %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   HBM2 Status                                                   #
+#                                                                #
+##################################################################
+
+// Register Full Name: HBM2 Controller Status
+// RTL Instant Name  : hbm2_status
+// Address      : 0x200C
+// Description  : HBM2 PLL lock, channel active, CATTRIP, temperature
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:07]   %% Unused      %%                               %%      %%       %%
+//  Field : [06:06]   %% ch_active   %% Any channel active            %% R_O  %% 0x0   %% 0x0
+//  Field : [05:05]   %% pll_locked  %% HBM2 PLL locked               %% R_O  %% 0x0   %% 0x0
+//  Field : [04:04]   %% cattrip     %% CATTRIP asserted              %% R_O  %% 0x0   %% 0x0
+//  Field : [03:00]   %% temp_code   %% Temperature sensor code       %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   HBM2 BW Monitor — Read                                        #
+#                                                                #
+##################################################################
+
+// Register Full Name: HBM2 Read Bandwidth Monitor
+// RTL Instant Name  : hbm2_bw_read
+// Address      : 0x2010
+// Description  : Measured HBM2 read bandwidth (MB/s), updated every 1s
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:00]   %% bw_read_mbs %% Read BW in MB/s             %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   HBM2 BW Monitor — Write                                       #
+#                                                                #
+##################################################################
+
+// Register Full Name: HBM2 Write Bandwidth Monitor
+// RTL Instant Name  : hbm2_bw_write
+// Address      : 0x2014
+// Description  : Measured HBM2 write bandwidth (MB/s), updated every 1s
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:00]   %% bw_write_mbs%% Write BW in MB/s            %% R_O  %% 0x0   %% 0x0
+
+
+##################################################################
+#              FFN Registers (0x3000 - 0x3FFF)                    #
+##################################################################
+
+##################################################################
+#                                                                #
+#   FFN Block Version                                             #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN Block Version
+// RTL Instant Name  : ffn_version
+// Address      : 0x3000
+// Description  : FFN Block Version
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:24]   %% day    %% Build day         %% R_O %% 0x0B  %% 0x0B
+//  Field : [23:16]   %% month  %% Build month       %% R_O %% 0x06  %% 0x06
+//  Field : [15:08]   %% year   %% Build year-2000   %% R_O %% 0x1A  %% 0x1A
+//  Field : [07:00]   %% number %% Build number/day  %% R_O %% 0x01  %% 0x01
+
+##################################################################
+#                                                                #
+#   FFN Control                                                   #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN Control Register
+// RTL Instant Name  : ffn_control
+// Address      : 0x3004
+// Description  : FFN start, stop, reset control
+// Width        : 32
+// Register Type: {Config}
+//  Field : [31:04]   %% Unused      %%                               %%      %%       %%
+//  Field : [03:03]   %% counter_rst %% Reset perf counters (pulse)   %% R/W/C %% 0x0   %% 0x0
+//  Field : [02:02]   %% soft_reset  %% FFN soft reset (active=1)     %% R/W  %% 0x0   %% 0x0
+//  Field : [01:01]   %% stop        %% FFN stop (graceful)           %% R/W  %% 0x0   %% 0x0
+//  Field : [00:00]   %% start       %% FFN start (pulse 0→1→0)       %% R/W  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   FFN Status                                                    #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN Status Register
+// RTL Instant Name  : ffn_status
+// Address      : 0x3008
+// Description  : FFN state, busy, done, pass
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:16]   %% Unused      %%                               %%      %%       %%
+//  Field : [15:08]   %% error_code  %% Error code (0=no error)       %% R_O  %% 0x0   %% 0x0
+//  Field : [07:07]   %% pass        %% Last inference passed         %% R_O  %% 0x0   %% 0x0
+//  Field : [06:06]   %% done        %% Inference complete            %% R_O  %% 0x0   %% 0x0
+//  Field : [05:05]   %% busy        %% FFN is processing             %% R_O  %% 0x0   %% 0x0
+//  Field : [04:04]   %% Unused      %%                               %%      %%       %%
+//  Field : [03:00]   %% state       %% FSM state (0=IDLE 1=LOAD...)  %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   FFN Performance — Token Count                                 #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN Token Counter
+// RTL Instant Name  : ffn_token_cnt
+// Address      : 0x300C
+// Description  : Number of tokens processed since last counter reset
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:00]   %% token_cnt   %% Token count                  %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   FFN Performance — Cycle Count                                 #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN Cycle Counter
+// RTL Instant Name  : ffn_cycle_cnt
+// Address      : 0x3010
+// Description  : Cycle count since last counter reset
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:00]   %% cycle_cnt   %% Cycle count                  %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   FFN Performance — Throughput (TPS)                            #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN Throughput
+// RTL Instant Name  : ffn_tps
+// Address      : 0x3014
+// Description  : Calculated TPS = token_cnt × core_freq / cycle_cnt (×1e6)
+// Width        : 32
+// Register Type: {Status}
+// Formula      : (token_cnt * 100000000) / cycle_cnt  // at 100MHz
+//  Field : [31:00]   %% tps         %% Tokens per second estimate    %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   FFN AXI Transaction Counters                                  #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN AXI Read Transaction Counter
+// RTL Instant Name  : ffn_axi_ar_cnt
+// Address      : 0x3018
+// Description  : Number of AXI4 read address transactions issued
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:16]   %% r_beat_cnt  %% Read data beats received     %% R_O  %% 0x0   %% 0x0
+//  Field : [15:00]   %% ar_trans_cnt%% Read address transactions    %% R_O  %% 0x0   %% 0x0
+
+##################################################################
+#                                                                #
+#   FFN DSP Status (GATE CHECK)                                   #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN DSP Utilization
+// RTL Instant Name  : ffn_dsp_status
+// Address      : 0x301C
+// Description  : DSP block count and status — GATE CHECK: DSP > 0
+// Width        : 32
+// Register Type: {Status}
+//  Field : [31:16]   %% Unused      %%                               %%      %%       %%
+//  Field : [15:00]   %% dsp_count   %% Number of DSP blocks used     %% R_O  %% 0x0   %% 0x0
+//                                             %% GATE: MUST be > 0   %%
