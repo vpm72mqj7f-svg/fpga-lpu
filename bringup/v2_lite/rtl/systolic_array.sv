@@ -68,7 +68,7 @@ module systolic_array #(
     output logic [3:0]                          dbg_fsm_state,
     output logic                                dbg_preload_active,
     output logic                                dbg_stream_active,
-    output logic [5:0]                          dbg_cycle_in_row,
+    output logic [$clog2(INPUT_DIM/DSP_LANES):0] dbg_cycle_in_row,
 
     // ---- Performance counters ----
     output logic [31:0]                         perf_rows_done,
@@ -311,7 +311,7 @@ module systolic_array #(
     assign dbg_fsm_state     = state;
     assign dbg_preload_active = (state == S_WT_PRELOAD) || (state == S_WT_PRELOAD_WAIT);
     assign dbg_stream_active  = (state == S_STREAM);
-    assign dbg_cycle_in_row   = cycle_count[5:0];
+    assign dbg_cycle_in_row   = cycle_count;
 
     // Performance counters
     logic [31:0] _perf_rows, _perf_proj, _perf_cycles;
