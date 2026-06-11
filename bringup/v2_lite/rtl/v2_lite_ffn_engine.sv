@@ -169,7 +169,9 @@ module v2_lite_ffn_engine #(
 
     logic                        weight_valid;
     logic [DSP_LANES*DATA_W-1:0] weight_data;
-    logic                        weight_ready;
+    logic                        weight_ready;        // to hbm2 reader (muxed from active SA)
+    logic                        sa_gu_weight_ready;  // from gate/up SA
+    logic                        sa_dn_weight_ready;  // from down SA
 
     // HBM2 reader debug wires
     logic [2:0]  hbm2r_dbg_fsm;
@@ -247,7 +249,7 @@ module v2_lite_ffn_engine #(
         .activ_ready     (sa_gate_up_activ_ready),
         .activ_data      (sa_gate_up_activ_data),
         .weight_valid    (weight_valid),
-        .weight_ready    (weight_ready),
+        .weight_ready    (sa_gu_weight_ready),
         .weight_data     (weight_data),
         .wt_preload_req  (),
         .wt_preload_row  (),
@@ -300,7 +302,7 @@ module v2_lite_ffn_engine #(
         .activ_ready     (sa_down_activ_ready),
         .activ_data      (sa_down_activ_data),
         .weight_valid    (weight_valid),
-        .weight_ready    (weight_ready),
+        .weight_ready    (sa_dn_weight_ready),
         .weight_data     (weight_data),
         .wt_preload_req  (),
         .wt_preload_row  (),
@@ -808,6 +810,9 @@ module v2_lite_ffn_engine #(
     assign dbg_down_done   = down_done;
     assign dbg_silu_active = (state == S_SILU);
     assign dbg_merge_active = (state == S_MERGE_GATE_UP);
+    // MUX: hbm2 reader's weight_ready is driven by whichever SA is active
+    assign weight_ready = sa_gate_up_busy ? sa_gu_weight_ready : sa_dn_weight_ready;
+
     assign dbg_hbm2_busy   = hbm2_busy;
     assign dbg_sa_active   = sa_gate_up_busy || sa_down_busy;
     assign dbg_hbm2r_fsm   = hbm2r_dbg_fsm;
