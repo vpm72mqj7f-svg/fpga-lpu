@@ -1,0 +1,249 @@
+##################################################################
+# FPGA LPU — V2-Lite Full ISP Debug Register Map
+# File: v2_lite_full.atreg
+# Revision 1.0 — 2026.Jun.11
+##################################################################
+# Guideline:
+#   File name: <project>.atreg (atreg = ATVN register define)
+#   Comment:   # or //#
+#   Delimiter: %%
+##################################################################
+# Common rules:
+#   Access types:
+#     R_O  : Read Only
+#     R/W  : Read / Write
+#     R/W/C: Read / Write-1-to-Clear (sticky bit)
+#     W_O  : Write Only
+##################################################################
+# ISP Architecture:
+#   4 altsource_probe instances, each with indexed probe/source ports.
+#   Address = Instance ID + Probe/Source Index.
+#   CLI: quartus_issp --probe --instance=<ID> [--probe_index=<N>]
+#        quartus_issp --source --instance=<ID> --source_index=<N> --value=<V>
+##################################################################
+
+
+##################################################################
+#                                                                #
+#   PCIE — PCIe XCVR Subsystem (Instance: PCIE)                  #
+#                                                                #
+##################################################################
+
+// Register Full Name: PCIE Link Status
+// Instance         : PCIE
+// Probe Index      : 0
+// Width            : 32
+// Register Type    : {Status}
+// Description      : PCIe link training status, speed, width, and PLL lock
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [04:00]   %% LTSSM_STATE      %% LTSSM state (TODO: internal wire)    %% R_O    %% 0x00   %% 0x00
+//  Field: [09:05]   %% LINK_SPEED       %% Negotiated speed (TODO)              %% R_O    %% 0x00   %% 0x00
+//  Field: [15:10]   %% LINK_WIDTH       %% Active lanes (TODO)                  %% R_O    %% 0x00   %% 0x00
+//  Field: [16]      %% ATX_PLL_LOCK     %% ATX PLL locked                       %% R_O    %% 0x0    %% 0x0
+//  Field: [17]      %% CONFIG_DONE      %% HIP config done (TODO)               %% R_O    %% 0x0    %% 0x0
+//  Field: [18]      %% PERSTN           %% PERST# pin state (TODO)              %% R_O    %% 0x0    %% 0x0
+//  Field: [19]      %% LINK_UP          %% Link in L0 (TODO)                    %% R_O    %% 0x0    %% 0x0
+//  Field: [31:20]   %% RSVD             %% Reserved                             %% R_O    %% 0x000  %% 0x000
+##################################################################
+
+// Register Full Name: PCIE Lane Status
+// Instance         : PCIE
+// Probe Index      : 1
+// Width            : 32
+// Register Type    : {Status}
+// Description      : Per-lane PLL lock and signal detect for 16 PCIe lanes
+// Where            : Lane mapping — [0]=bank_1c_0 .. [5]=bank_1c_5, [6]=bank_1d_0 .. [15]=bank_1e_3
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [15:00]   %% PLL_LOCK         %% Per-lane PLL lock, 1=locked         %% R_O    %% 0x0000 %% 0x0000
+//  Field: [31:16]   %% SIGNAL_DETECT    %% RX signal detect (TODO)              %% R_O    %% 0x0000 %% 0x0000
+##################################################################
+
+// Register Full Name: PCIE Error Counters
+// Instance         : PCIE
+// Probe Index      : 2
+// Width            : 32
+// Register Type    : {Counter}
+// Description      : Data link and transaction layer error counters
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [15:00]   %% DL_FE_ERR        %% Data Link framing errors (TODO)      %% R_O    %% 0x0000 %% 0x0000
+//  Field: [31:16]   %% TL_ERR           %% Transaction layer errors (TODO)      %% R_O    %% 0x0000 %% 0x0000
+##################################################################
+
+
+##################################################################
+#                                                                #
+#   HBM2 — HBM2 Memory Subsystem (Instance: HBM2)                #
+#                                                                #
+##################################################################
+
+// Register Full Name: HBM2 Traffic Generator Status
+// Instance         : HBM2
+// Probe Index      : 0
+// Width            : 32
+// Register Type    : {Status}
+// Description      : Per-channel traffic generator pass/fail
+// Where            : Channel mapping — [0]=tg0_0, [1]=tg0_1, [2]=tg1_0 ... [15]=tg7_1
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [15:00]   %% TG_PASS          %% Channel TG passed, 1=pass           %% R_O    %% 0x0000 %% 0x0000
+//  Field: [31:16]   %% TG_FAIL          %% Channel TG failed, 1=fail           %% R_O    %% 0x0000 %% 0x0000
+##################################################################
+
+// Register Full Name: HBM2 Traffic Generator Timeout
+// Instance         : HBM2
+// Probe Index      : 1
+// Width            : 32
+// Register Type    : {Status}
+// Description      : Per-channel traffic generator timeout
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [15:00]   %% TG_TIMEOUT       %% Channel TG timeout, 1=timeout       %% R_O    %% 0x0000 %% 0x0000
+//  Field: [31:16]   %% RSVD             %% Reserved                             %% R_O    %% 0x0000 %% 0x0000
+##################################################################
+
+// Register Full Name: HBM2 Status
+// Instance         : HBM2
+// Probe Index      : 2
+// Width            : 32
+// Register Type    : {Status}
+// Description      : HBM2 temperature, PLL lock, channel activity
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [02:00]   %% TEMP             %% Temperature code (TODO: IO buf)      %% R_O    %% 0x0    %% 0x0
+//  Field: [03]      %% CATTRIP          %% Catastrophic trip (TODO: IO buf)     %% R_O    %% 0x0    %% 0x0
+//  Field: [04]      %% PLL_LOCK         %% HBM2 core PLL locked                 %% R_O    %% 0x0    %% 0x0
+//  Field: [05]      %% CH_ACTIVE        %% Any channel active                   %% R_O    %% 0x0    %% 0x0
+//  Field: [31:06]   %% RSVD             %% Reserved                             %% R_O    %% 0x0    %% 0x0
+##################################################################
+
+
+##################################################################
+#                                                                #
+#   FFN — Feed-Forward Network Engine (Instance: FFN)            #
+#                                                                #
+##################################################################
+
+// Register Full Name: FFN Status
+// Instance         : FFN
+// Probe Index      : 0
+// Width            : 32
+// Register Type    : {Status}
+// Description      : FFN engine FSM state and status flags
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [03:00]   %% STATE            %% FSM: 0=IDLE, 1=START, 2=BUSY, 5=PASS %% R_O    %% 0x0    %% 0x0
+//  Field: [04]      %% BUSY             %% Engine processing                    %% R_O    %% 0x0    %% 0x0
+//  Field: [05]      %% DONE             %% Computation completed                %% R_O    %% 0x0    %% 0x0
+//  Field: [06]      %% PASS             %% Self-test passed                     %% R_O    %% 0x0    %% 0x0
+//  Field: [07]      %% ERROR            %% Error detected                       %% R_O    %% 0x0    %% 0x0
+//  Field: [15:08]   %% ERROR_CODE       %% Error code, 0=no error               %% R_O    %% 0x00   %% 0x00
+//  Field: [31:16]   %% RSVD             %% Reserved                             %% R_O    %% 0x0000 %% 0x0000
+##################################################################
+
+// Register Full Name: FFN Performance Counters
+// Instance         : FFN
+// Probe Index      : 1
+// Width            : 32
+// Register Type    : {Counter}
+// Description      : Token count and cycle count for throughput measurement
+// Formula          : DecodeRate = (TOKEN_COUNT * 100MHz) / CYCLE_COUNT  (tokens/sec)
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [15:00]   %% TOKEN_COUNT      %% Tokens processed since reset         %% R_O    %% 0x0000 %% 0x0000
+//  Field: [31:16]   %% CYCLE_COUNT_LO   %% Cycle counter LSB (0.01s at 100MHz)  %% R_O    %% 0x0000 %% 0x0000
+##################################################################
+
+// Register Full Name: FFN AXI Statistics
+// Instance         : FFN
+// Probe Index      : 2
+// Width            : 32
+// Register Type    : {Counter}
+// Description      : AXI read transaction and beat counters
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [15:00]   %% AR_TRANS         %% AXI AR transactions issued           %% R_O    %% 0x0000 %% 0x0000
+//  Field: [31:16]   %% R_BEATS          %% AXI R data beats received (TODO)     %% R_O    %% 0x0000 %% 0x0000
+##################################################################
+
+// Register Full Name: FFN Output Data
+// Instance         : FFN
+// Probe Index      : 3
+// Width            : 32
+// Register Type    : {Status}
+// Description      : Latest FFN output data sample (lower 32 bits of 16384-bit output)
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [15:00]   %% TDATA_LO         %% FFN output data [15:0]               %% R_O    %% 0x0000 %% 0x0000
+//  Field: [31:16]   %% TDATA_HI         %% FFN output data [31:16]              %% R_O    %% 0x0000 %% 0x0000
+##################################################################
+
+
+##################################################################
+#                                                                #
+#   SYS — System Control & Status (Instance: SYS)                #
+#                                                                #
+##################################################################
+
+// Register Full Name: System Status
+// Instance         : SYS
+// Probe Index      : 0
+// Width            : 32
+// Register Type    : {Status}
+// Description      : Board LEDs, reset/clock status, firmware version
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [03:00]   %% LED              %% Board LED: [0]=HBM2, [1]=~PCIE_PLL,  %% R_O    %% 0x0    %% 0x0
+//                                       %% [2]=FFN, [3]=heartbeat
+//  Field: [07:04]   %% RESET_STATUS     %% Reset state flags (TODO)             %% R_O    %% 0x0    %% 0x0
+//  Field: [15:08]   %% CLK_STATUS       %% Clock status flags (TODO)            %% R_O    %% 0x0    %% 0x0
+//  Field: [31:16]   %% VERSION          %% Firmware version: 0x0001=v1.0        %% R_O    %% 0x0001 %% 0x0001
+##################################################################
+
+// Register Full Name: System Control
+// Instance         : SYS
+// Source Index     : 0
+// Width            : 32
+// Register Type    : {Control}
+// Description      : System control register — write to trigger actions
+// Field: [Bit:Bit]  %% Name             %% Description                          %% Type   %% Reset  %% Default
+//  Field: [00]      %% FFN_START        %% Write 1 to start FFN self-test       %% W_O    %% 0x0    %% 0x0
+//  Field: [01]      %% FFN_RESET        %% Write 1 to reset FFN engine          %% W_O    %% 0x0    %% 0x0
+//  Field: [02]      %% COUNTER_RESET    %% Write 1 to reset all perf counters   %% W_O    %% 0x0    %% 0x0
+//  Field: [31:03]   %% RSVD             %% Reserved                             %% W_O    %% 0x0    %% 0x0
+##################################################################
+
+
+##################################################################
+#                                                                #
+#   Quick Health Check                                           #
+#                                                                #
+##################################################################
+# Expected values for a healthy board:
+#
+#   PCIE Probe 0 [16]     ATX_PLL_LOCK  = 1
+#   PCIE Probe 1 [15:00]  PLL_LOCK      = 0xFFFF (all 16 lanes)
+#   HBM2 Probe 0 [15:00]  TG_PASS       = 0xFFFF (all 16 channels)
+#   HBM2 Probe 0 [31:16]  TG_FAIL       = 0x0000 (no failures)
+#   FFN  Probe 0 [06]     PASS          = 1
+#   FFN  Probe 0 [05]     DONE          = 1
+#   FFN  Probe 1 [15:00]  TOKEN_COUNT   > 0 (if FFN ran)
+#   SYS  Probe 0 [3:0]    LED[1]        = 0 (PCIe PLL locked)
+#   SYS  Probe 0 [31:16]  VERSION       = 0x0001
+##################################################################
+
+
+##################################################################
+#                                                                #
+#   CLI Quick Reference                                          #
+#                                                                #
+##################################################################
+# Read all status registers:
+#   quartus_issp --probe --instance=PCIE
+#   quartus_issp --probe --instance=HBM2
+#   quartus_issp --probe --instance=FFN
+#   quartus_issp --probe --instance=SYS
+#
+# Read single probe:
+#   quartus_issp --probe --instance=FFN --probe_index=1
+#
+# Write control:
+#   quartus_issp --source --instance=SYS --source_index=0 --value=1
+#
+# Health check one-liner (PowerShell):
+#   $p0=(quartus_issp --probe --instance=PCIE --probe_index=0); "PCIe PLL:$((($p0 -shr 16) -band 1))"
+#   $h0=(quartus_issp --probe --instance=HBM2 --probe_index=0); "HBM2 Pass:0x{0:X4}" -f ($h0 -band 0xFFFF)
+#   $f0=(quartus_issp --probe --instance=FFN --probe_index=0); "FFN Pass:$((($f0 -shr 6) -band 1))"
+#   $s0=(quartus_issp --probe --instance=SYS --probe_index=0); "Version:0x{0:X4}" -f (($s0 -shr 16) -band 0xFFFF)
+##################################################################

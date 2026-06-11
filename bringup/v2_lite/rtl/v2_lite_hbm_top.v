@@ -170,9 +170,10 @@ module v2_lite_hbm_top (
                 B_IDLE:  bstate <= B_WAIT;
                 B_WAIT:  bstate <= B_SEND;
                 B_SEND: begin
+                    integer i;
                     ffn_rx_valid <= 1;
                     // Send ramp pattern as activation
-                    for (int i = 0; i < HIDDEN; i = i + 1)
+                    for (i = 0; i < HIDDEN; i = i + 1)
                         ffn_rx_data[i*DATA_W +: DATA_W] <= i[7:0];
                     bstate <= B_BUSY;
                 end
