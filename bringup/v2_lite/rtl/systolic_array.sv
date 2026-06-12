@@ -170,27 +170,32 @@ module systolic_array #(
 
             // Stage 1-2: DSP multiply (8b signed × 8b signed → 16b, 2 pipe stages)
             //
-            // Intel lpm_mult — guaranteed DSP inference on Stratix 10.
-            // lpm_pipeline=1 provides input+output registers (PIPE_STAGES=2 equiv).
+            // altera_mult_add with full Intel IP parameters for Stratix 10.
+            // PIPE_STAGES=2: input registers → DSP multiply → output register.
+            // Behavioural model (altera_mult_add_sim.sv) uses A_WIDTH/B_WIDTH;
+            // Quartus synthesis uses NUMBER_OF_MULTIPLIERS/WIDTH_A/WIDTH_B/etc.
             logic signed [15:0] s1_product;
             logic signed [15:0] s2_product;
             logic               s1_v, s2_v;
 
             wire signed [15:0] mult_result;
 
-            lpm_mult #(
-                .lpm_widtha         (8),
-                .lpm_widthb         (8),
-                .lpm_widthp         (16),
-                .lpm_widths         (1),
-                .lpm_representation ("SIGNED"),
-                .lpm_pipeline       (1),
-                .lpm_type           ("LPM_MULT"),
-                .lpm_hint           ("DEDICATED_MULTIPLIER_CIRCUITRY=YES,MAXIMIZE_SPEED=9")
+            altera_mult_add #(
+                .A_WIDTH                (8),
+                .B_WIDTH                (8),
+                .PIPE_STAGES            (2),
+                .NUMBER_OF_MULTIPLIERS  (1),
+                .WIDTH_A                (8),
+                .WIDTH_B                (8),
+                .WIDTH_RESULT           (16),
+                .INPUT_REGISTER_A       ("CLOCK0"),
+                .INPUT_REGISTER_B       ("CLOCK0"),
+                .OUTPUT_REGISTER        ("CLOCK0"),
+                .SELECTED_DEVICE_FAMILY ("Stratix 10")
             ) u_dsp_mult (
                 .clock  (clk),
-                .dataa  (s0_a),
-                .datab  (s0_b),
+                .a      (s0_a),
+                .b      (s0_b),
                 .result (mult_result)
             );
 

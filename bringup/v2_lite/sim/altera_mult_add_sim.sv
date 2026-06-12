@@ -19,7 +19,16 @@
 module altera_mult_add #(
     parameter int A_WIDTH     = 18,
     parameter int B_WIDTH     = 19,
-    parameter int PIPE_STAGES = 2
+    parameter int PIPE_STAGES = 2,
+    // Intel Quartus synthesis parameters (ignored by behavioral model)
+    parameter int NUMBER_OF_MULTIPLIERS  = 1,
+    parameter int WIDTH_A                = 18,
+    parameter int WIDTH_B                = 19,
+    parameter int WIDTH_RESULT           = 37,
+    parameter      INPUT_REGISTER_A       = "CLOCK0",
+    parameter      INPUT_REGISTER_B       = "CLOCK0",
+    parameter      OUTPUT_REGISTER        = "CLOCK0",
+    parameter      SELECTED_DEVICE_FAMILY = "Stratix 10"
 ) (
     input  logic                     clock,
     input  logic [A_WIDTH-1:0]       a,
