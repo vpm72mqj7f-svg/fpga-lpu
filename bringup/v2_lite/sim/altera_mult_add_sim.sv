@@ -30,9 +30,9 @@ module altera_mult_add #(
     parameter      OUTPUT_REGISTER        = "CLOCK0",
     parameter      SELECTED_DEVICE_FAMILY = "Stratix 10"
 ) (
-    input  logic                     clock,
-    input  logic [A_WIDTH-1:0]       a,
-    input  logic [B_WIDTH-1:0]       b,
+    input  logic                     clock0,
+    input  logic [A_WIDTH-1:0]       dataa,
+    input  logic [B_WIDTH-1:0]       datab,
     output logic [A_WIDTH+B_WIDTH-1:0] result
 );
 
@@ -45,28 +45,28 @@ module altera_mult_add #(
 
     generate
         if (PIPE_STAGES == 0) begin : g_pipe0
-            assign result = $signed(a) * $signed(b);
+            assign result = $signed(dataa) * $signed(datab);
         end else if (PIPE_STAGES == 1) begin : g_pipe1
-            always_ff @(posedge clock) begin
-                result <= $signed(a) * $signed(b);
+            always_ff @(posedge clock0) begin
+                result <= $signed(dataa) * $signed(datab);
             end
         end else if (PIPE_STAGES == 2) begin : g_pipe2
-            always_ff @(posedge clock) begin
-                a_r <= $signed(a);
-                b_r <= $signed(b);
+            always_ff @(posedge clock0) begin
+                a_r <= $signed(dataa);
+                b_r <= $signed(datab);
             end
-            always_ff @(posedge clock) begin
+            always_ff @(posedge clock0) begin
                 result <= $signed(a_r) * $signed(b_r);
             end
         end else begin : g_pipe3
-            always_ff @(posedge clock) begin
-                a_r <= $signed(a);
-                b_r <= $signed(b);
+            always_ff @(posedge clock0) begin
+                a_r <= $signed(dataa);
+                b_r <= $signed(datab);
             end
-            always_ff @(posedge clock) begin
+            always_ff @(posedge clock0) begin
                 mult_r <= $signed(a_r) * $signed(b_r);
             end
-            always_ff @(posedge clock) begin
+            always_ff @(posedge clock0) begin
                 result <= mult_r;
             end
         end

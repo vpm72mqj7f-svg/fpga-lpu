@@ -193,9 +193,9 @@ module systolic_array #(
                 .OUTPUT_REGISTER        ("CLOCK0"),
                 .SELECTED_DEVICE_FAMILY ("Stratix 10")
             ) u_dsp_mult (
-                .clock  (clk),
-                .a      (s0_a),
-                .b      (s0_b),
+                .clock0 (clk),
+                .dataa  (s0_a),
+                .datab  (s0_b),
                 .result (mult_result)
             );
 
