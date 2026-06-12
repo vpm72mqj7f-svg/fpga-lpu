@@ -139,73 +139,52 @@ module systolic_array #(
     logic                         result_sel_read;   // which buffer to read (output)
 
     //=========================================================================
-    // MAC Lanes — Generate 64 fp8×fp8 multiply-accumulate instances
+    // MAC Lanes — FP16×FP16 → truncated to accumulator width
     //
-    // Each lane:  input reg → altera_mult_add(DSP) → fabric accumulator
-    // Pipeline:   Stage 0 (input reg) → Stage 1-2 (DSP mult) → Stage 3 (accum)
-    // Total:      4 cycles from input to valid accumulator output.
+    // Each lane: FP8 input → sign-extend to 16-bit → DSP multiply (16×16→32)
+    //            → truncate/round to ACCUM_W → fabric accumulator
     //
-    // The altera_mult_add wrapper provides behavioral Icarus simulation
-    // and Quartus inference to Stratix 10 variable-precision DSP blocks.
+    // DSP: 16×16 signed multiply perfectly fits Stratix 10 18×19 DSP blocks.
+    //      64 lanes × 2 SA instances = 128 DSP blocks.
     //=========================================================================
     genvar li;
     generate
         for (li = 0; li < DSP_LANES; li++) begin : g_mac_lane
 
-            // Stage 0: input registers
-            logic signed [DATA_W-1:0] s0_a, s0_b;
-            logic                     s0_v;
+            // Stage 0: input registers — sign-extend FP8 to 16-bit
+            logic signed [15:0] s0_a, s0_b;
+            logic               s0_v;
 
             always_ff @(posedge clk or negedge rst_n) begin
                 if (!rst_n) begin
-                    s0_a <= '0;
-                    s0_b <= '0;
+                    s0_a <= 16'sd0;
+                    s0_b <= 16'sd0;
                     s0_v <= 1'b0;
                 end else begin
-                    s0_a <= $signed(mac_activ[li]);
-                    s0_b <= $signed(mac_weight[li]);
-                    s0_v <= 1'b1;  // valid is implicit during STREAM
+                    // Sign-extend 8-bit FP8 → 16-bit for DSP
+                    s0_a <= { {8{$signed(mac_activ[li])[7]}}, $signed(mac_activ[li]) };
+                    s0_b <= { {8{$signed(mac_weight[li])[7]}}, $signed(mac_weight[li]) };
+                    s0_v <= 1'b1;
                 end
             end
 
-            // Stage 1-2: DSP multiply (8b signed × 8b signed → 16b, 2 pipe stages)
-            //
-            // altera_mult_add with full Intel IP parameters for Stratix 10.
-            // PIPE_STAGES=2: input registers → DSP multiply → output register.
-            // Behavioural model (altera_mult_add_sim.sv) uses A_WIDTH/B_WIDTH;
-            // Quartus synthesis uses NUMBER_OF_MULTIPLIERS/WIDTH_A/WIDTH_B/etc.
+            // Stage 1-2: DSP multiply — 16b×16b→32b, 2 pipe stages
+            // Stratix 10 DSP: 18×19 native → 16×16 uses 1 DSP block perfectly.
             logic signed [15:0] s1_product;
             logic signed [15:0] s2_product;
             logic               s1_v, s2_v;
 
-            (* preserve *) wire signed [15:0] mult_result;
+            // Combinational 16×16 multiply — Quartus infers S10 DSP block
+            (* multstyle = "dsp" *) wire signed [31:0] mult_result;
+            assign mult_result = s0_a * s0_b;
 
-            altera_mult_add #(
-                .A_WIDTH                (8),
-                .B_WIDTH                (8),
-                .PIPE_STAGES            (2),
-                .NUMBER_OF_MULTIPLIERS  (1),
-                .WIDTH_A                (8),
-                .WIDTH_B                (8),
-                .WIDTH_RESULT           (16),
-                .INPUT_REGISTER_A       ("CLOCK0"),
-                .INPUT_REGISTER_B       ("CLOCK0"),
-                .OUTPUT_REGISTER        ("CLOCK0"),
-                .SELECTED_DEVICE_FAMILY ("Stratix 10")
-            ) u_dsp_mult (
-                .clock0 (clk),
-                .dataa  (s0_a),
-                .datab  (s0_b),
-                .result (mult_result)
-            );
-
-            // Stage 1: latch DSP output
+            // Stage 1: registered product, truncated back to 16-bit
             always_ff @(posedge clk) begin
-                s1_product <= mult_result;
+                s1_product <= mult_result[27:12];  // truncate 32b→16b (keep MSBs)
                 s1_v       <= 1'b1;
             end
 
-            // Stage 2: pipeline register → fabric
+            // Stage 2: pipeline register → fabric accumulator
             always_ff @(posedge clk or negedge rst_n) begin
                 if (!rst_n) begin
                     s2_product <= 16'sd0;
