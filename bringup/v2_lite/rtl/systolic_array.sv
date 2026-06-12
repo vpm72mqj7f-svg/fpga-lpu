@@ -170,22 +170,33 @@ module systolic_array #(
 
             // Stage 1-2: DSP multiply (8b signed × 8b signed → 16b, 2 pipe stages)
             //
-            // Intel Quartus DSP inference recipe:
-            //   1. Combinational multiply with multstyle attribute
-            //   2. Register the product (DSP output register, PIPE_STAGES=1 equiv)
-            //   3. Second register (fabric, PIPE_STAGES=2 total)
-            // Quartus maps this to a single S10 variable-precision DSP block.
+            // Intel lpm_mult — guaranteed DSP inference on Stratix 10.
+            // lpm_pipeline=1 provides input+output registers (PIPE_STAGES=2 equiv).
             logic signed [15:0] s1_product;
             logic signed [15:0] s2_product;
             logic               s1_v, s2_v;
 
-            // Combinational multiply → Quartus infers DSP block
-            (* multstyle = "dsp" *) wire signed [15:0] mult_comb;
-            assign mult_comb = $signed(s0_a) * $signed(s0_b);
+            wire signed [15:0] mult_result;
 
-            // Stage 1: registered product → DSP output register
+            lpm_mult #(
+                .lpm_widtha         (8),
+                .lpm_widthb         (8),
+                .lpm_widthp         (16),
+                .lpm_widths         (1),
+                .lpm_representation ("SIGNED"),
+                .lpm_pipeline       (1),
+                .lpm_type           ("LPM_MULT"),
+                .lpm_hint           ("DEDICATED_MULTIPLIER_CIRCUITRY=YES,MAXIMIZE_SPEED=9")
+            ) u_dsp_mult (
+                .clock  (clk),
+                .dataa  (s0_a),
+                .datab  (s0_b),
+                .result (mult_result)
+            );
+
+            // Stage 1: latch DSP output
             always_ff @(posedge clk) begin
-                s1_product <= mult_comb;
+                s1_product <= mult_result;
                 s1_v       <= 1'b1;
             end
 
