@@ -161,9 +161,9 @@ module systolic_array #(
                     s0_b <= 16'sd0;
                     s0_v <= 1'b0;
                 end else begin
-                    // Sign-extend 8-bit FP8 → 16-bit for DSP
-                    s0_a <= { {8{$signed(mac_activ[li])[7]}}, $signed(mac_activ[li]) };
-                    s0_b <= { {8{$signed(mac_weight[li])[7]}}, $signed(mac_weight[li]) };
+                    // Sign-extend 8-bit FP8 → 16-bit for DSP (SV auto-extends)
+                    s0_a <= $signed(mac_activ[li]);
+                    s0_b <= $signed(mac_weight[li]);
                     s0_v <= 1'b1;
                 end
             end
