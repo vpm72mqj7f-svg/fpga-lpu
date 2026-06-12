@@ -169,21 +169,27 @@ module systolic_array #(
             end
 
             // Stage 1-2: DSP multiply (8b signed × 8b signed → 16b, 2 pipe stages)
-            // Use multstyle = "dsp" for Quartus DSP inference (replaces
-            // explicit altera_mult_add IP which requires many Intel-specific
-            // parameters). The 2-stage pipeline is equivalent to PIPE_STAGES=2.
+            //
+            // Intel Quartus DSP inference recipe:
+            //   1. Combinational multiply with multstyle attribute
+            //   2. Register the product (DSP output register, PIPE_STAGES=1 equiv)
+            //   3. Second register (fabric, PIPE_STAGES=2 total)
+            // Quartus maps this to a single S10 variable-precision DSP block.
             logic signed [15:0] s1_product;
             logic signed [15:0] s2_product;
             logic               s1_v, s2_v;
 
-            // Stage 1: registered multiply → DSP input registers
-            (* multstyle = "dsp" *) logic signed [15:0] product_raw;
+            // Combinational multiply → Quartus infers DSP block
+            (* multstyle = "dsp" *) wire signed [15:0] mult_comb;
+            assign mult_comb = $signed(s0_a) * $signed(s0_b);
+
+            // Stage 1: registered product → DSP output register
             always_ff @(posedge clk) begin
-                s1_product <= $signed(s0_a) * $signed(s0_b);
+                s1_product <= mult_comb;
                 s1_v       <= 1'b1;
             end
 
-            // Stage 2: pipeline register → DSP output register
+            // Stage 2: pipeline register → fabric
             always_ff @(posedge clk or negedge rst_n) begin
                 if (!rst_n) begin
                     s2_product <= 16'sd0;
