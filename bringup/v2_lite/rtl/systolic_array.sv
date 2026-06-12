@@ -175,14 +175,18 @@ module systolic_array #(
             logic               s1_v, s2_v;
 
             // Combinational 16×16 multiply — Quartus infers S10 DSP block
-            (* multstyle = "dsp" *) wire signed [31:0] mult_result;
+            (* multstyle = "dsp" *) logic signed [31:0] mult_result;
+            logic signed [31:0] mult_reg;
             assign mult_result = s0_a * s0_b;
 
-            // Stage 1: registered product, truncated back to 16-bit
+            // Stage 1: register full 32b product (DSP output register)
             always_ff @(posedge clk) begin
-                s1_product <= mult_result[27:12];  // truncate 32b→16b (keep MSBs)
-                s1_v       <= 1'b1;
+                mult_reg <= mult_result;
+                s1_v     <= 1'b1;
             end
+
+            // Truncate registered product: 32b → 16b (keep upper bits)
+            assign s1_product = mult_reg[31:16];
 
             // Stage 2: pipeline register → fabric accumulator
             always_ff @(posedge clk or negedge rst_n) begin
