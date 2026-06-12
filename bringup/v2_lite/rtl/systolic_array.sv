@@ -178,7 +178,7 @@ module systolic_array #(
             logic signed [15:0] s2_product;
             logic               s1_v, s2_v;
 
-            wire signed [15:0] mult_result;
+            (* preserve *) wire signed [15:0] mult_result;
 
             altera_mult_add #(
                 .A_WIDTH                (8),

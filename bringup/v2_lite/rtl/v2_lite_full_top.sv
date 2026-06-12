@@ -208,17 +208,17 @@ module v2_lite_full
    always @(posedge core_clk_iopll_ref_clk_clk or negedge cpu_resetn)
      if (!cpu_resetn) rc <= 8'd0; else if (rc < 8'd255) rc <= rc + 8'd1;
 
-   // FFN-to-HBM2 AXI read channel wires
-   wire [31:0] ffn_araddr;
-   wire [7:0]  ffn_arlen;
-   wire [2:0]  ffn_arsize;
-   wire        ffn_arvalid, ffn_arready;
-   wire [255:0] ffn_rdata;
-   wire [1:0]  ffn_rresp;
-   wire        ffn_rvalid, ffn_rready, ffn_rlast;
+   // FFN-to-HBM2 AXI read channel wires (preserve: prevent dead-code elimination)
+   (* preserve *) wire [31:0] ffn_araddr;
+   (* preserve *) wire [7:0]  ffn_arlen;
+   (* preserve *) wire [2:0]  ffn_arsize;
+   (* preserve *) wire        ffn_arvalid, ffn_arready;
+   (* preserve *) wire [255:0] ffn_rdata;
+   (* preserve *) wire [1:0]  ffn_rresp;
+   (* preserve *) wire        ffn_rvalid, ffn_rready, ffn_rlast;
 
-   reg fv, fr, fp, fs; reg [16383:0] fd;
-   wire rdy, tv, busy, done; wire [16383:0] td;
+   (* preserve *) reg fv, fr, fp, fs; (* preserve *) reg [16383:0] fd;
+   (* preserve *) wire rdy, tv, busy, done; (* preserve *) wire [16383:0] td;
 
    // Expert IDs — use SV assignment pattern for unpacked array port
    wire [6:0] ffn_expert_id_0 = 7'd0, ffn_expert_id_1 = 7'd1,
@@ -339,9 +339,11 @@ module v2_lite_full
    always @(posedge core_clk_iopll_ref_clk_clk or negedge cpu_resetn)
      if(!cpu_resetn) hb<=0; else hb<=hb+1;
 
+   // LED[2] = XOR of FFN output bits (forces Quartus to keep compute path)
+   wire led2_ffn_data = ^td[127:0];
    assign led[0] = hbm_all_pass;
    assign led[1] = ~pcie_atx_pll_locked;  // OFF when PCIe PLL locked (good)
-   assign led[2] = fp ? hb[25] : done;    // FFN pass=blink, else done status
+   assign led[2] = fp ? hb[25] : (done ? led2_ffn_data : 1'b0);
    assign led[3] = hb[26];                // Heartbeat
 
 
