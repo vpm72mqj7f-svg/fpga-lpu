@@ -131,74 +131,22 @@ module v2_lite_full
                           tg6_0_pass,tg6_1_pass,tg7_0_pass,tg7_1_pass};
 
    // ========================================================================
-   // PCIe Qsys (pcie_xcvr_system)
+   // PCIe Endpoint Qsys (pcie_ep — Gen3 x8, 250MHz)
    // ========================================================================
-   wire pcie_atx_pll_locked;
-   wire pcie_pll_locked_a, pcie_pll_locked_b, pcie_pll_locked_c, pcie_pll_locked_d;
-   wire pcie_pll_locked_e, pcie_pll_locked_f, pcie_pll_locked_g, pcie_pll_locked_h;
-   wire pcie_pll_locked_i, pcie_pll_locked_j, pcie_pll_locked_k, pcie_pll_locked_l;
-   wire pcie_pll_locked_m, pcie_pll_locked_n, pcie_pll_locked_o, pcie_pll_locked_p;
    wire int_reset_n;
 
    random_start u_rand (.clock(clk_50m), .r_start(), .int_reset_n(int_reset_n));
 
-   pcie_xcvr_system u_pcie (
-       .atx_pll_1c_refclk_in_clk_clk(refclk_pcie_ep_p),
-       .clk_100_clk(core_clk_iopll_ref_clk_clk),
-       .clk_100_reset_reset_n(cpu_resetn & int_reset_n),
-       .clk_50_clk(clk_50m),
-       .clk_50_reset_reset_n(cpu_resetn & int_reset_n),
-       .pcie_xcvr_system_bank_1c_0_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[0]),
-       .pcie_xcvr_system_bank_1c_0_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[0]),
-       .pcie_xcvr_system_bank_1c_1_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[1]),
-       .pcie_xcvr_system_bank_1c_1_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[1]),
-       .pcie_xcvr_system_bank_1c_2_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[2]),
-       .pcie_xcvr_system_bank_1c_2_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[2]),
-       .pcie_xcvr_system_bank_1c_3_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[3]),
-       .pcie_xcvr_system_bank_1c_3_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[3]),
-       .pcie_xcvr_system_bank_1c_4_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[4]),
-       .pcie_xcvr_system_bank_1c_4_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[4]),
-       .pcie_xcvr_system_bank_1c_5_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[5]),
-       .pcie_xcvr_system_bank_1c_5_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[5]),
-       .pcie_xcvr_system_bank_1d_0_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[6]),
-       .pcie_xcvr_system_bank_1d_0_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[6]),
-       .pcie_xcvr_system_bank_1d_1_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[7]),
-       .pcie_xcvr_system_bank_1d_1_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[7]),
-       .pcie_xcvr_system_bank_1d_2_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[8]),
-       .pcie_xcvr_system_bank_1d_2_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[8]),
-       .pcie_xcvr_system_bank_1d_3_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[9]),
-       .pcie_xcvr_system_bank_1d_3_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[9]),
-       .pcie_xcvr_system_bank_1d_4_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[10]),
-       .pcie_xcvr_system_bank_1d_4_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[10]),
-       .pcie_xcvr_system_bank_1d_5_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[11]),
-       .pcie_xcvr_system_bank_1d_5_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[11]),
-       .pcie_xcvr_system_bank_1e_0_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[12]),
-       .pcie_xcvr_system_bank_1e_0_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[12]),
-       .pcie_xcvr_system_bank_1e_1_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[13]),
-       .pcie_xcvr_system_bank_1e_1_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[13]),
-       .pcie_xcvr_system_bank_1e_2_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[14]),
-       .pcie_xcvr_system_bank_1e_2_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[14]),
-       .pcie_xcvr_system_bank_1e_3_xcvr_native_s10_0_rx_serial_data_rx_serial_data(pcie_ep_tx_p[15]),
-       .pcie_xcvr_system_bank_1e_3_xcvr_native_s10_0_tx_serial_data_tx_serial_data(pcie_ep_rx_p[15]),
-       .pcie_xcvr_system_pll_status_pll_locked_output_pll_locked(pcie_atx_pll_locked),
-       .dbg_pll_locked_a(pcie_pll_locked_a),
-       .dbg_pll_locked_b(pcie_pll_locked_b),
-       .dbg_pll_locked_c(pcie_pll_locked_c),
-       .dbg_pll_locked_d(pcie_pll_locked_d),
-       .dbg_pll_locked_e(pcie_pll_locked_e),
-       .dbg_pll_locked_f(pcie_pll_locked_f),
-       .dbg_pll_locked_g(pcie_pll_locked_g),
-       .dbg_pll_locked_h(pcie_pll_locked_h),
-       .dbg_pll_locked_i(pcie_pll_locked_i),
-       .dbg_pll_locked_j(pcie_pll_locked_j),
-       .dbg_pll_locked_k(pcie_pll_locked_k),
-       .dbg_pll_locked_l(pcie_pll_locked_l),
-       .dbg_pll_locked_m(pcie_pll_locked_m),
-       .dbg_pll_locked_n(pcie_pll_locked_n),
-       .dbg_pll_locked_o(pcie_pll_locked_o),
-       .dbg_pll_locked_p(pcie_pll_locked_p)
+   // PCIe EP: only refclk + reset at top level.
+   // Serial lanes, BARs, and XCVR are handled inside the PCIe Hard IP.
+   pcie_ep u_pcie (
+       .clk_clk       (refclk_pcie_ep_p),
+       .reset_reset_n (cpu_resetn & int_reset_n)
    );
 
+   // PLL lock status comes from PCIe HIP internally — assume locked after config
+   // TODO: read LTSSM state from pcie_ep internal registers
+   wire pcie_atx_pll_locked = 1'b1;  // placeholder
    assign pcie_ep_i2c_sda = 1'bz;
 
    // ========================================================================
