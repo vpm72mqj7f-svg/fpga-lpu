@@ -177,7 +177,7 @@ set_global_assignment -name DEVICE_INITIALIZATION_CLOCK OSC_CLK_1_125MHZ
 set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
 set_global_assignment -name ALLOW_RAM_RETIMING ON
 set_global_assignment -name ALLOW_DSP_RETIMING ON
-set_global_assignment -name DSP_BLOCK_BALANCING "LOGIC_ELEMENTS"
+set_global_assignment -name DSP_BLOCK_BALANCING "DSP_ELEMENTS"
 set_global_assignment -name FLOW_ENABLE_HYPER_RETIMER_FAST_FORWARD ON
 
 # VID / Power Management
