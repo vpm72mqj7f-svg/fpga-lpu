@@ -321,27 +321,27 @@ set_global_assignment -name SEARCH_PATH ip/
 # ============================================================================
 # Design Partitions — Incremental Compilation
 # ============================================================================
-set_global_assignment -name FLOW_ENABLE_INCREMENTAL_COMPILATION ON
-
-# Root partition
-set_instance_assignment -name PARTITION root_partition -to "|"
-set_instance_assignment -name PARTITION_COLOR 16777215 -to "|"
-
-# HBM2 Qsys — rarely changes after calibration (POST_FIT preserved)
-set_instance_assignment -name PARTITION u_hbm -to "u_hbm"
-set_instance_assignment -name PARTITION_PRESERVE PLACEMENT_AND_ROUTING -to "u_hbm"
-set_instance_assignment -name PARTITION_COLOR 16711935 -to "u_hbm"
-
-# PCIe Qsys — rarely changes after PLL lock (POST_FIT preserved)
-set_instance_assignment -name PARTITION u_pcie -to "u_pcie"
-set_instance_assignment -name PARTITION_PRESERVE PLACEMENT_AND_ROUTING -to "u_pcie"
-set_instance_assignment -name PARTITION_COLOR 65535 -to "u_pcie"
-
-# FFN custom RTL — frequently changes (SOURCE, rebuilt every time)
-set_instance_assignment -name PARTITION u_ffn -to "u_ffn"
-set_instance_assignment -name PARTITION_COLOR 16776960 -to "u_ffn"
-
-# ISP debug — moderate changes (POST_FIT with PLACEMENT preserved)
-set_instance_assignment -name PARTITION u_isp -to "u_isp"
-set_instance_assignment -name PARTITION_PRESERVE PLACEMENT -to "u_isp"
-set_instance_assignment -name PARTITION_COLOR 65280 -to "u_isp"
+# [PARTITION-FLOW-DISABLED] HSSI/HBM2 periphery IPs must be in root partition.
+# Intel requirement: transceiver and HBM2 UIB periphery IPs cannot exist in
+# non-root partitions. Partition flow will be re-enabled after restructuring
+# the partition hierarchy to keep periphery IPs in root.
+#
+# set_global_assignment -name FLOW_ENABLE_INCREMENTAL_COMPILATION ON
+# # Root partition
+# set_instance_assignment -name PARTITION root_partition -to "|"
+# set_instance_assignment -name PARTITION_COLOR 16777215 -to "|"
+# # HBM2 Qsys — rarely changes after calibration (POST_FIT preserved)
+# set_instance_assignment -name PARTITION u_hbm -to "u_hbm"
+# set_instance_assignment -name PARTITION_PRESERVE PLACEMENT_AND_ROUTING -to "u_hbm"
+# set_instance_assignment -name PARTITION_COLOR 16711935 -to "u_hbm"
+# # PCIe Qsys — rarely changes after PLL lock (POST_FIT preserved)
+# set_instance_assignment -name PARTITION u_pcie -to "u_pcie"
+# set_instance_assignment -name PARTITION_PRESERVE PLACEMENT_AND_ROUTING -to "u_pcie"
+# set_instance_assignment -name PARTITION_COLOR 65535 -to "u_pcie"
+# # FFN custom RTL — frequently changes (SOURCE, rebuilt every time)
+# set_instance_assignment -name PARTITION u_ffn -to "u_ffn"
+# set_instance_assignment -name PARTITION_COLOR 16776960 -to "u_ffn"
+# # ISP debug — moderate changes (POST_FIT with PLACEMENT preserved)
+# set_instance_assignment -name PARTITION u_isp -to "u_isp"
+# set_instance_assignment -name PARTITION_PRESERVE PLACEMENT -to "u_isp"
+# set_instance_assignment -name PARTITION_COLOR 65280 -to "u_isp"
