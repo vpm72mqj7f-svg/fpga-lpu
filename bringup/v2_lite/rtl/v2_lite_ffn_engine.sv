@@ -46,9 +46,9 @@ module v2_lite_ffn_engine #(
     parameter int NUM_EXPERTS = 66,
     parameter int TOP_K       = 6,
     parameter int DATA_W      = 8,       // FP8 E4M3
-    parameter int ACCUM_W     = 24,      // accumulator width (fp16 + headroom)
-    parameter int DSP_LANES   = 64,      // parallel MAC units
-    parameter logic [31:0] VERSION = 32'h0B061A01  // {day,month,year-2000,build#}
+    parameter int ACCUM_W     = 24,      // accumulator width
+    parameter int DSP_LANES   = 128,     // 128 lanes × 2 SA = ~2000 DSP (PR partition sizing)
+    parameter logic [31:0] VERSION = 32'h13061A02  // {day(13),month(06),year-2000(26),build(2)}
 ) (
     input  logic                         clk,              // 500 MHz core clock
     input  logic                         rst_n,
@@ -269,6 +269,41 @@ module v2_lite_ffn_engine #(
         .perf_projections(sa_gu_perf_proj),
         .perf_total_cycles(sa_gu_perf_cycles)
     );
+
+    // =========================================================================
+    // PR Partition Sizing: Extra parallel SA instances to consume DSP
+    //   Each SA: DSP_LANES=128 MACs → ~128 DSP blocks
+    //   8 instances × 128 lanes = ~1024 DSP (target ~2000 with fabric adder trees)
+    // =========================================================================
+    logic [3:0]  sa_pr_start, sa_pr_busy, sa_pr_done;
+    logic [3:0]  sa_pr_activ_valid, sa_pr_activ_ready;
+    logic [DSP_LANES*DATA_W-1:0] sa_pr_activ_data [4];
+    logic [3:0]  sa_pr_result_valid;
+    logic [ACCUM_W-1:0] sa_pr_result_data [4];
+    logic [$clog2(INTER)-1:0] sa_pr_result_row [4];
+    logic [3:0]  sa_pr_result_last;
+    genvar pri;
+    generate
+        for (pri = 0; pri < 4; pri++) begin : g_pr_sa
+            systolic_array #(
+                .INPUT_DIM(HIDDEN), .OUTPUT_DIM(INTER),
+                .DSP_LANES(DSP_LANES), .DATA_W(DATA_W), .ACCUM_W(ACCUM_W)
+            ) u_sa_pr_gate (
+                .clk(clk), .rst_n(rst_n),
+                .start(sa_pr_start[pri]), .busy(sa_pr_busy[pri]), .done(sa_pr_done[pri]),
+                .activ_valid(sa_pr_activ_valid[pri]), .activ_ready(sa_pr_activ_ready[pri]),
+                .activ_data(sa_pr_activ_data[pri]),
+                .weight_valid(weight_valid), .weight_ready(), .weight_data(weight_data),
+                .wt_preload_req(), .wt_preload_row(), .wt_preload_ack(1'b0),
+                .result_valid(sa_pr_result_valid[pri]), .result_ready(1'b1),
+                .result_data(sa_pr_result_data[pri]),
+                .result_row(sa_pr_result_row[pri]), .result_last(sa_pr_result_last[pri]),
+                .dbg_current_row(), .dbg_cycle_cnt(), .dbg_fsm_state(),
+                .dbg_preload_active(), .dbg_stream_active(), .dbg_cycle_in_row(),
+                .perf_rows_done(), .perf_projections(), .perf_total_cycles()
+            );
+        end
+    endgenerate
 
     // =========================================================================
     // Systolic Array: Down (1408 → 2048)

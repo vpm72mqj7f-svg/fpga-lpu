@@ -27,9 +27,10 @@
 module systolic_array #(
     parameter int INPUT_DIM  = 2048,    // V2-Lite: activation / row dimension
     parameter int OUTPUT_DIM = 1408,    // V2-Lite: number of output rows
-    parameter int DSP_LANES  = 64,      // V2-Lite: column parallelism
+    parameter int DSP_LANES  = 128,     // V2-Lite PR: 128 lanes for partition sizing
+    parameter int M_ROWS     = 16,      // 16 output rows (was 8)
     parameter int DATA_W     = 8,       // FP8 E4M3
-    parameter int ACCUM_W    = 24,      // accumulator width (fp16 + headroom)
+    parameter int ACCUM_W    = 32,      // accumulator width (extended for DSP utilization)
     parameter logic [31:0] VERSION = 32'h0B061B01  // {day,month,year-2000,build#}
 ) (
     input  logic        clk,
