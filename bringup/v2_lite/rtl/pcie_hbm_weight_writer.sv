@@ -1,52 +1,46 @@
 // =============================================================================
 // pcie_hbm_weight_writer.sv — PCIe BAR0 → HBM2 AXI4 Weight Download Engine
 //
-// Host writes expert weights through PCIe BAR0 registers:
-//   0x00  HBM_ADDR_LO   [31:0]  W  HBM2 target address low
-//   0x04  HBM_ADDR_HI   [31:0]  W  HBM2 target address high (reserved)
-//   0x08  BURST_COUNT   [31:0]  W  number of 256-beat AXI bursts to issue
-//   0x0C  CONTROL       [31:0]  W  [0]=START [1]=ABORT
-//   0x10  STATUS        [31:0]  R  [0]=BUSY [1]=DONE [2]=ERROR
-//   0x20  DATA_PORT     [63:0]  W  64-bit data write port (4 writes → 1 AXI beat)
+// AVMM slave (PCIe clock domain) → CDC FIFO → AXI4 write master (core domain)
 //
-// Operation:
-//   1. Host writes HBM_ADDR_LO, BURST_COUNT to BAR0
-//   2. Host writes CONTROL[0]=1 (START)
-//   3. Host streams 256-bit words through DATA_PORT (4 × 64-bit writes per beat)
-//   4. Module issues AXI4 write bursts to HBM2
-//   5. Host polls STATUS until DONE=1
+// Register Map (per v2_lite_pcie_regmap.atreg WT block, base 0x1000):
+//   0x1000 WT_CONTROL        [31:0]  R/W  [0]=START [1]=ABORT [2]=AUTO_INCR
+//   0x1004 WT_STATUS         [31:0]  R_O  [0]=BUSY [1]=DONE [2]=ERROR
+//   0x1008 WT_HBM_ADDR_LO    [31:0]  R/W  HBM2 target address [27:0]
+//   0x100C WT_HBM_ADDR_HI    [31:0]  R/W  HBM2 target address [63:32] (reserved)
+//   0x1010 WT_BURST_COUNT    [31:0]  R/W  Number of 256-beat AXI bursts
+//   0x1014 WT_BYTES_DONE     [31:0]  R_O  Total bytes written
+//   0x1018 WT_ERROR_CODE     [31:0]  R/W/C Error flags
+//   0x1020 WT_DATA_PORT      [31:0]  W_O  Stream writes pack to 256-bit AXI beats
 //
-// AXI4 write channel:
-//   AW: 28-bit address, 8-bit burst length, 3-bit size(5=32B), 2-bit burst(INCR)
-//   W:  256-bit data, 32-bit strobe
-//   B:  9-bit ID, 2-bit response
-//
-// Performance:
-//   At 250 MHz, 256-bit × 256 beats/burst = 8 KB/burst
-//   One 64-bit DATA_PORT write per 4 cycles = 64-bit/cycle ≈ 2 GB/s data rate
-//   HBM2 effective BW per pseudo-channel ≈ 14 GB/s (limited by 256-bit AXI)
+// Clock domains:
+//   pcie_clk (250MHz) — AVMM slave interface
+//   core_clk (100MHz) — AXI4 write master interface
+//   CDC FIFO bridges between them for control and data
 // =============================================================================
 
 module pcie_hbm_weight_writer #(
-    parameter int AXI_ADDR_W  = 28,    // HBM2 AXI4 address width
-    parameter int AXI_DATA_W  = 256,   // AXI4 data width
-    parameter int AXI_ID_W    = 9,     // AXI4 ID width
-    parameter int BAR_ADDR_W  = 8      // BAR0 address width (256 bytes)
+    parameter int AXI_ADDR_W  = 28,
+    parameter int AXI_DATA_W  = 256,
+    parameter int AXI_ID_W    = 9,
+    parameter int BAR_ADDR_W  = 16     // BAR0 address width (64KB window)
 ) (
-    input  logic                         clk,
-    input  logic                         rst_n,
+    // ---- PCIe Domain: AVMM Slave (from PCIe HIP rxm_bar0) ----
+    input  logic                         pcie_clk,
+    input  logic                         pcie_rst_n,
+    input  logic [63:0]                  avs_address,      // byte address in BAR0
+    input  logic [31:0]                  avs_writedata,
+    output logic [31:0]                  avs_readdata,
+    input  logic                         avs_write,
+    input  logic                         avs_read,
+    output logic                         avs_waitrequest,
+    output logic                         avs_readdatavalid,
+    input  logic [3:0]                   avs_byteenable,
 
-    // ---- PCIe BAR0 Register Interface (from PCIe HIP AXI4-Lite slave) ----
-    input  logic                         bar_wvalid,
-    input  logic [BAR_ADDR_W-1:0]        bar_waddr,
-    input  logic [31:0]                  bar_wdata,
-    output logic                         bar_wready,
-    input  logic                         bar_rvalid,
-    input  logic [BAR_ADDR_W-1:0]        bar_raddr,
-    output logic [31:0]                  bar_rdata,
-    output logic                         bar_rready,
+    // ---- Core Domain: AXI4 Write Master (to HBM2 ed_synth) ----
+    input  logic                         core_clk,
+    input  logic                         core_rst_n,
 
-    // ---- HBM2 AXI4 Write Master ----
     // AW channel
     output logic [AXI_ID_W-1:0]          m_axi_awid,
     output logic [AXI_ADDR_W-1:0]        m_axi_awaddr,
@@ -73,159 +67,267 @@ module pcie_hbm_weight_writer #(
 );
 
     // =========================================================================
-    // Register Map (BAR0 offsets)
+    // Register Map (WT block, BAR0 base = 0x1000)
     // =========================================================================
-    localparam logic [BAR_ADDR_W-1:0] ADDR_HBM_LO    = 8'h00;
-    localparam logic [BAR_ADDR_W-1:0] ADDR_HBM_HI    = 8'h04;
-    localparam logic [BAR_ADDR_W-1:0] ADDR_BURST_CNT = 8'h08;
-    localparam logic [BAR_ADDR_W-1:0] ADDR_CONTROL   = 8'h0C;
-    localparam logic [BAR_ADDR_W-1:0] ADDR_STATUS    = 8'h10;
-    localparam logic [BAR_ADDR_W-1:0] ADDR_DATA_PORT = 8'h20;
+    localparam logic [BAR_ADDR_W-1:0] WT_BASE       = 16'h1000;
+    localparam logic [BAR_ADDR_W-1:0] ADDR_CONTROL  = WT_BASE + 16'h00;
+    localparam logic [BAR_ADDR_W-1:0] ADDR_STATUS   = WT_BASE + 16'h04;
+    localparam logic [BAR_ADDR_W-1:0] ADDR_HBM_LO   = WT_BASE + 16'h08;
+    localparam logic [BAR_ADDR_W-1:0] ADDR_HBM_HI   = WT_BASE + 16'h0C;
+    localparam logic [BAR_ADDR_W-1:0] ADDR_BURST_CNT= WT_BASE + 16'h10;
+    localparam logic [BAR_ADDR_W-1:0] ADDR_BYTES_DONE=WT_BASE + 16'h14;
+    localparam logic [BAR_ADDR_W-1:0] ADDR_ERROR     = WT_BASE + 16'h18;
+    localparam logic [BAR_ADDR_W-1:0] ADDR_DATA_PORT = WT_BASE + 16'h20;
 
-    // CONTROL bits
     localparam int CTRL_START = 0;
     localparam int CTRL_ABORT = 1;
 
-    // STATUS bits
     localparam int STAT_BUSY  = 0;
     localparam int STAT_DONE  = 1;
     localparam int STAT_ERROR = 2;
 
     // =========================================================================
-    // Internal Registers
+    // PCIe Domain: AVMM Slave Register Access
     // =========================================================================
-    logic [31:0]  hbm_addr_lo;
-    logic [31:0]  hbm_addr_hi;
-    logic [31:0]  burst_count;
-    logic [31:0]  control;
-    logic [31:0]  status;
-    logic [63:0]  data_port;
+    logic [31:0]  hbm_addr_lo, hbm_addr_hi, burst_count, control, status;
+    logic [31:0]  bytes_done, error_code;
+    logic [31:0]  data_port_wr;
+    logic         data_port_wr_pulse;
 
-    // =========================================================================
-    // Data Packer: 4 × 64-bit BAR writes → 1 × 256-bit AXI beat
-    // =========================================================================
-    logic [1:0]   data_port_wr_cnt;    // 0..3, rolls over per AXI beat
-    logic         data_port_ready;     // high when can accept next 64-bit write
-    logic [AXI_DATA_W-1:0] wdata_buffer;
-    logic         wdata_buffer_valid;
-    logic         wdata_buffer_last;   // last beat of current burst
+    // Simple AVMM: single-cycle reads (no waitrequest needed for register access)
+    assign avs_waitrequest = 1'b0;  // registers are always ready
 
-    logic [31:0]  beats_remaining;     // beats left in current burst
-    logic [31:0]  bursts_remaining;    // bursts left in total transfer
-    logic         transfer_active;
-
-    // =========================================================================
-    // FSM
-    // =========================================================================
-    typedef enum logic [2:0] {
-        S_IDLE,
-        S_START_BURST,     // Issue AW
-        S_WRITE_DATA,      // Stream W beats
-        S_WAIT_BRESP,      // Wait for B channel response
-        S_NEXT_BURST,      // Check if more bursts remain
-        S_DONE,            // Transfer complete
-        S_ERROR            // Error state
-    } state_t;
-
-    state_t state;
-
-    // =========================================================================
-    // BAR0 Register Read/Write
-    // =========================================================================
-    assign bar_wready = 1'b1;  // Always ready to accept BAR writes
-    assign bar_rready = 1'b1;
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            hbm_addr_lo   <= 32'd0;
-            hbm_addr_hi   <= 32'd0;
-            burst_count   <= 32'd0;
-            control       <= 32'd0;
-            data_port     <= 64'd0;
+    always_ff @(posedge pcie_clk or negedge pcie_rst_n) begin
+        if (!pcie_rst_n) begin
+            hbm_addr_lo  <= 32'd0;
+            hbm_addr_hi  <= 32'd0;
+            burst_count  <= 32'd0;
+            control      <= 32'd0;
+            data_port_wr <= 32'd0;
+            data_port_wr_pulse <= 1'b0;
         end else begin
-            // Write registers
-            if (bar_wvalid && bar_wready) begin
-                case (bar_waddr)
-                    ADDR_HBM_LO:    hbm_addr_lo   <= bar_wdata;
-                    ADDR_HBM_HI:    hbm_addr_hi   <= bar_wdata;
-                    ADDR_BURST_CNT: burst_count   <= bar_wdata;
-                    ADDR_CONTROL:   control       <= bar_wdata;
-                    ADDR_DATA_PORT: data_port     <= {data_port[31:0], bar_wdata}; // 2×32-bit → 64-bit
+            data_port_wr_pulse <= 1'b0;
+            // Auto-clear START after one cycle
+            if (control[CTRL_START]) control[CTRL_START] <= 1'b0;
+
+            if (avs_write) begin
+                unique case (avs_address[BAR_ADDR_W-1:0])
+                    ADDR_HBM_LO:    hbm_addr_lo  <= avs_writedata;
+                    ADDR_HBM_HI:    hbm_addr_hi  <= avs_writedata;
+                    ADDR_BURST_CNT: burst_count  <= avs_writedata;
+                    ADDR_CONTROL:   control      <= avs_writedata;
+                    ADDR_DATA_PORT: begin
+                        data_port_wr <= avs_writedata;
+                        data_port_wr_pulse <= 1'b1;
+                    end
                     default: ;
                 endcase
             end
-            // Auto-clear CONTROL after START
-            if (control[CTRL_START] && state != S_IDLE)
-                control[CTRL_START] <= 1'b0;
         end
     end
 
-    // BAR read mux
+    // AVMM read mux (combinational)
     always_comb begin
-        bar_rdata = 32'd0;
-        case (bar_raddr)
-            ADDR_HBM_LO:    bar_rdata = hbm_addr_lo;
-            ADDR_HBM_HI:    bar_rdata = hbm_addr_hi;
-            ADDR_BURST_CNT: bar_rdata = burst_count;
-            ADDR_CONTROL:   bar_rdata = control;
-            ADDR_STATUS:    bar_rdata = status;
-            default:        bar_rdata = 32'd0;
+        avs_readdata = 32'd0;
+        unique case (avs_address[BAR_ADDR_W-1:0])
+            ADDR_HBM_LO:    avs_readdata = hbm_addr_lo;
+            ADDR_HBM_HI:    avs_readdata = hbm_addr_hi;
+            ADDR_BURST_CNT: avs_readdata = burst_count;
+            ADDR_CONTROL:   avs_readdata = control;
+            ADDR_STATUS:    avs_readdata = status;
+            ADDR_BYTES_DONE:avs_readdata = bytes_done;
+            ADDR_ERROR:     avs_readdata = error_code;
+            default:        avs_readdata = 32'd0;
         endcase
     end
 
-    // =========================================================================
-    // Data Port Packer Counter
-    // =========================================================================
-    // data_port_ready: high when we're in write-data state and need more data
-    assign data_port_ready = (state == S_WRITE_DATA) && m_axi_wready;
+    always_ff @(posedge pcie_clk or negedge pcie_rst_n) begin
+        if (!pcie_rst_n)
+            avs_readdatavalid <= 1'b0;
+        else
+            avs_readdatavalid <= avs_read;
+    end
 
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            data_port_wr_cnt    <= 2'd0;
-            wdata_buffer_valid  <= 1'b0;
-            wdata_buffer        <= 256'd0;
+    // =========================================================================
+    // CDC: Status readback from core domain → PCIe domain (toggle handshake)
+    // =========================================================================
+    logic        status_req_toggle, status_ack_toggle;
+    logic        status_req_sync1, status_req_sync2;
+
+    // PCIe domain: request status, receive via toggle handshake
+    always_ff @(posedge pcie_clk or negedge pcie_rst_n) begin
+        if (!pcie_rst_n) begin
+            status_req_toggle <= 1'b0;
         end else begin
-            // Collect 4 × 64-bit writes into 256-bit word
-            if (bar_wvalid && bar_wready && (bar_waddr == ADDR_DATA_PORT)) begin
-                data_port_wr_cnt <= data_port_wr_cnt + 2'd1;
-                // Latch 64-bit data into the correct 256-bit slice
-                case (data_port_wr_cnt)
-                    2'd0: wdata_buffer[63:0]    <= bar_wdata;
-                    2'd1: wdata_buffer[127:64]  <= bar_wdata;
-                    2'd2: wdata_buffer[191:128] <= bar_wdata;
-                    2'd3: begin
-                        wdata_buffer[255:192] <= bar_wdata;
-                        wdata_buffer_valid     <= 1'b1;  // Full 256-bit word ready
-                    end
-                endcase
-            end
+            // Receive: when ack toggles to match request, latch status data
+            if (status_ack_sync2 == status_req_toggle)
+                status_req_toggle <= ~status_req_toggle;
+        end
+    end
 
-            // Clear valid flag when AXI W channel consumes the data
-            if (wdata_buffer_valid && m_axi_wready) begin
-                wdata_buffer_valid <= 1'b0;
-                data_port_wr_cnt   <= 2'd0;
+    // Synchronize ack from core to PCIe domain
+    logic status_ack_sync1, status_ack_sync2;
+    always_ff @(posedge pcie_clk or negedge pcie_rst_n) begin
+        if (!pcie_rst_n) begin
+            status_ack_sync1 <= 1'b0;
+            status_ack_sync2 <= 1'b0;
+        end else begin
+            status_ack_sync1 <= status_ack_toggle;
+            status_ack_sync2 <= status_ack_sync1;
+        end
+    end
+
+    // Core domain: provide status when requested
+    always_ff @(posedge core_clk or negedge core_rst_n) begin
+        if (!core_rst_n) begin
+            status_req_sync1 <= 1'b0;
+            status_req_sync2 <= 1'b0;
+            status_ack_toggle <= 1'b0;
+        end else begin
+            status_req_sync1 <= status_req_toggle;
+            status_req_sync2 <= status_req_sync1;
+            if (status_req_sync2 != status_ack_toggle) begin
+                // Latch status + bytes_done on request
+                status     <= {28'd0, transfer_error, wdata_buffer_valid, transfer_active, transfer_done};
+                bytes_done <= perf_bytes_done;
+                error_code <= {31'd0, transfer_error};
+                status_ack_toggle <= status_req_sync2;
             end
         end
     end
 
     // =========================================================================
-    // AXI4 Write Channel Assignments (constant)
+    // Core Domain: Data Packer + AXI4 Write FSM
     // =========================================================================
-    assign m_axi_awid    = '0;
-    assign m_axi_awsize  = 3'd5;     // 32 bytes per beat (256-bit AXI data width)
-    assign m_axi_awburst = 2'b01;    // INCR (incrementing burst)
-    assign m_axi_awprot  = 3'b000;
-    assign m_axi_awqos   = 4'd0;
-    assign m_axi_wstrb   = {AXI_DATA_W/8{1'b1}};  // All bytes valid
-    assign m_axi_bready  = 1'b1;     // Always ready for write response
+    // Data packer: 8 × 32-bit PCIe writes → 1 × 256-bit AXI beat
+    // CDC: data_port_wr_pulse crosses with data_port_wr value
+    logic [2:0]   data_wr_cnt;       // 0..7
+    logic [AXI_DATA_W-1:0] wdata_buffer;
+    logic         wdata_buffer_valid;
+    (* preserve *) logic        data_wr_pulse_cdc;  // CDC: data write strobe
+
+    // Simple pulse synchronizer for data write
+    logic [2:0]   data_wr_pulse_sync;
+    always_ff @(posedge core_clk or negedge core_rst_n) begin
+        if (!core_rst_n)
+            data_wr_pulse_sync <= 3'd0;
+        else
+            data_wr_pulse_sync <= {data_wr_pulse_sync[1:0], data_port_wr_pulse};
+    end
+    assign data_wr_pulse_cdc = data_wr_pulse_sync[2:1] == 2'b01;  // rising edge
+
+    // Core data packer
+    logic [31:0] data_port_core;
+    always_ff @(posedge core_clk or negedge core_rst_n) begin
+        if (!core_rst_n) begin
+            data_port_core <= 32'd0;
+        end else if (data_port_wr_pulse) begin
+            data_port_core <= data_port_wr;
+        end
+    end
+
+    always_ff @(posedge core_clk or negedge core_rst_n) begin
+        if (!core_rst_n) begin
+            data_wr_cnt       <= 3'd0;
+            wdata_buffer      <= 256'd0;
+            wdata_buffer_valid <= 1'b0;
+        end else begin
+            if (data_wr_pulse_cdc) begin
+                data_wr_cnt <= data_wr_cnt + 3'd1;
+                unique case (data_wr_cnt)
+                    3'd0: wdata_buffer[31:0]    <= data_port_core;
+                    3'd1: wdata_buffer[63:32]   <= data_port_core;
+                    3'd2: wdata_buffer[95:64]   <= data_port_core;
+                    3'd3: wdata_buffer[127:96]  <= data_port_core;
+                    3'd4: wdata_buffer[159:128] <= data_port_core;
+                    3'd5: wdata_buffer[191:160] <= data_port_core;
+                    3'd6: wdata_buffer[223:192] <= data_port_core;
+                    3'd7: begin
+                        wdata_buffer[255:224] <= data_port_core;
+                        wdata_buffer_valid <= 1'b1;
+                    end
+                endcase
+            end
+            if (wdata_buffer_valid && m_axi_wvalid && m_axi_wready)
+                wdata_buffer_valid <= 1'b0;
+        end
+    end
 
     // =========================================================================
-    // Main FSM
+    // CDC: Control register crossing
     // =========================================================================
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+    logic [31:0] hbm_addr_lo_core, burst_count_core;
+    logic        start_pulse, abort_pulse;
+
+    // Toggle synchronizer for START and ABORT
+    logic start_toggle, start_toggle_sync1, start_toggle_sync2, start_toggle_core;
+    logic abort_toggle, abort_toggle_sync1, abort_toggle_sync2, abort_toggle_core;
+
+    always_ff @(posedge pcie_clk or negedge pcie_rst_n) begin
+        if (!pcie_rst_n) begin
+            start_toggle <= 1'b0;
+            abort_toggle <= 1'b0;
+        end else begin
+            if (control[CTRL_START])  start_toggle <= ~start_toggle;
+            if (control[CTRL_ABORT])  abort_toggle <= ~abort_toggle;
+        end
+    end
+
+    always_ff @(posedge core_clk or negedge core_rst_n) begin
+        if (!core_rst_n) begin
+            start_toggle_sync1 <= 1'b0; start_toggle_sync2 <= 1'b0; start_toggle_core <= 1'b0;
+            abort_toggle_sync1 <= 1'b0; abort_toggle_sync2 <= 1'b0; abort_toggle_core <= 1'b0;
+            start_pulse <= 1'b0; abort_pulse <= 1'b0;
+            hbm_addr_lo_core <= 32'd0; burst_count_core <= 32'd0;
+        end else begin
+            start_toggle_sync1 <= start_toggle;
+            start_toggle_sync2 <= start_toggle_sync1;
+            if (start_toggle_sync2 != start_toggle_core) begin
+                start_toggle_core <= start_toggle_sync2;
+                start_pulse       <= start_toggle_sync2;
+                // Latch control values on START
+                hbm_addr_lo_core  <= hbm_addr_lo;
+                burst_count_core  <= burst_count;
+            end else start_pulse <= 1'b0;
+
+            abort_toggle_sync1 <= abort_toggle;
+            abort_toggle_sync2 <= abort_toggle_sync1;
+            if (abort_toggle_sync2 != abort_toggle_core) begin
+                abort_toggle_core <= abort_toggle_sync2;
+                abort_pulse       <= 1'b1;
+            end else abort_pulse <= 1'b0;
+        end
+    end
+
+    // =========================================================================
+    // AXI4 Constants
+    // =========================================================================
+    assign m_axi_awid    = '0;
+    assign m_axi_awsize  = 3'd5;      // 32 bytes per beat (256-bit)
+    assign m_axi_awburst = 2'b01;     // INCR
+    assign m_axi_awprot  = 3'b000;
+    assign m_axi_awqos   = 4'd0;
+    assign m_axi_wstrb   = {AXI_DATA_W/8{1'b1}};
+    assign m_axi_bready  = 1'b1;
+
+    // =========================================================================
+    // Core AXI4 Write FSM
+    // =========================================================================
+    typedef enum logic [2:0] {
+        S_IDLE, S_START_BURST, S_WRITE_DATA, S_WAIT_BRESP, S_NEXT_BURST, S_DONE, S_ERROR
+    } state_t;
+    state_t state;
+
+    logic [31:0] hbm_addr_reg;
+    logic [31:0] beats_remaining;
+    logic [31:0] bursts_remaining;
+    logic        transfer_active;
+    logic        transfer_done, transfer_error;
+    logic [31:0] perf_bytes_done;
+
+    always_ff @(posedge core_clk or negedge core_rst_n) begin
+        if (!core_rst_n) begin
             state            <= S_IDLE;
-            status           <= 32'd0;
             m_axi_awvalid    <= 1'b0;
             m_axi_awaddr     <= {AXI_ADDR_W{1'b0}};
             m_axi_awlen      <= 8'd0;
@@ -235,112 +337,91 @@ module pcie_hbm_weight_writer #(
             beats_remaining  <= 32'd0;
             bursts_remaining <= 32'd0;
             transfer_active  <= 1'b0;
+            transfer_done    <= 1'b0;
+            transfer_error   <= 1'b0;
+            perf_bytes_done  <= 32'd0;
+            hbm_addr_reg     <= 32'd0;
         end else begin
-            // Default: deassert pulsed signals
-            m_axi_awvalid <= 1'b0;
+            m_axi_awvalid <= 1'b0;  // pulsed
+            transfer_done <= 1'b0;
 
             case (state)
-
                 S_IDLE: begin
-                    status <= 32'd0;
-                    if (control[CTRL_START]) begin
-                        // Validate: must have address and burst count
-                        if (burst_count == 32'd0) begin
-                            status[STAT_ERROR] <= 1'b1;
+                    if (start_pulse) begin
+                        if (burst_count_core == 32'd0) begin
+                            transfer_error <= 1'b1;
                             state <= S_ERROR;
                         end else begin
-                            status[STAT_BUSY]      <= 1'b1;
-                            bursts_remaining       <= burst_count;
-                            hbm_addr_lo            <= hbm_addr_lo;  // latch
-                            transfer_active        <= 1'b1;
-                            state                  <= S_START_BURST;
+                            bursts_remaining <= burst_count_core;
+                            hbm_addr_reg     <= hbm_addr_lo_core;
+                            transfer_active  <= 1'b1;
+                            state <= S_START_BURST;
                         end
                     end
                 end
 
-                // Issue AXI4 write address
                 S_START_BURST: begin
                     if (!m_axi_awvalid) begin
-                        // Set burst length: 256 beats per burst (max AXI4)
                         m_axi_awlen    <= 8'd255;   // 256 beats − 1
-                        m_axi_awaddr   <= hbm_addr_lo[AXI_ADDR_W-1:0];
+                        m_axi_awaddr   <= hbm_addr_reg[AXI_ADDR_W-1:0];
                         m_axi_awvalid  <= 1'b1;
                         beats_remaining <= 32'd256;
-                        data_port_wr_cnt <= 2'd0;
-                        wdata_buffer_valid <= 1'b0;
+                        data_wr_cnt     <= 3'd0;
                         state <= S_WRITE_DATA;
                     end
                 end
 
-                // Stream write data beats
                 S_WRITE_DATA: begin
                     if (wdata_buffer_valid) begin
-                        // Drive W channel with packed 256-bit data
                         if (!m_axi_wvalid || (m_axi_wvalid && m_axi_wready)) begin
                             m_axi_wdata  <= wdata_buffer;
                             m_axi_wvalid <= 1'b1;
                             m_axi_wlast  <= (beats_remaining == 32'd1);
                             beats_remaining <= beats_remaining - 32'd1;
+                            perf_bytes_done <= perf_bytes_done + 32'd32;
 
                             if (beats_remaining == 32'd1) begin
-                                // Last beat of this burst
-                                // Advance HBM2 address for next burst
-                                hbm_addr_lo <= hbm_addr_lo + 32'd8192;  // 256 × 32B = 8KB
+                                hbm_addr_reg <= hbm_addr_reg + 32'd8192;
                                 state <= S_WAIT_BRESP;
                             end
                         end
                     end
-
-                    // Abort check
-                    if (control[CTRL_ABORT]) begin
+                    if (abort_pulse) begin
                         m_axi_wvalid <= 1'b0;
                         transfer_active <= 1'b0;
-                        status[STAT_BUSY] <= 1'b0;
-                        status[STAT_ERROR] <= 1'b1;
+                        transfer_error <= 1'b1;
                         state <= S_ERROR;
                     end
                 end
 
-                // Wait for write response (B channel)
                 S_WAIT_BRESP: begin
-                    m_axi_wvalid <= 1'b0;  // deassert W valid
+                    m_axi_wvalid <= 1'b0;
                     m_axi_wlast  <= 1'b0;
-
                     if (m_axi_bvalid && m_axi_bready) begin
-                        // Check for write error
                         if (m_axi_bresp != 2'b00) begin
-                            status[STAT_ERROR] <= 1'b1;
+                            transfer_error <= 1'b1;
                             state <= S_ERROR;
-                        end else begin
-                            state <= S_NEXT_BURST;
-                        end
+                        end else state <= S_NEXT_BURST;
                     end
                 end
 
-                // Check if more bursts remain
                 S_NEXT_BURST: begin
                     bursts_remaining <= bursts_remaining - 32'd1;
-                    if (bursts_remaining > 32'd1) begin
-                        // More bursts: re-issue AW for next 8KB chunk
-                        hbm_addr_lo <= hbm_addr_lo;  // already advanced
+                    if (bursts_remaining > 32'd1)
                         state <= S_START_BURST;
-                    end else begin
+                    else begin
+                        transfer_done <= 1'b1;
                         state <= S_DONE;
                     end
                 end
 
-                // Transfer complete
                 S_DONE: begin
-                    status[STAT_BUSY] <= 1'b0;
-                    status[STAT_DONE] <= 1'b1;
                     transfer_active <= 1'b0;
-                    // Wait for host to read STATUS, then clear on next START
                     state <= S_IDLE;
                 end
 
-                // Error state (sticky until next START)
                 S_ERROR: begin
-                    if (control[CTRL_START])
+                    if (start_pulse)
                         state <= S_IDLE;
                 end
 
