@@ -81,6 +81,12 @@ module pcie_hbm_weight_writer #(
             data_lo <= 0; data_hi <= 0; data_commit <= 0;
         end else begin
             data_commit <= 0;
+            // Status auto-update from FSM signals
+            reg_status <= {28'd0, transfer_error, data_commit, transfer_active, transfer_done};
+            if (transfer_done) reg_bytes <= perf_bytes;
+            if (transfer_error) reg_error[0] <= 1'b1;
+            if (reg_ctrl[0])    reg_error <= 0;
+
             if (reg_ctrl[0]) reg_ctrl[0] <= 0;  // auto-clear START
 
             if (avs_wr_pulse) begin
@@ -143,14 +149,9 @@ module pcie_hbm_weight_writer #(
     end
 
     // =========================================================================
-    // Status update
+    // Status update (merged into register file above — no separate always_ff)
+    // reg_status/reg_bytes/reg_error updated in main register always_ff
     // =========================================================================
-    always_ff @(posedge clk) begin
-        reg_status <= {28'd0, transfer_error, data_commit, transfer_active, transfer_done};
-        if (transfer_done) reg_bytes <= perf_bytes;
-        if (transfer_error) reg_error[0] <= 1'b1;
-        if (reg_ctrl[0])    reg_error <= 0;
-    end
 
     // =========================================================================
     // AXI4 Constants
