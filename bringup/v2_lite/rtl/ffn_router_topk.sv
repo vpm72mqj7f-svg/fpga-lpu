@@ -94,34 +94,37 @@ module ffn_router_topk #(
     end
 
     // =========================================================================
-    // Top-K: insertion sort over 2 cycles (66×6 comparisons, single-cycle)
+    // Top-K: sequential comparison (66 cycles for 66 experts)
     // =========================================================================
     logic [SCORE_W-1:0] topk_scores [TOP_K];
     logic [$clog2(NUM_EXPERTS)-1:0] topk_ids [TOP_K];
     logic sort_done;
 
-    generate for (genvar k = 0; k < TOP_K; k++) begin : g_tk_rst
+    genvar kk;
+    generate for (kk = 0; kk < TOP_K; kk++) begin : g_tk
         always_ff @(posedge clk or negedge rst_n)
-            if (!rst_n) begin topk_scores[k] <= 0; topk_ids[k] <= 0; end
+            if (!rst_n) begin topk_scores[kk] <= 0; topk_ids[kk] <= 0; end
     end endgenerate
 
-    // Combinational insertion sort (66 experts × 6 slots, single-cycle result)
-    always_comb begin
-        logic [SCORE_W-1:0] tk_s [TOP_K];
-        logic [$clog2(NUM_EXPERTS)-1:0] tk_i [TOP_K];
-        for (int k = 0; k < TOP_K; k++) begin tk_s[k] = topk_scores[k]; tk_i[k] = topk_ids[k]; end
-        for (int e = 0; e < NUM_EXPERTS; e++) begin
+    logic [$clog2(NUM_EXPERTS):0] sort_idx;
+    always_ff @(posedge clk) begin
+        if (st == S_TOPK_SORT && !sort_done) begin
+            // Insert scores[sort_idx] into sorted top-K
             for (int k = 0; k < TOP_K; k++) begin
-                if (scores[e] > tk_s[k]) begin
-                    for (int j = TOP_K-1; j > k; j--) begin tk_s[j] = tk_s[j-1]; tk_i[j] = tk_i[j-1]; end
-                    tk_s[k] = scores[e]; tk_i[k] = e; break;
+                if (scores[sort_idx] > topk_scores[k]) begin
+                    for (int j = TOP_K-1; j > k; j--) begin
+                        topk_scores[j] <= topk_scores[j-1];
+                        topk_ids[j] <= topk_ids[j-1];
+                    end
+                    topk_scores[k] <= scores[sort_idx];
+                    topk_ids[k] <= sort_idx;
+                    break;
                 end
             end
+            sort_idx <= sort_idx + 1;
+            if (sort_idx == NUM_EXPERTS - 1) sort_done <= 1;
         end
-        sort_done = 1;  // always true — combinational
     end
-
-    always_ff @(posedge clk) begin
         if (st == S_TOPK_SORT) begin
             topk_scores <= '{default:0}; topk_ids <= '{default:0};
             for (int e = 0; e < NUM_EXPERTS; e++) begin
