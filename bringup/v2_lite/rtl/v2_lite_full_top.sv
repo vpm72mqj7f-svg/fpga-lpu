@@ -250,10 +250,6 @@ module v2_lite_full
    (* preserve *) wire rdy, tv, busy, done; (* preserve *) wire [16383:0] td;
 
    // Expert IDs — use SV assignment pattern for unpacked array port
-   wire [6:0] ffn_expert_id_0 = 7'd0, ffn_expert_id_1 = 7'd1,
-              ffn_expert_id_2 = 7'd2, ffn_expert_id_3 = 7'd3,
-              ffn_expert_id_4 = 7'd4, ffn_expert_id_5 = 7'd5;
-
    // FFN production debug wires
    wire [3:0]  ffn_dbg_fsm;
    wire [2:0]  ffn_dbg_expert_cnt;
@@ -272,8 +268,8 @@ module v2_lite_full
        .TOP_K    (6),
        .DATA_W   (8),
        .ACCUM_W  (24),
-       .DSP_LANES (64),
-       .VERSION  (32'h0B061A01)
+       .DSP_LANES (512),
+       .ROUTER_LANES (128)
    ) u_ffn (
        .clk               (core_clk_iopll_ref_clk_clk),
        .rst_n             (rn),
@@ -293,8 +289,7 @@ module v2_lite_full
        .m_axi_rvalid      (ffn_rvalid),
        .m_axi_rready      (ffn_rready),
        .m_axi_rlast       (ffn_rlast),
-       .expert_id         ('{ffn_expert_id_0, ffn_expert_id_1, ffn_expert_id_2,
-                             ffn_expert_id_3, ffn_expert_id_4, ffn_expert_id_5}),
+       .mode_prefill      (1'b0),  // M3: Decode mode only
        .busy              (busy),
        .done              (done),
        .dbg_fsm_state     (ffn_dbg_fsm),
