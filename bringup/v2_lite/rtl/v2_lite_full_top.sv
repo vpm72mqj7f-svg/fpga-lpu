@@ -40,12 +40,11 @@ module v2_lite_full
    // PCIe → HBM2 Weight Writer (BAR0 → AXI4 write)
    // ========================================================================
    wire [8:0]  wt_axi_awid;     wire [27:0] wt_axi_awaddr;  wire [7:0] wt_axi_awlen;
-   wire [2:0]  wt_axi_awsize;   wire [1:0]  wt_axi_awburst;  wire [2:0] wt_axi_awprot;
-   wire [3:0]  wt_axi_awqos;
+   wire [2:0]  wt_axi_awsize;   wire [1:0]  wt_axi_awburst;
    wire        wt_axi_awvalid, wt_axi_awready;
    wire [255:0] wt_axi_wdata;   wire [31:0] wt_axi_wstrb;
    wire        wt_axi_wlast, wt_axi_wvalid, wt_axi_wready;
-   wire [8:0]  wt_axi_bid;      wire [1:0]  wt_axi_bresp;
+   wire [1:0]  wt_axi_bresp;
    wire        wt_axi_bvalid, wt_axi_bready;
 
    pcie_hbm_weight_writer u_weight_writer (
@@ -64,8 +63,6 @@ module v2_lite_full
        .m_axi_awlen        (wt_axi_awlen),
        .m_axi_awsize       (wt_axi_awsize),
        .m_axi_awburst      (wt_axi_awburst),
-       .m_axi_awprot       (wt_axi_awprot),
-       .m_axi_awqos        (wt_axi_awqos),
        .m_axi_awvalid      (wt_axi_awvalid),
        .m_axi_awready      (wt_axi_awready),
        .m_axi_wdata        (wt_axi_wdata),
@@ -73,7 +70,6 @@ module v2_lite_full
        .m_axi_wlast         (wt_axi_wlast),
        .m_axi_wvalid       (wt_axi_wvalid),
        .m_axi_wready       (wt_axi_wready),
-       .m_axi_bid          (wt_axi_bid),
        .m_axi_bresp        (wt_axi_bresp),
        .m_axi_bvalid       (wt_axi_bvalid),
        .m_axi_bready       (wt_axi_bready)
@@ -145,11 +141,11 @@ module v2_lite_full
        // Write channel: connected to weight writer AXI4 output
        .ffn_axi_awid(wt_axi_awid), .ffn_axi_awaddr(wt_axi_awaddr), .ffn_axi_awlen(wt_axi_awlen),
        .ffn_axi_awsize(wt_axi_awsize), .ffn_axi_awburst(wt_axi_awburst),
-       .ffn_axi_awprot(wt_axi_awprot), .ffn_axi_awqos(wt_axi_awqos), .ffn_axi_awuser(1'b0),
+       .ffn_axi_awprot(3'd0), .ffn_axi_awqos(4'd0), .ffn_axi_awuser(1'b0),
        .ffn_axi_awvalid(wt_axi_awvalid), .ffn_axi_awready(wt_axi_awready),
        .ffn_axi_wdata(wt_axi_wdata), .ffn_axi_wstrb(wt_axi_wstrb), .ffn_axi_wlast(wt_axi_wlast),
        .ffn_axi_wvalid(wt_axi_wvalid), .ffn_axi_wready(wt_axi_wready),
-       .ffn_axi_bid(wt_axi_bid), .ffn_axi_bresp(wt_axi_bresp),
+       .ffn_axi_bid(), .ffn_axi_bresp(wt_axi_bresp),
        .ffn_axi_bvalid(wt_axi_bvalid), .ffn_axi_bready(wt_axi_bready)
    );
 
