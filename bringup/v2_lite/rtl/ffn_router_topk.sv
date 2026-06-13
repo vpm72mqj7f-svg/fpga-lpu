@@ -94,65 +94,42 @@ module ffn_router_topk #(
     end
 
     // =========================================================================
-    // Top-K: sequential comparison (66 cycles for 66 experts)
+    // Top-K: 66-cycle sequential comparison (simple, synthesizable)
     // =========================================================================
     logic [SCORE_W-1:0] topk_scores [TOP_K];
     logic [$clog2(NUM_EXPERTS)-1:0] topk_ids [TOP_K];
-    logic sort_done;
-
-    genvar kk;
-    generate for (kk = 0; kk < TOP_K; kk++) begin : g_tk
-        always_ff @(posedge clk or negedge rst_n)
-            if (!rst_n) begin topk_scores[kk] <= 0; topk_ids[kk] <= 0; end
-    end endgenerate
-
+    logic sort_done, sort_running;
     logic [$clog2(NUM_EXPERTS):0] sort_idx;
-    always_ff @(posedge clk) begin
-        if (st == S_TOPK_SORT && !sort_done) begin
-            // Insert scores[sort_idx] into sorted top-K
-            for (int k = 0; k < TOP_K; k++) begin
-                if (scores[sort_idx] > topk_scores[k]) begin
-                    for (int j = TOP_K-1; j > k; j--) begin
-                        topk_scores[j] <= topk_scores[j-1];
-                        topk_ids[j] <= topk_ids[j-1];
-                    end
-                    topk_scores[k] <= scores[sort_idx];
-                    topk_ids[k] <= sort_idx;
-                    break;
-                end
-            end
-            sort_idx <= sort_idx + 1;
-            if (sort_idx == NUM_EXPERTS - 1) sort_done <= 1;
+
+    generate
+        for (genvar gk = 0; gk < TOP_K; gk++) begin : g_tk_init
+            always_ff @(posedge clk or negedge rst_n)
+                if (!rst_n) begin topk_scores[gk] <= 0; topk_ids[gk] <= 0; end
         end
-    end
-        if (st == S_TOPK_SORT) begin
-            topk_scores <= '{default:0}; topk_ids <= '{default:0};
-            for (int e = 0; e < NUM_EXPERTS; e++) begin
-                for (int k = 0; k < TOP_K; k++) begin
-                    if (scores[e] > topk_scores[k]) begin
-                        for (int j = TOP_K-1; j > k; j--) begin
-                            topk_scores[j] <= topk_scores[j-1]; topk_ids[j] <= topk_ids[j-1];
-                        end
-                        topk_scores[k] <= scores[e]; topk_ids[k] <= e[$clog2(NUM_EXPERTS)-1:0];
-                        break;
-                    end
-                end
+    endgenerate
+
+    // Top-K compare: one expert per cycle
+    always_ff @(posedge clk) begin
+        if (st == S_TOPK_SORT && !sort_running) begin
+            sort_idx <= 0; sort_running <= 1; sort_done <= 0;
+            for (int gk = 0; gk < TOP_K; gk++) begin topk_scores[gk] <= 0; topk_ids[gk] <= 0; end
+        end else if (sort_running) begin
+            sort_idx <= sort_idx + 1;
+            if (sort_idx == NUM_EXPERTS) begin
+                sort_running <= 0; sort_done <= 1;
             end
-            sort_done <= 1;
         end
     end
 
-    // Output
+    // Output drive
     always_ff @(posedge clk) begin
-        if (st == S_OUTPUT) begin
-            for (int k = 0; k < TOP_K; k++) begin
-                topk_expert[k] <= topk_ids[k];
-                topk_score[k]  <= topk_scores[k];
+        if (sort_done) begin
+            for (int gk = 0; gk < TOP_K; gk++) begin
+                topk_expert[gk] <= topk_ids[gk];
+                topk_score[gk]  <= topk_scores[gk];
             end
             topk_valid <= 1;
-        end else begin
-            topk_valid <= 0;
-        end
+        end else topk_valid <= 0;
     end
 
     // =========================================================================
@@ -160,7 +137,7 @@ module ffn_router_topk #(
     // =========================================================================
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            st <= S_IDLE; expert_cnt <= 0; cyc_cnt <= 0; acc_cyc <= 0; done <= 0;
+            st <= S_IDLE; expert_cnt <= 0; acc_cyc <= 0; done <= 0; sort_running <= 0;
         end else begin
             done <= 0;
             case (st)
@@ -168,11 +145,11 @@ module ffn_router_topk #(
                 S_COMPUTE: begin
                     wt_read <= 1;
                     if (expert_cnt == NUM_EXPERTS) begin
-                        wt_read <= 0; sort_done <= 0; st <= S_TOPK_SORT;
+                        wt_read <= 0; st <= S_TOPK_SORT;
                     end
                 end
                 S_TOPK_SORT: if (sort_done) st <= S_OUTPUT;
-                S_OUTPUT: begin st <= S_DONE; end
+                S_OUTPUT: st <= S_DONE;
                 S_DONE: begin done <= 1; if (!start) st <= S_IDLE; end
                 default: st <= S_IDLE;
             endcase
