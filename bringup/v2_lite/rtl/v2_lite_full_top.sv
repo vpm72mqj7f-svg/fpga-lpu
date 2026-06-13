@@ -11,7 +11,6 @@ module v2_lite_full
     m2u_bridge_shiftwr, m2u_bridge_capturewr, m2u_bridge_updatewr,
     m2u_bridge_selectwir, m2u_bridge_wsi,
     refclk_pcie_ep_p, refclk_pcie_ep_edge_p, refclk_pcie_ep1_p,
-    pcie_ep_rx_p, pcie_ep_tx_p,
     s10_pcie_perstn0, s10_pcie_perstn1, pcie_ep_waken,
     pcie_ep_i2c_scl, pcie_ep_i2c_sda
     );
@@ -31,10 +30,8 @@ module v2_lite_full
    output m2u_bridge_shiftwr, m2u_bridge_capturewr, m2u_bridge_updatewr;
    output m2u_bridge_selectwir, m2u_bridge_wsi;
 
-   // PCIe
+   // PCIe (serial lanes handled internally by PCIe Hard IP)
    input refclk_pcie_ep_p, refclk_pcie_ep_edge_p, refclk_pcie_ep1_p;
-   output [15:0] pcie_ep_rx_p;
-   input [15:0] pcie_ep_tx_p;
    input s10_pcie_perstn0, s10_pcie_perstn1, pcie_ep_waken;
    input pcie_ep_i2c_scl;
    inout pcie_ep_i2c_sda;
