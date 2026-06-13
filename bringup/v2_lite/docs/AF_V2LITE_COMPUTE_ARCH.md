@@ -4,22 +4,18 @@
 > **Device**: Stratix 10 MX 1SM21BHU2F53E1VG  
 > **Date**: 2026-06-13
 
-## 1. Precision Model
+## 1. Precision Model (V2-Lite: FP8×FP8)
 
 | Parameter | Format | Bit Layout | Bias | DSP Mapping |
 |-----------|--------|-----------|------|-------------|
-| **Weight** | FP4 E2M1 | `[s][e1 e0][m]` | exp bias=1 | Lookup → int8 → DSP |
+| **Weight** | FP8 E4M3 | `[s][e3 e2 e1 e0][m2 m1 m0]` | exp bias=7 | int8 to DSP B port |
 | **Activation** | FP8 E4M3 | `[s][e3 e2 e1 e0][m2 m1 m0]` | exp bias=7 | int8 to DSP A port |
-| **Scale** | FP8 E4M3 | same as activation | bias=7 | per-group scale × product |
 | **Accumulator** | Int32 Q12.20 | 2's complement | — | fabric adder tree |
 | **SiLU Output** | FP8 E4M3 | same as activation | bias=7 | LUT + DSP interp |
 
-**FP4 → int8 Decoding**:
-```
-FP4 weight (4-bit) → 16-entry LUT → int8 (signed, -8..+7)
-FP8 activation → pass through as int8
-DSP multiply: int8 × int8 → 16b product → accumulate to 32b
-```
+**FP8×FP8 multiply**: sign-extend 8-bit → 16-bit → DSP 16×16→32 → truncate upper 16 bits.  
+S10 DSP blocks: 18×19 native → 16×16 fills one block perfectly.  
+V4 target: Agilex 7 AI Tensor blocks for mixed-precision (FP4/FP8/BF16).
 
 ## 2. Architecture: GEMM = Σ Multi-GEMV
 
@@ -74,17 +70,22 @@ Act[7]│MAC │───►│56│57│..│119│────►... ──►
 | **Per Expert** | | **~135k** | |
 | **6 Experts** | | **~810k** | Without pipelining |
 | **With pipelining** | | **~585k** | Overlap next expert |
-| **Tokens/sec @100MHz** | | **~170** | 585k cycles / 100M |
-| **Tokens/sec @250MHz** | | **~427** | Target |
+| **Tokens/sec @450MHz** | | **~770** | Design target |
 
 ## 3. Clock Architecture
 
 | Domain | Frequency | Source | Purpose |
 |--------|-----------|--------|---------|
-| `core_clk` | **100MHz → 250MHz** | IOPLL (ed_synth) | FFN compute, AXI, control |
+| `core_clk` | **450MHz** | IOPLL reconfig | FFN compute, AXI, control |
 | `hbm_refclk` | 100MHz (fixed) | Board Si5341A | HBM2 controller |
 | `pcie_clk` | 250MHz | PCIe HIP coreclkout | PCIe AXI domain |
-| `dsp_clk` | 500MHz (future) | IOPLL C1 output | DSP overdrive |
+| `dsp_clk` | 450MHz | same IOPLL | DSP systolic array |
+
+**IOPLL Configuration (450MHz)**:
+```
+f_ref = 100MHz, VCO = f_ref × N / M = 100 × 27 / 1 = 2700MHz
+C0 = 6 → core_clk = 2700/6 = 450MHz
+```
 
 ## 4. Parallelism (Decode Only)
 
@@ -117,9 +118,10 @@ Full definition: `v2_lite/docs/v2_lite_pcie_regmap.atreg`
 
 | Gap | Current | Target | Priority |
 |-----|---------|--------|----------|
-| Precision | FP8×FP8 (RTL done) | FP4×FP8 (weight decode LUT) | P0 |
-| Clock | 100MHz (IOPLL 1:1) | **250MHz** (N=15, C0=6) | P0 |
-| DSP count | 128 @ 100MHz | **512-1000** @ 250MHz | P0 |
+| Precision | FP8×FP8 ✅ | FP8×FP8 ✅ (V2-Lite spec) | — |
+| Clock | 100MHz (IOPLL 1:1) | **450MHz** (N=27, C0=6) | P0 |
+| DSP count | 128 @ 100MHz | **512-1000** @ 450MHz | P0 |
+| DSP pipeline | PIPE=2 (100MHz) | PIPE≥3 (450MHz) | P0 |
 | Simulation | 0 | Behavioral model matching golden | P0 |
 | TPS measurement | Not measured | ISP perf counters → real TPS | P1 |
 | Multi-expert pipelining | Sequential | Overlap expert N+1 preload | P1 |
