@@ -81,6 +81,7 @@ module v2_lite_ffn_engine #(
     // ---- Status ----
     output logic                         busy,
     output logic                         done,
+    output logic [63:0]                  pr_debug,        // PR fill accumulator (prevents optimization)
 
     // ---- Debug (JTAG ISP) ----
     output logic [3:0]                   dbg_fsm_state,
@@ -304,6 +305,25 @@ module v2_lite_ffn_engine #(
             );
         end
     endgenerate
+
+    // PR partition fill: accumulate extra SA results to prevent optimization
+    logic [63:0] pr_fill_accum;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) pr_fill_accum <= 64'd0;
+        else begin
+            for (int pi = 0; pi < 4; pi++)
+                if (sa_pr_result_valid[pi])
+                    pr_fill_accum <= pr_fill_accum + sa_pr_result_data[pi];
+            if (sa_pr_start[0]) pr_fill_accum <= 64'd0;
+        end
+    end
+    // Feed start to keep SAs active — tie to gate/up SA state
+    assign sa_pr_start = {4{sa_gate_up_start}};
+    assign sa_pr_activ_valid = {4{sa_gate_up_activ_valid}};
+    assign sa_pr_activ_data[0] = sa_gate_up_activ_data;
+    assign sa_pr_activ_data[1] = sa_gate_up_activ_data;
+    assign sa_pr_activ_data[2] = sa_gate_up_activ_data;
+    assign sa_pr_activ_data[3] = sa_gate_up_activ_data;
 
     // =========================================================================
     // Systolic Array: Down (1408 → 2048)
@@ -850,6 +870,7 @@ module v2_lite_ffn_engine #(
 
     assign dbg_hbm2_busy   = hbm2_busy;
     assign dbg_sa_active   = sa_gate_up_busy || sa_down_busy;
+    assign pr_debug        = pr_fill_accum;
     assign dbg_hbm2r_fsm   = hbm2r_dbg_fsm;
     assign dbg_hbm2r_wr_watermark = hbm2r_dbg_wr_addr[6:4];
     assign dbg_hbm2r_rd_watermark = hbm2r_dbg_rd_addr[6:4];

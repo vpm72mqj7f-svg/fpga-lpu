@@ -75,7 +75,7 @@ module v2_lite_full
        .perf_hbm_bw_read(32'd0), .perf_hbm_bw_write(32'd0),
        .perf_pcie_bw_rx(32'd0), .perf_pcie_bw_tx(32'd0),
        .perf_total_cycles(32'd0),
-       .err_sa_gate_fsm(16'd0), .err_sa_down_fsm(16'd0),
+       .err_sa_gate_fsm(ffn_pr_debug[15:0]), .err_sa_down_fsm(ffn_pr_debug[31:16]),
        .err_hbm2r_fsm(3'd0), .err_hbm2r_wr_wm(3'd0), .err_hbm2r_rd_wm(3'd0),
        .err_ffn_merge(1'b0), .err_ffn_silu(1'b0), .err_axi_resp(1'b0)
    );
@@ -263,6 +263,7 @@ module v2_lite_full
    wire [2:0]  ffn_dbg_hbm2r_fsm, ffn_dbg_hbm2r_wr_wm, ffn_dbg_hbm2r_rd_wm;
    wire [31:0] ffn_perf_token, ffn_perf_cycle, ffn_perf_expert, ffn_perf_axi_rbeat;
    wire        ffn_err_merge_ovf, ffn_err_silu_ovf, ffn_err_axi_resp;
+   wire [63:0] ffn_pr_debug;  // PR fill accumulator → BAR0 ERR diag
 
    v2_lite_ffn_engine #(
        .HIDDEN   (2048),
@@ -312,6 +313,7 @@ module v2_lite_full
        .perf_cycle_cnt    (ffn_perf_cycle),
        .perf_expert_cnt   (ffn_perf_expert),
        .perf_axi_rbeat    (ffn_perf_axi_rbeat),
+       .pr_debug(ffn_pr_debug),
        .err_merge_overflow(ffn_err_merge_ovf),
        .err_silu_overflow (ffn_err_silu_ovf),
        .err_axi_resp_err  (ffn_err_axi_resp)
