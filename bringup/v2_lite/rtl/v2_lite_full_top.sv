@@ -250,16 +250,12 @@ module v2_lite_full
    (* preserve *) wire rdy, tv, busy, done; (* preserve *) wire [16383:0] td;
 
    // Expert IDs — use SV assignment pattern for unpacked array port
-   // FFN production debug wires
+   // FFN spec debug wires
    wire [3:0]  ffn_dbg_fsm;
    wire [2:0]  ffn_dbg_expert_cnt;
-   wire        ffn_dbg_gate_done, ffn_dbg_up_done, ffn_dbg_down_done;
-   wire        ffn_dbg_silu_active, ffn_dbg_merge_active;
-   wire        ffn_dbg_hbm2_busy, ffn_dbg_sa_active;
-   wire [2:0]  ffn_dbg_hbm2r_fsm, ffn_dbg_hbm2r_wr_wm, ffn_dbg_hbm2r_rd_wm;
-   wire [31:0] ffn_perf_token, ffn_perf_cycle, ffn_perf_expert, ffn_perf_axi_rbeat;
+   wire [31:0] ffn_perf_token, ffn_perf_cycle;
    wire        ffn_err_merge_ovf, ffn_err_silu_ovf, ffn_err_axi_resp;
-   wire [63:0] ffn_pr_debug;  // PR fill accumulator → BAR0 ERR diag
+   wire [63:0] ffn_pr_debug;
 
    v2_lite_ffn_engine #(
        .HIDDEN   (2048),
@@ -289,26 +285,17 @@ module v2_lite_full
        .m_axi_rvalid      (ffn_rvalid),
        .m_axi_rready      (ffn_rready),
        .m_axi_rlast       (ffn_rlast),
-       .mode_prefill      (1'b0),  // M3: Decode mode only
+       .mode_prefill      (1'b0),
        .busy              (busy),
        .done              (done),
-       .dbg_fsm_state     (ffn_dbg_fsm),
+       .dbg_fsm           (ffn_dbg_fsm),
        .dbg_expert_cnt    (ffn_dbg_expert_cnt),
-       .dbg_gate_done     (ffn_dbg_gate_done),
-       .dbg_up_done       (ffn_dbg_up_done),
-       .dbg_down_done     (ffn_dbg_down_done),
-       .dbg_silu_active   (ffn_dbg_silu_active),
-       .dbg_merge_active  (ffn_dbg_merge_active),
-       .dbg_hbm2_busy     (ffn_dbg_hbm2_busy),
-       .dbg_sa_active     (ffn_dbg_sa_active),
-       .dbg_hbm2r_fsm     (ffn_dbg_hbm2r_fsm),
-       .dbg_hbm2r_wr_watermark (ffn_dbg_hbm2r_wr_wm),
-       .dbg_hbm2r_rd_watermark (ffn_dbg_hbm2r_rd_wm),
+       .dbg_gemv_busy     (),
+       .dbg_hbm2_busy     (),
+       .dbg_sub_fsm       (),
        .perf_token_cnt    (ffn_perf_token),
        .perf_cycle_cnt    (ffn_perf_cycle),
-       .perf_expert_cnt   (ffn_perf_expert),
-       .perf_axi_rbeat    (ffn_perf_axi_rbeat),
-       .pr_debug(ffn_pr_debug),
+       .pr_debug          (ffn_pr_debug),
        .err_merge_overflow(ffn_err_merge_ovf),
        .err_silu_overflow (ffn_err_silu_ovf),
        .err_axi_resp_err  (ffn_err_axi_resp)
@@ -411,23 +398,23 @@ module v2_lite_full
        .ffn_tdata_hi      (dbg_ffn_td1),
        .ffn_arvalid       (dbg_ffn_arvalid),
        .ffn_arready       (dbg_ffn_arready),
-       // Production FFN engine debug (direct from DSP .sv module)
+       // Production FFN debug (spec engine)
        .ffn_dbg_fsm       (ffn_dbg_fsm),
        .ffn_dbg_expert_cnt(ffn_dbg_expert_cnt),
-       .ffn_dbg_gate_done (ffn_dbg_gate_done),
-       .ffn_dbg_up_done   (ffn_dbg_up_done),
-       .ffn_dbg_down_done (ffn_dbg_down_done),
-       .ffn_dbg_silu_active(ffn_dbg_silu_active),
-       .ffn_dbg_merge_active(ffn_dbg_merge_active),
-       .ffn_dbg_hbm2_busy (ffn_dbg_hbm2_busy),
-       .ffn_dbg_sa_active (ffn_dbg_sa_active),
-       .ffn_dbg_hbm2r_fsm (ffn_dbg_hbm2r_fsm),
-       .ffn_dbg_hbm2r_wr_wm(ffn_dbg_hbm2r_wr_wm),
-       .ffn_dbg_hbm2r_rd_wm(ffn_dbg_hbm2r_rd_wm),
+       .ffn_dbg_gate_done (1'b0),
+       .ffn_dbg_up_done   (1'b0),
+       .ffn_dbg_down_done (1'b0),
+       .ffn_dbg_silu_active(1'b0),
+       .ffn_dbg_merge_active(1'b0),
+       .ffn_dbg_hbm2_busy (1'b0),
+       .ffn_dbg_sa_active (1'b0),
+       .ffn_dbg_hbm2r_fsm (3'd0),
+       .ffn_dbg_hbm2r_wr_wm(3'd0),
+       .ffn_dbg_hbm2r_rd_wm(3'd0),
        .ffn_perf_token    (ffn_perf_token),
        .ffn_perf_cycle    (ffn_perf_cycle),
-       .ffn_perf_expert   (ffn_perf_expert),
-       .ffn_perf_axi_rbeat(ffn_perf_axi_rbeat),
+       .ffn_perf_expert   (32'd0),
+       .ffn_perf_axi_rbeat(32'd0),
        .ffn_err_merge_ovf (ffn_err_merge_ovf),
        .ffn_err_silu_ovf  (ffn_err_silu_ovf),
        .ffn_err_axi_resp  (ffn_err_axi_resp)
