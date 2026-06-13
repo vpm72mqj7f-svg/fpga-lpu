@@ -58,7 +58,7 @@ module v2_lite_full
    logic        bar0_readdatavalid;
 
    v2_lite_bar0_regs u_bar0 (
-       .clk, .rst_n(rn),
+       .clk(core_clk_iopll_ref_clk_clk), .rst_n(rn),
        .avs_address(pcie_bar0_address), .avs_writedata(pcie_bar0_writedata),
        .avs_readdata(bar0_readdata), .avs_write(pcie_bar0_write),
        .avs_read(pcie_bar0_read), .avs_readdatavalid(bar0_readdatavalid),
@@ -84,7 +84,7 @@ module v2_lite_full
    assign pcie_bar0_waitrequest  = 1'b0;
 
    pcie_hbm_weight_writer u_weight_writer (
-       .clk, .rst_n(rn),
+       .clk(core_clk_iopll_ref_clk_clk), .rst_n(rn),
        .start(wt_start), .abort(wt_abort), .hbm_addr(wt_hbm_addr),
        .burst_count(wt_burst_cnt), .busy(wt_busy), .done(wt_done),
        .error(wt_error), .bytes_written(wt_bytes_done),
