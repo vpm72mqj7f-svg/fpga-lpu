@@ -37,7 +37,7 @@ module v2_lite_full
    inout pcie_ep_i2c_sda;
 
    // ========================================================================
-   // PCIe → HBM2 Weight Writer (BAR0 → AXI4 write)
+   // BAR0 Register Map + Weight Writer (AVMM → Regs → AXI4)
    // ========================================================================
    wire [8:0]  wt_axi_awid;     wire [27:0] wt_axi_awaddr;  wire [7:0] wt_axi_awlen;
    wire [2:0]  wt_axi_awsize;   wire [1:0]  wt_axi_awburst;
@@ -47,32 +47,57 @@ module v2_lite_full
    wire [1:0]  wt_axi_bresp;
    wire        wt_axi_bvalid, wt_axi_bready;
 
+   // Weight writer control signals
+   wire        wt_start, wt_abort, wt_busy, wt_done, wt_error;
+   wire [27:0] wt_hbm_addr;
+   wire [23:0] wt_burst_cnt;
+   wire [31:0] wt_bytes_done;
+   wire [31:0] wt_data_lo, wt_data_hi;
+   wire        wt_data_commit;
+   logic [31:0] bar0_readdata;
+   logic        bar0_readdatavalid;
+
+   v2_lite_bar0_regs u_bar0 (
+       .clk, .rst_n(rn),
+       .avs_address(pcie_bar0_address), .avs_writedata(pcie_bar0_writedata),
+       .avs_readdata(bar0_readdata), .avs_write(pcie_bar0_write),
+       .avs_read(pcie_bar0_read), .avs_readdatavalid(bar0_readdatavalid),
+       .wt_start, .wt_abort, .wt_hbm_addr, .wt_burst_cnt,
+       .wt_busy, .wt_done, .wt_error, .wt_bytes_done,
+       .wt_data_lo, .wt_data_hi, .wt_data_commit,
+       .ffn_fsm_state(dbg_ffn_state), .ffn_busy(busy), .ffn_done(done),
+       .ffn_pass(fp), .ffn_error(1'b0),
+       .ffn_token_cnt(32'd0), .ffn_cycle_cnt(32'd0),
+       .ffn_expert_total(32'd0), .ffn_axi_rbeat(32'd0),
+       .sys_led(led), .sys_hbm_tg_pass(hbm_all_pass),
+       .sys_pcie_pll_lock(pcie_atx_pll_locked), .sys_pcie_link_up(1'b0),
+       .sys_pcie_ltssm(8'd0),
+       .perf_hbm_bw_read(32'd0), .perf_hbm_bw_write(32'd0),
+       .perf_pcie_bw_rx(32'd0), .perf_pcie_bw_tx(32'd0),
+       .perf_total_cycles(32'd0),
+       .err_sa_gate_fsm(16'd0), .err_sa_down_fsm(16'd0),
+       .err_hbm2r_fsm(3'd0), .err_hbm2r_wr_wm(3'd0), .err_hbm2r_rd_wm(3'd0),
+       .err_ffn_merge(1'b0), .err_ffn_silu(1'b0), .err_axi_resp(1'b0)
+   );
+   assign pcie_bar0_readdata     = bar0_readdata;
+   assign pcie_bar0_readdatavalid = bar0_readdatavalid;
+   assign pcie_bar0_waitrequest  = 1'b0;
+
    pcie_hbm_weight_writer u_weight_writer (
-       .clk                (core_clk_iopll_ref_clk_clk),
-       .rst_n              (rn),
-       .avs_address        (pcie_bar0_address),
-       .avs_byteenable     (pcie_bar0_byteenable),
-       .avs_writedata      (pcie_bar0_writedata),
-       .avs_readdata       (pcie_bar0_readdata),
-       .avs_write          (pcie_bar0_write),
-       .avs_read           (pcie_bar0_read),
-       .avs_waitrequest    (pcie_bar0_waitrequest),
-       .avs_readdatavalid  (pcie_bar0_readdatavalid),
-       .m_axi_awid         (wt_axi_awid),
-       .m_axi_awaddr       (wt_axi_awaddr),
-       .m_axi_awlen        (wt_axi_awlen),
-       .m_axi_awsize       (wt_axi_awsize),
-       .m_axi_awburst      (wt_axi_awburst),
-       .m_axi_awvalid      (wt_axi_awvalid),
-       .m_axi_awready      (wt_axi_awready),
-       .m_axi_wdata        (wt_axi_wdata),
-       .m_axi_wstrb        (wt_axi_wstrb),
-       .m_axi_wlast         (wt_axi_wlast),
-       .m_axi_wvalid       (wt_axi_wvalid),
-       .m_axi_wready       (wt_axi_wready),
-       .m_axi_bresp        (wt_axi_bresp),
-       .m_axi_bvalid       (wt_axi_bvalid),
-       .m_axi_bready       (wt_axi_bready)
+       .clk, .rst_n(rn),
+       .start(wt_start), .abort(wt_abort), .hbm_addr(wt_hbm_addr),
+       .burst_count(wt_burst_cnt), .busy(wt_busy), .done(wt_done),
+       .error(wt_error), .bytes_written(wt_bytes_done),
+       .data_lo(wt_data_lo), .data_hi(wt_data_hi),
+       .data_commit(wt_data_commit),
+       .m_axi_awid(wt_axi_awid), .m_axi_awaddr(wt_axi_awaddr),
+       .m_axi_awlen(wt_axi_awlen), .m_axi_awsize(wt_axi_awsize),
+       .m_axi_awburst(wt_axi_awburst),
+       .m_axi_awvalid(wt_axi_awvalid), .m_axi_awready(wt_axi_awready),
+       .m_axi_wdata(wt_axi_wdata), .m_axi_wstrb(wt_axi_wstrb),
+       .m_axi_wlast(wt_axi_wlast), .m_axi_wvalid(wt_axi_wvalid),
+       .m_axi_wready(wt_axi_wready), .m_axi_bresp(wt_axi_bresp),
+       .m_axi_bvalid(wt_axi_bvalid), .m_axi_bready(wt_axi_bready)
    );
 
    // ========================================================================
