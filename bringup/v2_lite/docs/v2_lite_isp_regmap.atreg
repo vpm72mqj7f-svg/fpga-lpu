@@ -1,0 +1,130 @@
+# =============================================================================
+# v2_lite_isp_regmap.atreg — JTAG ISP Register Map (M1 SOF, 12MB)
+#
+# Accessed via JTAG: quartus_stp -t read_isp_local.tcl
+# ISP instances: PCIE (96b), HBM2 (96b), FFN (224b), SYS (32b+32b)
+#
+# Access codes:  R_O=Read Only, R/W=Read/Write (via source)
+# Field format: BIT_HI:BIT_LO NAME (WIDTH) TYPE RESET DESCRIPTION
+# =============================================================================
+
+@PROJECT V2_LITE_ISP
+@VERSION 0x13061A01
+@DATE    2026-06-13
+@INTERFACE JTAG ISP (altsource_probe)
+@WIDTH   per-instance
+
+###############################################################################
+# ISP Instance: PCIE — 96-bit probe (3 × 32-bit words)
+###############################################################################
+@BLOCK PCIE 0 96
+
+REG PCIE_PROBE0 0 R_O 0x00000000
+  FIELD 15:0  PLL_LOCKED_BANK   R_O 0x0000 Per-lane PLL lock (16 lanes, 1=locked)
+  FIELD 16    ATX_PLL_LOCKED    R_O 0     ATX PLL lock aggregate
+  FIELD 31:17 RSVD              R_O 0x00 Reserved
+
+REG PCIE_PROBE1 32 R_O 0x00000000
+  FIELD 7:0   LTSSM_STATE       R_O 0x00 Current LTSSM state
+  FIELD 31:8  RSVD              R_O 0x00 Reserved
+
+REG PCIE_PROBE2 64 R_O 0x00000000
+  FIELD 0     LINK_UP           R_O 0     PCIe link up
+  FIELD 5:1   LINK_WIDTH        R_O 0x00 Negotiated link width
+  FIELD 9:6   LINK_SPEED        R_O 0x00 Negotiated link speed
+  FIELD 31:10 RSVD              R_O 0x00 Reserved
+
+###############################################################################
+# ISP Instance: HBM2 — 96-bit probe (3 × 32-bit words)
+###############################################################################
+@BLOCK HBM2 0 96
+
+REG HBM2_PROBE0 0 R_O 0x00000000
+  FIELD 15:0  TG_PASS           R_O 0x0000 Traffic gen pass flags (16 pseudo-channels)
+  FIELD 31:16 TG_FAIL           R_O 0x0000 Traffic gen fail flags
+
+REG HBM2_PROBE1 32 R_O 0x00000000
+  FIELD 15:0  TG_TIMEOUT        R_O 0x0000 Traffic gen timeout flags
+  FIELD 31:16 RSVD              R_O 0x00 Reserved
+
+REG HBM2_PROBE2 64 R_O 0x00000000
+  FIELD 0     CH_ACTIVE         R_O 0     Any channel active
+  FIELD 1     HBM_PLL_LOCKED    R_O 0     HBM2 PLL locked
+  FIELD 2     CATTRIP           R_O 0     Catastrophic trip
+  FIELD 5:3   TEMP_CODE         R_O 0x00 HBM2 temperature code
+  FIELD 31:6  RSVD              R_O 0x00 Reserved
+
+###############################################################################
+# ISP Instance: FFN — 224-bit probe (7 × 32-bit words)
+###############################################################################
+@BLOCK FFN 0 224
+
+REG FFN_PROBE0 0 R_O 0x00000000
+  FIELD 3:0   FSM_STATE         R_O 0x0   FFN main FSM state
+  FIELD 6:4   EXPERT_CNT        R_O 0x0   Current expert index
+  FIELD 7     HBM2_BUSY         R_O 0     HBM2 reader active
+  FIELD 8     SA_ACTIVE         R_O 0     Any systolic array active
+  FIELD 9     SILU_ACTIVE       R_O 0     SiLU processing
+  FIELD 10    MERGE_ACTIVE      R_O 0     Merge processing
+  FIELD 11    BUSY              R_O 0     FFN busy
+  FIELD 12    DONE              R_O 0     FFN done
+  FIELD 15:13 HBM2R_FSM         R_O 0x0   HBM2 reader FSM state
+  FIELD 18:16 HBM2R_WR_WM       R_O 0x0   HBM2 reader write fill level
+  FIELD 21:19 HBM2R_RD_WM       R_O 0x0   HBM2 reader read drain level
+  FIELD 22    GATE_DONE         R_O 0     Gate projection done
+  FIELD 23    UP_DONE           R_O 0     Up projection done
+  FIELD 24    DOWN_DONE         R_O 0     Down projection done
+  FIELD 31:25 RSVD              R_O 0x0  Reserved
+
+REG FFN_PROBE1 32 R_O 0x00000000
+  FIELD 31:0  PERF_TOKEN_CNT    R_O 0     Token counter (32-bit)
+
+REG FFN_PROBE2 64 R_O 0x00000000
+  FIELD 15:0  PERF_CYCLE_LO     R_O 0x0   Cycle count low 16-bit
+  FIELD 31:16 PERF_EXPERT_LO    R_O 0x0   Expert count low 16-bit
+
+REG FFN_PROBE3 96 R_O 0x00000000
+  FIELD 15:0  PERF_AXI_RBEAT    R_O 0x0   AXI read beat count
+  FIELD 31:16 PERF_AXI_AR_TRAN  R_O 0x0   AXI AR transaction count
+
+REG FFN_PROBE4 128 R_O 0x00000000
+  FIELD 3:0   SA_GATE_FSM       R_O 0x0   Gate/Up SA FSM state
+  FIELD 7:4   SA_DOWN_FSM       R_O 0x0   Down SA FSM state
+  FIELD 13:8  SA_GATE_CYCLE     R_O 0x00  Gate/Up current row cycle
+  FIELD 19:14 SA_DOWN_CYCLE     R_O 0x00  Down current row cycle
+  FIELD 31:20 RSVD              R_O 0x00 Reserved
+
+REG FFN_PROBE5 160 R_O 0x00000000
+  FIELD 0     ERR_AXI_RESP      R_O 0     AXI response error
+  FIELD 1     ERR_MERGE_OVF     R_O 0     Merge overflow
+  FIELD 2     ERR_SILU_OVF      R_O 0     SiLU overflow
+  FIELD 31:3  RSVD              R_O 0x0  Reserved
+
+REG FFN_PROBE6 192 R_O 0x00000000
+  FIELD 2:0   HBM2R_FSM         R_O 0x0   HBM2 reader FSM
+  FIELD 5:3   HBM2R_WR_WM       R_O 0x0   Write watermark
+  FIELD 8:6   HBM2R_RD_WM       R_O 0x0   Read watermark
+  FIELD 31:9  RSVD              R_O 0x0  Reserved
+
+###############################################################################
+# ISP Instance: SYS — 32-bit probe + 32-bit source
+###############################################################################
+@BLOCK SYS 0 32
+
+REG SYS_PROBE0 0 R_O 0x00000000
+  FIELD 3:0   LED_STATE         R_O 0x0   Current LED output
+  FIELD 16    CONFIG_DONE       R_O 0     FPGA configuration done
+  FIELD 17    PCIE_LINK_UP      R_O 0     PCIe link up (stub)
+  FIELD 18    ATX_PLL_LOCK      R_O 0     ATX PLL locked
+  FIELD 19    HBM_PLL_LOCK      R_O 0     HBM2 PLL locked
+  FIELD 31:20 RSVD              R_O 0x00 Reserved
+
+REG SYS_SOURCE0 0 R/W 0x00000000
+  FIELD 0     FFN_START         R/W 0     FFN engine start (JTAG→FPGA)
+  FIELD 1     FFN_RESET         R/W 0     FFN soft reset (JTAG→FPGA)
+  FIELD 2     COUNTER_RST       R/W 0     Reset perf counters
+  FIELD 31:3  RSVD              R/W 0x0  Reserved
+
+# =============================================================================
+# @END
+# =============================================================================
