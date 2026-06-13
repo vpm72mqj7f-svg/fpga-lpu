@@ -3,180 +3,149 @@
 #
 # Access codes:  R_O=Read Only, W_O=Write Only, R/W=Read/Write, R/W/C=W1C
 # Field format: BIT_HI:BIT_LO NAME (WIDTH) TYPE RESET DESCRIPTION
+#
+# ALIGNED WITH: v2_lite_bar0_regs.sv (hardware implementation)
+# SOFTWARE REF: c_ref/fpga/pcie_driver.h
 # =============================================================================
 
 @PROJECT V2_LITE_PCIE
-@VERSION 0x0D061A01
+@VERSION 0x13061A02
 @DATE    2026-06-13
 @WIDTH   32
 
 ###############################################################################
-# 0x0000–0x0FFF — SYS: System / Global Registers
+# 0x000–0x0FF — WT: Weight Transfer Engine (reads mapped to software writes)
 ###############################################################################
-@BLOCK SYS 0x0000 0x0FFF
+@BLOCK WT 0x000 0x0FF
 
-REG SYS_VERSION 0x0000 R_O 0x0D061A01
-  FIELD 31:24 VERSION_DAY    R_O 0x0D    Build day (13)
-  FIELD 23:16 VERSION_MONTH  R_O 0x06    Build month (June)
-  FIELD 15:8  VERSION_YEAR   R_O 0x1A    Build year - 2000 (26)
-  FIELD 7:0   VERSION_NUM    R_O 0x01    Build number
-
-REG SYS_SCRATCH 0x0004 R/W 0x4154564E
-  FIELD 31:0  SCRATCH_DATA   R/W 0x4154564E  CPU bus test register ("ATVN")
-
-REG SYS_CONTROL 0x0008 R/W 0x00000000
-  FIELD 0     FFN_START      R/W 0    Write 1 to start FFN inference
-  FIELD 1     FFN_RESET      R/W 0    Write 1 to reset FFN engine
-  FIELD 2     COUNTER_RST    R/W 0    Write 1 to clear perf counters
-  FIELD 3     ERROR_CLEAR    R/W 0    Write 1 to clear error flags
-  FIELD 7:4   LED_OVERRIDE   R/W 0x0  LED override value (0=auto)
-  FIELD 31:8  RSVD           R_O 0x0  Reserved
-
-REG SYS_STATUS 0x000C R_O 0x00000000
-  FIELD 0     FFN_BUSY       R_O 0    FFN engine busy
-  FIELD 1     FFN_DONE       R_O 0    FFN inference complete
-  FIELD 2     FFN_PASS       R_O 0    FFN self-test pass
-  FIELD 3     HBM_TG_PASS    R_O 0    HBM2 traffic gen all-pass
-  FIELD 4     PCIE_PLL_LOCK  R_O 0    PCIe ATX PLL locked
-  FIELD 5     PCIE_LINK_UP   R_O 0    PCIe link training complete
-  FIELD 15:8  PCIE_LTSSM     R_O 0x00 Current LTSSM state
-  FIELD 19:16 LED_STATE      R_O 0x0  Current LED output
-  FIELD 31:20 RSVD           R_O 0x0  Reserved
-
-REG SYS_CLK_FREQ 0x0010 R_O 0x00000000
-  FIELD 31:0  CORE_CLK_HZ    R_O 0    Measured core clock frequency (Hz)
-
-REG SYS_BUILD_INFO 0x0014 R_O 0x00000000
-  FIELD 15:0  ALM_COUNT      R_O 0    ALM utilization
-  FIELD 31:16 DSP_COUNT      R_O 0    DSP block count
-
-###############################################################################
-# 0x1000–0x1FFF — WT: Weight Transfer Engine
-###############################################################################
-@BLOCK WT 0x1000 0x1FFF
-
-REG WT_CONTROL 0x1000 R/W 0x00000000
+REG WT_CONTROL 0x000 R/W 0x00000000
   FIELD 0     WT_START       W_O 0    Write 1 to start weight download
   FIELD 1     WT_ABORT       W_O 0    Write 1 to abort transfer
-  FIELD 2     WT_AUTO_INCR   R/W 0    Auto-increment HBM2 address on burst
+  FIELD 31:2  RSVD           R_O 0x0  Reserved
+
+REG WT_STATUS 0x004 R_O 0x00000000
+  FIELD 0     WT_DONE        R_O 0    Transfer complete
+  FIELD 1     WT_BUSY        R_O 0    Transfer in progress
+  FIELD 2     WT_ERROR       R_O 0    Transfer error
   FIELD 31:3  RSVD           R_O 0x0  Reserved
 
-REG WT_STATUS 0x1004 R_O 0x00000000
-  FIELD 0     WT_BUSY        R_O 0    Weight transfer in progress
-  FIELD 1     WT_DONE        R_O 0    Transfer complete
-  FIELD 2     WT_ERROR       R_O 0    Transfer error
-  FIELD 3     WT_FIFO_FULL   R_O 0    CDC FIFO full
-  FIELD 4     WT_FIFO_EMPTY  R_O 0    CDC FIFO empty
-  FIELD 31:5  RSVD           R_O 0x0  Reserved
+REG WT_HBM_ADDR_LO 0x008 R/W 0x00000000
+  FIELD 27:0  HBM_ADDR       R/W 0x0  HBM2 target byte address [27:0]
+  FIELD 31:28 RSVD           R_O 0x0  Reserved
 
-REG WT_HBM_ADDR_LO 0x1008 R/W 0x00000000
-  FIELD 27:0  HBM_ADDR       R/W 0x0  HBM2 target address [27:0]
-  FIELD 31:28 RSVD           R_O 0x0  Reserved (HBM2 addr is 28-bit)
-
-REG WT_HBM_ADDR_HI 0x100C R/W 0x00000000
+REG WT_HBM_ADDR_HI 0x00C R/W 0x00000000
   FIELD 31:0  HBM_ADDR_HI    R/W 0x0  HBM2 target address [63:32] (reserved)
 
-REG WT_BURST_COUNT 0x1010 R/W 0x00000000
+REG WT_BURST_COUNT 0x010 R/W 0x00000000
   FIELD 23:0  BURST_CNT      R/W 0    Number of 256-beat AXI bursts
   FIELD 31:24 RSVD           R_O 0x0  Reserved
 
-REG WT_BYTES_TRANSFERRED 0x1014 R_O 0x00000000
-  FIELD 31:0  BYTES_DONE     R_O 0    Bytes successfully written to HBM2
+REG WT_BYTES_DONE 0x014 R_O 0x00000000
+  FIELD 31:0  BYTES_WRITTEN  R_O 0    Bytes successfully written to HBM2
 
-REG WT_ERROR_CODE 0x1018 R/W/C 0x00000000
+REG WT_ERROR_CODE 0x018 R/W/C 0x00000000
   FIELD 0     ERR_AXI_BRESP  R/W/C 0  AXI write response error
-  FIELD 1     ERR_TIMEOUT    R/W/C 0  Transfer timeout
-  FIELD 31:2  RSVD           R_O 0x0  Reserved
+  FIELD 31:1  RSVD           R_O 0x0  Reserved
 
-# DATA_PORT: consecutive writes stream 32-bit words → packed to 256-bit AXI beats
-REG WT_DATA_PORT 0x1020 W_O 0x00000000
-  FIELD 31:0  DATA_WORD      W_O 0    Next 32-bit payload word
+REG WT_DATA_PORT_LO 0x020 W_O 0x00000000
+  FIELD 31:0  DATA_WORD_LO   W_O 0    Data word low (write HI to commit pair)
+
+REG WT_DATA_PORT_HI 0x024 W_O 0x00000000
+  FIELD 31:0  DATA_WORD_HI   W_O 0    Data word high (commits 64-bit pair)
 
 ###############################################################################
-# 0x2000–0x2FFF — FFN: FFN Compute Engine
+# 0x100–0x1FF — SYS: System / Global Registers
 ###############################################################################
-@BLOCK FFN 0x2000 0x2FFF
+@BLOCK SYS 0x100 0x1FF
 
-REG FFN_CONTROL 0x2000 R/W 0x00000000
+REG SYS_VERSION 0x100 R_O 0x13061A02
+  FIELD 31:24 VERSION_DAY    R_O 0x13   Build day (19)
+  FIELD 23:16 VERSION_MONTH  R_O 0x06   Build month (June)
+  FIELD 15:8  VERSION_YEAR   R_O 0x1A   Build year - 2000 (26)
+  FIELD 7:0   VERSION_NUM    R_O 0x02   Build number (2)
+
+REG SYS_CONTROL 0x108 R/W 0x00000000
+  FIELD 0     FFN_START      R/W 0    Write 1 to start FFN inference
+  FIELD 1     FFN_RESET      R/W 0    Write 1 to reset FFN engine
+  FIELD 2     COUNTER_RST    R/W 0    Clear performance counters
+  FIELD 31:3  RSVD           R_O 0x0  Reserved
+
+REG SYS_STATUS 0x10C R_O 0x00000000
+  FIELD 3:0   LED_STATE      R_O 0x0  Current LED output
+  FIELD 4     HBM_TG_PASS    R_O 0    HBM2 traffic gen all-pass
+  FIELD 5     PCIE_PLL_LOCK  R_O 0    PCIe ATX PLL locked
+  FIELD 6     PCIE_LINK_UP   R_O 0    PCIe link training complete
+  FIELD 14:7  PCIE_LTSSM     R_O 0x00 Current LTSSM state
+  FIELD 31:15 RSVD           R_O 0x0  Reserved
+
+###############################################################################
+# 0x200–0x2FF — FFN: FFN Compute Engine
+###############################################################################
+@BLOCK FFN 0x200 0x2FF
+
+REG FFN_CONTROL 0x200 R/W 0x00000000
   FIELD 0     FFN_START      W_O 0    Start inference
-  FIELD 1     FFN_RESET      W_O 0    Soft reset FFN engine
-  FIELD 8:2   EXPERT_ID      R/W 0    Starting expert index
-  FIELD 31:9  RSVD           R_O 0x0  Reserved
+  FIELD 31:1  RSVD           R_O 0x0  Reserved
 
-REG FFN_STATUS 0x2004 R_O 0x00000000
-  FIELD 3:0   FSM_STATE      R_O 0    Current FSM state
-  FIELD 4     FFN_BUSY       R_O 0    Engine busy
-  FIELD 5     FFN_DONE       R_O 0    Inference complete
-  FIELD 6     FFN_PASS       R_O 0    Self-test pass
-  FIELD 7     FFN_ERROR      R_O 0    Error flag
-  FIELD 15:8  EXPERT_ACTIVE  R_O 0    Currently processing expert
-  FIELD 18:16 GATE_DONE      R_O 0    Gate/Up/Down projection done flags
-  FIELD 31:19 RSVD           R_O 0x0  Reserved
+REG FFN_STATUS 0x204 R_O 0x00000000
+  FIELD 3:0   FSM_STATE      R_O 0    Current FSM state (0-9)
+  FIELD 4     BUSY           R_O 0    Engine busy
+  FIELD 5     DONE           R_O 0    Inference complete
+  FIELD 6     PASS           R_O 0    Self-test pass
+  FIELD 7     ERROR          R_O 0    Error flag
+  FIELD 10:8  EXPERT_CNT     R_O 0    Current expert index
+  FIELD 31:11 RSVD           R_O 0x0  Reserved
 
-REG FFN_TOKEN_COUNT 0x2008 R/W/C 0x00000000
-  FIELD 31:0  TOKENS         R/W/C 0  Tokens processed (sticky)
+REG FFN_TOKEN_COUNT 0x208 R_O 0x00000000
+  FIELD 31:0  TOKENS         R_O 0    Tokens processed
 
-REG FFN_CYCLE_COUNT 0x200C R/W/C 0x00000000
-  FIELD 31:0  CYCLES         R/W/C 0  Cycles elapsed
+REG FFN_CYCLE_COUNT 0x20C R_O 0x00000000
+  FIELD 31:0  CYCLES         R_O 0    Clock cycles elapsed
 
-REG FFN_EXPERT_COUNT 0x2010 R/W/C 0x00000000
-  FIELD 31:0  EXPERTS        R/W/C 0  Experts processed
+REG FFN_EXPERT_TOTAL 0x210 R_O 0x00000000
+  FIELD 31:0  EXPERTS        R_O 0    Total experts processed
 
-REG FFN_AXI_RBEAT_COUNT 0x2014 R/W/C 0x00000000
-  FIELD 31:0  AXI_RBEATS     R/W/C 0  AXI read data beats
+REG FFN_AXI_RBEAT 0x214 R_O 0x00000000
+  FIELD 31:0  AXI_READS      R_O 0    AXI read data beats
 
-REG FFN_THROUGHPUT 0x2018 R_O 0x00000000
-  FIELD 31:0  TPS_x1000      R_O 0    Tokens/sec × 1000
+REG FFN_THROUGHPUT 0x218 R_O 0x00000000
+  FIELD 31:0  TPS_x1000      R_O 0    Tokens/sec × 1000 (SW computed)
 
 ###############################################################################
-# 0x3000–0x3FFF — ACT: Activation Buffer Status
+# 0x300–0x3FF — ACT: Activation Buffer (stub, reserved)
 ###############################################################################
-@BLOCK ACT 0x3000 0x3FFF
-
-REG ACT_BUFFER_STATUS 0x3000 R_O 0x00000000
-  FIELD 0     ACT_VALID      R_O 0    Activation data valid
-  FIELD 1     ACT_READY      R_O 0    Ready for next activation
-  FIELD 11:2  ACT_WORDS      R_O 0    Words buffered
-  FIELD 31:12 RSVD           R_O 0x0  Reserved
+@BLOCK ACT 0x300 0x3FF
 
 ###############################################################################
-# 0x4000–0x4FFF — PERF: Performance Monitoring
+# 0x400–0x4FF — PERF: Performance Monitoring
 ###############################################################################
-@BLOCK PERF 0x4000 0x4FFF
+@BLOCK PERF 0x400 0x4FF
 
-REG PERF_HBM2_BW_READ 0x4000 R_O 0x00000000
+REG PERF_HBM2_BW_READ 0x400 R_O 0x00000000
   FIELD 31:0  BW_READ_MBPS   R_O 0    HBM2 read bandwidth (MB/s)
 
-REG PERF_HBM2_BW_WRITE 0x4004 R_O 0x00000000
+REG PERF_HBM2_BW_WRITE 0x404 R_O 0x00000000
   FIELD 31:0  BW_WRITE_MBPS  R_O 0    HBM2 write bandwidth (MB/s)
 
-REG PERF_PCIE_BW_RX 0x4008 R_O 0x00000000
+REG PERF_PCIE_BW_RX 0x408 R_O 0x00000000
   FIELD 31:0  BW_RX_MBPS     R_O 0    PCIe RX bandwidth (MB/s)
 
-REG PERF_PCIE_BW_TX 0x400C R_O 0x00000000
+REG PERF_PCIE_BW_TX 0x40C R_O 0x00000000
   FIELD 31:0  BW_TX_MBPS     R_O 0    PCIe TX bandwidth (MB/s)
 
-REG PERF_TOTAL_CYCLES 0x4010 R_O 0x00000000
+REG PERF_TOTAL_CYCLES 0x410 R_O 0x00000000
   FIELD 31:0  CYCLES         R_O 0    Total cycles since reset
 
 ###############################################################################
-# 0x5000–0x5FFF — ERR: Error / Diagnostic
+# 0x500–0x5FF — ERR: Error & Diagnostic
 ###############################################################################
-@BLOCK ERR 0x5000 0x5FFF
+@BLOCK ERR 0x500 0x5FF
 
-REG ERR_FLAGS 0x5000 R/W/C 0x00000000
-  FIELD 0     ERR_FFN_MERGE  R/W/C 0  FFN merge overflow
-  FIELD 1     ERR_FFN_SILU   R/W/C 0  FFN SiLU overflow
-  FIELD 2     ERR_AXI_RESP   R/W/C 0  AXI read response error
-  FIELD 3     ERR_WT_AXI     R/W/C 0  Weight transfer AXI error
-  FIELD 4     ERR_FIFO_OVER  R/W/C 0  CDC FIFO overflow
-  FIELD 31:5  RSVD           R_O 0x0  Reserved
-
-REG ERR_DIAG_0 0x5004 R_O 0x00000000
+REG ERR_FLAGS 0x500 R_O 0x00000000
   FIELD 15:0  SA_GATE_FSM    R_O 0    Systolic array gate FSM state
   FIELD 31:16 SA_DOWN_FSM    R_O 0    Systolic array down FSM state
 
-REG ERR_DIAG_1 0x5008 R_O 0x00000000
+REG ERR_DIAG_1 0x508 R_O 0x00000000
   FIELD 2:0   HBM2R_FSM      R_O 0    HBM2 reader FSM state
   FIELD 5:3   HBM2R_WR_WM    R_O 0    HBM2 reader write watermark
   FIELD 8:6   HBM2R_RD_WM    R_O 0    HBM2 reader read watermark
