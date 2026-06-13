@@ -56,8 +56,9 @@ module ffn_router_topk #(
     logic [$clog2(CYCLES_PER_EXPERT):0] cyc_cnt;
     logic [SCORE_W-1:0]            scores [NUM_EXPERTS];
 
-    // MAC lanes: simple multiply-accumulate
+    // MAC lanes + pipelined reduction tree
     logic [ROUTER_LANES-1:0][SCORE_W-1:0] router_partial;
+    logic [SCORE_W-1:0] router_sum;
 
     genvar li;
     generate
@@ -69,29 +70,32 @@ module ffn_router_topk #(
                 router_partial[li] <= a * b;
             end
         end
+
+        // Reduction: sum 128 partials into one value
+        localparam int R_STAGES = $clog2(ROUTER_LANES);  // 7 stages
+        logic [R_STAGES:0][ROUTER_LANES-1:0][SCORE_W-1:0] r_tree;
+        for (genvar gs = 0; gs <= R_STAGES; gs++) begin : g_rstage
+            if (gs == 0) begin
+                always_ff @(posedge clk)
+                    for (genvar gi = 0; gi < ROUTER_LANES; gi++)
+                        r_tree[0][gi] <= router_partial[gi];
+            end else begin
+                localparam int N_OUT = ROUTER_LANES >> gs;
+                always_ff @(posedge clk)
+                    for (genvar gi = 0; gi < N_OUT; gi++)
+                        r_tree[gs][gi] <= r_tree[gs-1][2*gi] + r_tree[gs-1][2*gi+1];
+            end
+        end
+        assign router_sum = r_tree[R_STAGES][0];
     endgenerate
 
-    // Score accumulation + expert cycling
+    // Score accumulation
     logic [$clog2(CYCLES_PER_EXPERT):0] acc_cyc;
     genvar ei;
     generate for (ei = 0; ei < NUM_EXPERTS; ei++) begin : g_score_rst
         always_ff @(posedge clk or negedge rst_n)
             if (!rst_n) scores[ei] <= 0;
     end endgenerate
-
-    always_ff @(posedge clk) begin
-        if (st == S_COMPUTE) begin
-            if (acc_cyc == 0) scores[expert_cnt] <= 0;
-            else begin
-                logic [SCORE_W-1:0] sum;
-                sum = scores[expert_cnt];
-                for (int i = 0; i < ROUTER_LANES; i++) sum = sum + router_partial[i];
-                scores[expert_cnt] <= sum;
-            end
-            acc_cyc <= acc_cyc + 1;
-            if (acc_cyc == CYCLES_PER_EXPERT - 1) begin acc_cyc <= 0; expert_cnt <= expert_cnt + 1; end
-        end
-    end
 
     // =========================================================================
     // Top-K: 66-cycle sequential comparison (simple, synthesizable)
@@ -144,6 +148,11 @@ module ffn_router_topk #(
                 S_IDLE: if (start) begin expert_cnt <= 0; acc_cyc <= 0; st <= S_COMPUTE; end
                 S_COMPUTE: begin
                     wt_read <= 1;
+                    scores[expert_cnt] <= scores[expert_cnt] + router_sum;
+                    acc_cyc <= acc_cyc + 1;
+                    if (acc_cyc == CYCLES_PER_EXPERT - 1) begin
+                        acc_cyc <= 0; expert_cnt <= expert_cnt + 1;
+                    end
                     if (expert_cnt == NUM_EXPERTS) begin
                         wt_read <= 0; st <= S_TOPK_SORT;
                     end
