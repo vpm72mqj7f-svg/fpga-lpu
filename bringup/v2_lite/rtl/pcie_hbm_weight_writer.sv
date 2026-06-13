@@ -362,11 +362,14 @@ module pcie_hbm_weight_writer #(
 
                 S_START_BURST: begin
                     if (!m_axi_awvalid) begin
-                        m_axi_awlen    <= 8'd255;   // 256 beats − 1
+                        m_axi_awlen    <= 8'd255;
                         m_axi_awaddr   <= hbm_addr_reg[AXI_ADDR_W-1:0];
                         m_axi_awvalid  <= 1'b1;
                         beats_remaining <= 32'd256;
                         data_wr_cnt     <= 3'd0;
+                    end
+                    if (m_axi_awvalid && m_axi_awready) begin
+                        m_axi_awvalid <= 1'b0;
                         state <= S_WRITE_DATA;
                     end
                 end
