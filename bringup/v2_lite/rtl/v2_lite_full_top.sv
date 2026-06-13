@@ -37,6 +37,49 @@ module v2_lite_full
    inout pcie_ep_i2c_sda;
 
    // ========================================================================
+   // PCIe → HBM2 Weight Writer (BAR0 → AXI4 write)
+   // ========================================================================
+   wire [8:0]  wt_axi_awid;     wire [27:0] wt_axi_awaddr;  wire [7:0] wt_axi_awlen;
+   wire [2:0]  wt_axi_awsize;   wire [1:0]  wt_axi_awburst;  wire [2:0] wt_axi_awprot;
+   wire [3:0]  wt_axi_awqos;
+   wire        wt_axi_awvalid, wt_axi_awready;
+   wire [255:0] wt_axi_wdata;   wire [31:0] wt_axi_wstrb;
+   wire        wt_axi_wlast, wt_axi_wvalid, wt_axi_wready;
+   wire [8:0]  wt_axi_bid;      wire [1:0]  wt_axi_bresp;
+   wire        wt_axi_bvalid, wt_axi_bready;
+
+   pcie_hbm_weight_writer u_weight_writer (
+       .clk                (core_clk_iopll_ref_clk_clk),
+       .rst_n              (rn),
+       .avs_address        (pcie_bar0_address),
+       .avs_byteenable     (pcie_bar0_byteenable),
+       .avs_writedata      (pcie_bar0_writedata),
+       .avs_readdata       (pcie_bar0_readdata),
+       .avs_write          (pcie_bar0_write),
+       .avs_read           (pcie_bar0_read),
+       .avs_waitrequest    (pcie_bar0_waitrequest),
+       .avs_readdatavalid  (pcie_bar0_readdatavalid),
+       .m_axi_awid         (wt_axi_awid),
+       .m_axi_awaddr       (wt_axi_awaddr),
+       .m_axi_awlen        (wt_axi_awlen),
+       .m_axi_awsize       (wt_axi_awsize),
+       .m_axi_awburst      (wt_axi_awburst),
+       .m_axi_awprot       (wt_axi_awprot),
+       .m_axi_awqos        (wt_axi_awqos),
+       .m_axi_awvalid      (wt_axi_awvalid),
+       .m_axi_awready      (wt_axi_awready),
+       .m_axi_wdata        (wt_axi_wdata),
+       .m_axi_wstrb        (wt_axi_wstrb),
+       .m_axi_wlast         (wt_axi_wlast),
+       .m_axi_wvalid       (wt_axi_wvalid),
+       .m_axi_wready       (wt_axi_wready),
+       .m_axi_bid          (wt_axi_bid),
+       .m_axi_bresp        (wt_axi_bresp),
+       .m_axi_bvalid       (wt_axi_bvalid),
+       .m_axi_bready       (wt_axi_bready)
+   );
+
+   // ========================================================================
    // HBM2 Qsys (ed_synth)
    // ========================================================================
    wire tg0_0_pass, tg0_0_fail, tg0_0_timeout, tg0_1_pass, tg0_1_fail, tg0_1_timeout;
@@ -99,13 +142,15 @@ module v2_lite_full
        .ffn_axi_arready(ffn_arready),
        .ffn_axi_rid(), .ffn_axi_rdata(ffn_rdata), .ffn_axi_rresp(ffn_rresp),
        .ffn_axi_rlast(ffn_rlast), .ffn_axi_rvalid(ffn_rvalid), .ffn_axi_rready(ffn_rready),
-       // Write channel tied inactive (FFN is read-only)
-       .ffn_axi_awid(9'd0), .ffn_axi_awaddr(28'd0), .ffn_axi_awlen(8'd0), .ffn_axi_awsize(3'd0),
-       .ffn_axi_awburst(2'b01), .ffn_axi_awprot(3'd0), .ffn_axi_awqos(4'd0), .ffn_axi_awuser(1'b0),
-       .ffn_axi_awvalid(1'b0), .ffn_axi_awready(),
-       .ffn_axi_wdata(256'd0), .ffn_axi_wstrb(32'd0), .ffn_axi_wlast(1'b0),
-       .ffn_axi_wvalid(1'b0), .ffn_axi_wready(),
-       .ffn_axi_bid(), .ffn_axi_bresp(), .ffn_axi_bvalid(), .ffn_axi_bready(1'b0)
+       // Write channel: connected to weight writer AXI4 output
+       .ffn_axi_awid(wt_axi_awid), .ffn_axi_awaddr(wt_axi_awaddr), .ffn_axi_awlen(wt_axi_awlen),
+       .ffn_axi_awsize(wt_axi_awsize), .ffn_axi_awburst(wt_axi_awburst),
+       .ffn_axi_awprot(wt_axi_awprot), .ffn_axi_awqos(wt_axi_awqos), .ffn_axi_awuser(1'b0),
+       .ffn_axi_awvalid(wt_axi_awvalid), .ffn_axi_awready(wt_axi_awready),
+       .ffn_axi_wdata(wt_axi_wdata), .ffn_axi_wstrb(wt_axi_wstrb), .ffn_axi_wlast(wt_axi_wlast),
+       .ffn_axi_wvalid(wt_axi_wvalid), .ffn_axi_wready(wt_axi_wready),
+       .ffn_axi_bid(wt_axi_bid), .ffn_axi_bresp(wt_axi_bresp),
+       .ffn_axi_bvalid(wt_axi_bvalid), .ffn_axi_bready(wt_axi_bready)
    );
 
    // HBM2 GPIO (aggregates TG status)
@@ -134,15 +179,33 @@ module v2_lite_full
 
    random_start u_rand (.clock(clk_50m), .r_start(), .int_reset_n(int_reset_n));
 
-   // PCIe EP: only refclk + reset at top level.
-   // Serial lanes, BARs, and XCVR are handled inside the PCIe Hard IP.
+   // PCIe EP BAR0 AVMM signals
+   wire [63:0] pcie_bar0_address;
+   wire [3:0]  pcie_bar0_byteenable;
+   wire [31:0] pcie_bar0_writedata, pcie_bar0_readdata;
+   wire        pcie_bar0_read, pcie_bar0_write;
+   wire        pcie_bar0_readdatavalid, pcie_bar0_waitrequest;
+   wire        pcie_coreclkout;
+
+   // PCIe EP: serial lanes inside HIP, BAR0 + npor/pin_perst exported
    pcie_ep u_pcie (
-       .clk_clk       (refclk_pcie_ep_p),
-       .reset_reset_n (cpu_resetn & int_reset_n)
+       .clk_clk            (refclk_pcie_ep_p),
+       .reset_reset_n      (cpu_resetn & int_reset_n),
+       .npor_npor          (s10_pcie_perstn0),
+       .pin_perst_n        (s10_pcie_perstn0),
+       .ninit_done_in      (1'b1),
+       .coreclkout_hip     (pcie_coreclkout),
+       .bar0_address       (pcie_bar0_address),
+       .bar0_byteenable    (pcie_bar0_byteenable),
+       .bar0_readdata      (pcie_bar0_readdata),
+       .bar0_writedata     (pcie_bar0_writedata),
+       .bar0_read          (pcie_bar0_read),
+       .bar0_write         (pcie_bar0_write),
+       .bar0_readdatavalid (pcie_bar0_readdatavalid),
+       .bar0_waitrequest   (pcie_bar0_waitrequest)
    );
 
    // PLL lock status comes from PCIe HIP internally — assume locked after config
-   // TODO: read LTSSM state from pcie_ep internal registers
    wire pcie_atx_pll_locked = 1'b1;  // placeholder
    assign pcie_ep_i2c_sda = 1'bz;
 
