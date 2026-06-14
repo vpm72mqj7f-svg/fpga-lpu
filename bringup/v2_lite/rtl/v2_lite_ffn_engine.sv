@@ -141,7 +141,7 @@ module v2_lite_ffn_engine #(
 
     assign perf_token_cnt = ar_cnt;
     assign perf_cycle_cnt = 32'd0;
-    assign dbg_sub_fsm = {1'b0, ar_st};
+    assign dbg_sub_fsm = {2'b0, ar_st};
     assign err_merge_overflow = 1'b0;
     assign err_silu_overflow = 1'b0;
     assign err_axi_resp_err = 1'b0;
