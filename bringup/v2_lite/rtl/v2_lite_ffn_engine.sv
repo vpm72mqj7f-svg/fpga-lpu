@@ -59,8 +59,9 @@ module v2_lite_ffn_engine #(
     logic [7:0] ramp;
     always_ff @(posedge clk) ramp <= ramp + 1;
     assign gemv_activ = {DSP_LANES{ramp}};
-    // HBM2 rdata → gemv_weight — real HBM2→DSP data path (prevents DSP removal)
-    assign gemv_weight = {DSP_LANES{m_axi_rdata[7:0]}};
+    // HBM2 rdata → gemv_weight: 256-bit AXI beat = 32 × FP8, assign to lanes 0..31
+    // Full 512 lanes = 16 beats × 32 lanes. Bringup: use beat-0 data, rest zeroed.
+    assign gemv_weight = { {(DSP_LANES*DATA_W - 256){1'b0}}, m_axi_rdata };
 
     ffn_gemv_array #(.DSP_LANES(DSP_LANES),.INPUT_DIM(HIDDEN),.OUTPUT_DIM(INTER)) u_gemv(
         .clk,.rst_n,.start(1'b1),.busy(gemv_busy),.done(gemv_done),
