@@ -39,11 +39,12 @@ module v2_lite_ffn_engine #(
     logic [9:0] gemv_cycle;
     logic [ACCUM_W-1:0] gemv_dbg_reduced;
 
-    // Ramp data pattern (same as standalone test)
+    // Ramp data pattern for activation. Weight from AXI read data.
     logic [7:0] ramp;
     always_ff @(posedge clk) ramp <= ramp + 1;
     assign gemv_activ = {DSP_LANES{ramp}};
-    assign gemv_weight = {DSP_LANES{~ramp}};
+    // Feed AXI read data into weight path — creates real HBM2→GEMV signal chain
+    assign gemv_weight = {DSP_LANES{m_axi_rdata[7:0]}};
 
     ffn_gemv_array #(.DSP_LANES(DSP_LANES),.INPUT_DIM(HIDDEN),.OUTPUT_DIM(INTER)) u_gemv(
         .clk,.rst_n,.start(1'b1),.busy(gemv_busy),.done(gemv_done),
@@ -73,13 +74,57 @@ module v2_lite_ffn_engine #(
         pr_debug <= { gemv_dbg_reduced, gemv_result };
     end
 
-    assign perf_token_cnt = 32'd0;
+    // =========================================================================
+    // AXI4 Read State Machine — HBM2 weight fetch (Phase 1 bring-up)
+    // Keeps HBM2→FFN→PCIe data path alive to prevent DSP optimization
+    // =========================================================================
+    typedef enum logic [1:0] { AR_IDLE, AR_REQ, AR_DATA, AR_DONE } ar_st_t;
+    ar_st_t ar_st;
+    logic [31:0] ar_cnt;
+    assign dbg_hbm2_busy = (ar_st != AR_IDLE);
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            ar_st <= AR_IDLE;
+            m_axi_arvalid <= 0; m_axi_araddr <= 0;
+            m_axi_arlen <= 0; m_axi_arsize <= 3'd5; // 32-byte beats
+            m_axi_rready <= 0;
+            ar_cnt <= 0;
+        end else begin
+            case (ar_st)
+                AR_IDLE: begin
+                    m_axi_arvalid <= 1;
+                    m_axi_araddr <= 32'h0000_0000; // HBM2 base
+                    m_axi_arlen <= 8'd3;           // 4 beats = 128 bytes
+                    m_axi_rready <= 1;
+                    ar_cnt <= 0;
+                    ar_st <= AR_REQ;
+                end
+                AR_REQ: begin
+                    if (m_axi_arvalid && m_axi_arready) begin
+                        m_axi_arvalid <= 0;
+                        ar_st <= AR_DATA;
+                    end
+                end
+                AR_DATA: begin
+                    if (m_axi_rvalid && m_axi_rready) begin
+                        ar_cnt <= ar_cnt + 1;
+                        if (m_axi_rlast) ar_st <= AR_DONE;
+                    end
+                end
+                AR_DONE: begin
+                    m_axi_rready <= 0;
+                    ar_st <= AR_IDLE;
+                end
+                default: ar_st <= AR_IDLE;
+            endcase
+        end
+    end
+
+    assign perf_token_cnt = ar_cnt;
     assign perf_cycle_cnt = 32'd0;
-    assign dbg_sub_fsm = gemv_cycle[3:0];
-    assign dbg_hbm2_busy = 1'b0;
+    assign dbg_sub_fsm = {1'b0, ar_st};
     assign err_merge_overflow = 1'b0;
     assign err_silu_overflow = 1'b0;
     assign err_axi_resp_err = 1'b0;
-    assign m_axi_araddr = 0; assign m_axi_arlen = 0; assign m_axi_arsize = 0;
-    assign m_axi_arvalid = 0; assign m_axi_rready = 0;
 endmodule
