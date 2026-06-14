@@ -1,5 +1,5 @@
 # ============================================================================
-# v2_lite_full.qsf — PCIe Gen3x16 + HBM2 + FFN (Triple Merge)
+# v2_lite_full.qsf �?PCIe Gen3x16 + HBM2 + FFN (Triple Merge)
 # Generated: 2026-06-10, Quartus Prime Pro 26.1
 # ============================================================================
 set_global_assignment -name TOP_LEVEL_ENTITY v2_lite_full
@@ -61,97 +61,23 @@ set_instance_assignment -name IO_STANDARD "1.8 V" -to led[3]
 # PCIe Serial Lanes (x16: Banks 1C/1D/1E)
 # ============================================================================
 # Lane 0
-set_location_assignment PIN_BL47 -to pcie_ep_rx_p[0]
-set_location_assignment PIN_BL46 -to pcie_ep_rx_n[0]
-set_location_assignment PIN_BH45 -to pcie_ep_tx_p[0]
-set_location_assignment PIN_BH44 -to pcie_ep_tx_n[0]
 # Lane 1
-set_location_assignment PIN_BK49 -to pcie_ep_rx_p[1]
-set_location_assignment PIN_BK48 -to pcie_ep_rx_n[1]
-set_location_assignment PIN_BJ47 -to pcie_ep_tx_p[1]
-set_location_assignment PIN_BJ46 -to pcie_ep_tx_n[1]
 # Lane 2
-set_location_assignment PIN_BH49 -to pcie_ep_rx_p[2]
-set_location_assignment PIN_BH48 -to pcie_ep_rx_n[2]
-set_location_assignment PIN_BG47 -to pcie_ep_tx_p[2]
-set_location_assignment PIN_BG46 -to pcie_ep_tx_n[2]
 # Lane 3
-set_location_assignment PIN_BG51 -to pcie_ep_rx_p[3]
-set_location_assignment PIN_BG50 -to pcie_ep_rx_n[3]
-set_location_assignment PIN_BF45 -to pcie_ep_tx_p[3]
-set_location_assignment PIN_BF44 -to pcie_ep_tx_n[3]
 # Lane 4
-set_location_assignment PIN_BF49 -to pcie_ep_rx_p[4]
-set_location_assignment PIN_BF48 -to pcie_ep_rx_n[4]
-set_location_assignment PIN_BE47 -to pcie_ep_tx_p[4]
-set_location_assignment PIN_BE46 -to pcie_ep_tx_n[4]
 # Lane 5
-set_location_assignment PIN_BE51 -to pcie_ep_rx_p[5]
-set_location_assignment PIN_BE50 -to pcie_ep_rx_n[5]
-set_location_assignment PIN_BD45 -to pcie_ep_tx_p[5]
-set_location_assignment PIN_BD44 -to pcie_ep_tx_n[5]
 # Lane 6
-set_location_assignment PIN_BD49 -to pcie_ep_rx_p[6]
-set_location_assignment PIN_BD48 -to pcie_ep_rx_n[6]
-set_location_assignment PIN_BB45 -to pcie_ep_tx_p[6]
-set_location_assignment PIN_BB44 -to pcie_ep_tx_n[6]
 # Lane 7
-set_location_assignment PIN_BC51 -to pcie_ep_rx_p[7]
-set_location_assignment PIN_BC50 -to pcie_ep_rx_n[7]
-set_location_assignment PIN_BC47 -to pcie_ep_tx_p[7]
-set_location_assignment PIN_BC46 -to pcie_ep_tx_n[7]
 # Lane 8
-set_location_assignment PIN_BB49 -to pcie_ep_rx_p[8]
-set_location_assignment PIN_BB48 -to pcie_ep_rx_n[8]
-set_location_assignment PIN_BA47 -to pcie_ep_tx_p[8]
-set_location_assignment PIN_BA46 -to pcie_ep_tx_n[8]
 # Lane 9
-set_location_assignment PIN_BA51 -to pcie_ep_rx_p[9]
-set_location_assignment PIN_BA50 -to pcie_ep_rx_n[9]
-set_location_assignment PIN_AY45 -to pcie_ep_tx_p[9]
-set_location_assignment PIN_AY44 -to pcie_ep_tx_n[9]
 # Lane 10
-set_location_assignment PIN_AY49 -to pcie_ep_rx_p[10]
-set_location_assignment PIN_AY48 -to pcie_ep_rx_n[10]
-set_location_assignment PIN_AW47 -to pcie_ep_tx_p[10]
-set_location_assignment PIN_AW46 -to pcie_ep_tx_n[10]
 # Lane 11
-set_location_assignment PIN_AW51 -to pcie_ep_rx_p[11]
-set_location_assignment PIN_AW50 -to pcie_ep_rx_n[11]
-set_location_assignment PIN_AV45 -to pcie_ep_tx_p[11]
-set_location_assignment PIN_AV44 -to pcie_ep_tx_n[11]
 # Lane 12
-set_location_assignment PIN_AV49 -to pcie_ep_rx_p[12]
-set_location_assignment PIN_AV48 -to pcie_ep_rx_n[12]
-set_location_assignment PIN_AU47 -to pcie_ep_tx_p[12]
-set_location_assignment PIN_AU46 -to pcie_ep_tx_n[12]
 # Lane 13
-set_location_assignment PIN_AU51 -to pcie_ep_rx_p[13]
-set_location_assignment PIN_AU50 -to pcie_ep_rx_n[13]
-set_location_assignment PIN_AT45 -to pcie_ep_tx_p[13]
-set_location_assignment PIN_AT44 -to pcie_ep_tx_n[13]
 # Lane 14
-set_location_assignment PIN_AT49 -to pcie_ep_rx_p[14]
-set_location_assignment PIN_AT48 -to pcie_ep_rx_n[14]
-set_location_assignment PIN_AR47 -to pcie_ep_tx_p[14]
-set_location_assignment PIN_AR46 -to pcie_ep_tx_n[14]
 # Lane 15
-set_location_assignment PIN_AR51 -to pcie_ep_rx_p[15]
-set_location_assignment PIN_AR50 -to pcie_ep_rx_n[15]
-set_location_assignment PIN_AP45 -to pcie_ep_tx_p[15]
-set_location_assignment PIN_AP44 -to pcie_ep_tx_n[15]
 
 # PCIe XCVR pin settings
-set_instance_assignment -name IO_STANDARD "HSSI DIFFERENTIAL I/O" -to pcie_ep_tx_p
-set_instance_assignment -name IO_STANDARD "HSSI DIFFERENTIAL I/O" -to pcie_ep_rx_p
-set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_0V -to pcie_ep_rx_p
-set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_0V -to pcie_ep_tx_p
-set_instance_assignment -name HSSI_PARAMETER "pma_rx_buf_eq_dc_gain_trim=no_dc_gain" -to pcie_ep_rx_p
-set_instance_assignment -name HSSI_PARAMETER "pma_adapt_adp_vga_en=radp_vga_enable" -to pcie_ep_rx_p
-set_instance_assignment -name HSSI_PARAMETER "pma_adapt_adp_vga_sel=radp_vga_sel_2" -to pcie_ep_rx_p
-set_instance_assignment -name HSSI_PARAMETER "pma_adapt_adp_ctle_eqz_1s_sel=radp_ctle_eqz_1s_sel_8" -to pcie_ep_rx_p
-set_instance_assignment -name HSSI_PARAMETER "pma_tx_buf_vod_output_swing_ctrl=31" -to pcie_ep_tx_p
-set_instance_assignment -name HSSI_PARAMETER "pma_tx_buf_compensation_en=enable" -to pcie_ep_tx_p
 
 # PCIe control pins
 set_location_assignment PIN_BH16 -to pcie_ep_waken
@@ -210,7 +136,7 @@ set_global_assignment -name OPTIMIZE_MULTI_CORNER_TIMING ON
 set_global_assignment -name ENABLE_UNUSED_RX_CLOCK_WORKAROUND ON
 
 # ============================================================================
-# Source Files — Top + FFN
+# Source Files �?Top + FFN
 # ============================================================================
 set_global_assignment -name SYSTEMVERILOG_FILE v2_lite_full_top.sv
 set_global_assignment -name VERILOG_FILE v2_lite_isp_debug.v
@@ -223,11 +149,10 @@ set_global_assignment -name SYSTEMVERILOG_FILE silu_activation.sv
 set_global_assignment -name SYSTEMVERILOG_FILE v2_lite_bar0_regs.sv
 set_global_assignment -name SYSTEMVERILOG_FILE pcie_hbm_weight_writer.sv
 set_global_assignment -name VERILOG_FILE random_start.v
-# ffn_gemv_array — replaced by pre-synthesized QXP (512 DSP proven standalone)
-set_global_assignment -name QXP_FILE ../gemv_test/gemv_dsp.qxp
+set_global_assignment -name SYSTEMVERILOG_FILE ffn_gemv_array.sv
 
 # ============================================================================
-# HBM2 Qsys (ed_synth) — pre-generated from working project
+# HBM2 Qsys (ed_synth) �?pre-generated from working project
 # ============================================================================
 set_global_assignment -name QSYS_FILE ed_synth.qsys
 set_global_assignment -name QSYS_FILE q_sys_gpio.qsys
@@ -257,12 +182,12 @@ set_global_assignment -name IP_FILE ip/q_sys_gpio/q_sys_gpio_product_info_0.ip
 set_global_assignment -name IP_FILE ip/q_sys_gpio/q_sys_gpio_pio_0.ip
 
 # ============================================================================
-# PCIe Qsys (pcie_xcvr_system) — pre-generated from working project
+# PCIe Qsys (pcie_xcvr_system) �?pre-generated from working project
 # ============================================================================
 set_global_assignment -name QSYS_FILE pcie_xcvr_system.qsys
 set_global_assignment -name QSYS_FILE pcie_xcvr_test.qsys
 set_global_assignment -name QSYS_FILE xcvr_test_system.qsys
-# PCIe EP (pcie_ep.qsys — BAR0 AVMM for register access)
+# PCIe EP (pcie_ep.qsys �?BAR0 AVMM for register access)
 set_global_assignment -name QSYS_FILE pcie_ep.qsys
 set_global_assignment -name IP_FILE ip/pcie_ep/pcie_ep_clk.ip
 set_global_assignment -name IP_FILE ip/pcie_ep/pcie_ep_pcie.ip
@@ -328,7 +253,7 @@ set_global_assignment -name SIGNALTAP_FILE v2_lite_full.stp
 set_global_assignment -name SEARCH_PATH ip/
 
 # ============================================================================
-# Design Partitions — Incremental Compilation
+# Design Partitions �?Incremental Compilation
 # ============================================================================
 # [PARTITION-FLOW-DISABLED] HSSI/HBM2 periphery IPs must be in root partition.
 # Intel requirement: transceiver and HBM2 UIB periphery IPs cannot exist in
@@ -339,18 +264,18 @@ set_global_assignment -name SEARCH_PATH ip/
 # # Root partition
 # set_instance_assignment -name PARTITION root_partition -to "|"
 # set_instance_assignment -name PARTITION_COLOR 16777215 -to "|"
-# # HBM2 Qsys — rarely changes after calibration (POST_FIT preserved)
+# # HBM2 Qsys �?rarely changes after calibration (POST_FIT preserved)
 # set_instance_assignment -name PARTITION u_hbm -to "u_hbm"
 # set_instance_assignment -name PARTITION_PRESERVE PLACEMENT_AND_ROUTING -to "u_hbm"
 # set_instance_assignment -name PARTITION_COLOR 16711935 -to "u_hbm"
-# # PCIe Qsys — rarely changes after PLL lock (POST_FIT preserved)
+# # PCIe Qsys �?rarely changes after PLL lock (POST_FIT preserved)
 # set_instance_assignment -name PARTITION u_pcie -to "u_pcie"
 # set_instance_assignment -name PARTITION_PRESERVE PLACEMENT_AND_ROUTING -to "u_pcie"
 # set_instance_assignment -name PARTITION_COLOR 65535 -to "u_pcie"
-# # FFN custom RTL — frequently changes (SOURCE, rebuilt every time)
+# # FFN custom RTL �?frequently changes (SOURCE, rebuilt every time)
 # set_instance_assignment -name PARTITION u_ffn -to "u_ffn"
 # set_instance_assignment -name PARTITION_COLOR 16776960 -to "u_ffn"
-# # ISP debug — moderate changes (POST_FIT with PLACEMENT preserved)
+# # ISP debug �?moderate changes (POST_FIT with PLACEMENT preserved)
 # set_instance_assignment -name PARTITION u_isp -to "u_isp"
 # set_instance_assignment -name PARTITION_PRESERVE PLACEMENT -to "u_isp"
 # set_instance_assignment -name PARTITION_COLOR 65280 -to "u_isp"

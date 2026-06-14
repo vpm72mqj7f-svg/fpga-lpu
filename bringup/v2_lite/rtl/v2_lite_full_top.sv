@@ -13,7 +13,6 @@ module v2_lite_full
     refclk_pcie_ep_p, refclk_pcie_ep_edge_p, refclk_pcie_ep1_p,
     s10_pcie_perstn0, s10_pcie_perstn1, pcie_ep_waken,
     pcie_ep_i2c_scl, pcie_ep_i2c_sda,
-    pcie_ep_rx_p, pcie_ep_rx_n, pcie_ep_tx_p, pcie_ep_tx_n
     );
 
    // Shared clocks and reset
@@ -36,10 +35,6 @@ module v2_lite_full
    input s10_pcie_perstn0, s10_pcie_perstn1, pcie_ep_waken;
    input pcie_ep_i2c_scl;
    inout pcie_ep_i2c_sda;
-
-   // PCIe serial lanes (32 TX + 32 RX = x16)
-   input  [15:0] pcie_ep_rx_p, pcie_ep_rx_n;
-   output [15:0] pcie_ep_tx_p, pcie_ep_tx_n;
 
    // ========================================================================
    // BAR0 Register Map + Weight Writer (AVMM → Regs → AXI4)
