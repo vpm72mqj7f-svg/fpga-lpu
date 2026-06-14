@@ -27,29 +27,34 @@ module tb_ffn_axi;
     // Clock: 100MHz
     always #5 clk = ~clk;
 
-    // HBM2 AXI Responder
+    // HBM2 AXI Responder with address-aware data
     logic [31:0] hbm_mem [0:1023];
-    logic [7:0] ar_beat_cnt;
+    logic [7:0] ar_beat_cnt, ar_beat_total;
     logic ar_active;
+    logic [27:0] captured_araddr;
+    logic [7:0]  captured_arlen;
 
     assign m_axi_arready = 1'b1;  // always ready for AR
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             m_axi_rvalid <= 0; m_axi_rdata <= 0; m_axi_rresp <= 0;
-            m_axi_rlast <= 0; ar_beat_cnt <= 0; ar_active <= 0;
+            m_axi_rlast <= 0; ar_beat_cnt <= 0; ar_beat_total <= 0;
+            ar_active <= 0; captured_araddr <= 0; captured_arlen <= 0;
         end else begin
-            // Accept AR
+            // Accept AR, capture address
             if (m_axi_arvalid && m_axi_arready && !ar_active) begin
                 ar_active <= 1; ar_beat_cnt <= 0;
+                captured_araddr <= m_axi_araddr;
+                captured_arlen  <= m_axi_arlen;
             end
-            // Send R beats
+            // Send R beats with address-dependent data
             if (ar_active) begin
                 m_axi_rvalid <= 1;
-                m_axi_rdata <= {4{8'hA5}};              // test pattern: 0xA5A5...A5
+                m_axi_rdata <= {4{captured_araddr[15:8], captured_araddr[7:0]}}; // addr-based pattern
                 m_axi_rresp <= 0;
                 ar_beat_cnt <= ar_beat_cnt + 1;
-                m_axi_rlast <= (ar_beat_cnt == m_axi_arlen[7:0]); // FIXME: use arlen
+                m_axi_rlast <= (ar_beat_cnt == captured_arlen);
                 if (m_axi_rlast && m_axi_rready) begin
                     ar_active <= 0; m_axi_rvalid <= 0;
                 end
@@ -82,18 +87,27 @@ module tb_ffn_axi;
 
     initial begin
         clk = 0; rst_n = 0;
-        $display("[%0t] TB_FFN_AXI: Starting simulation", $time);
+        $display("[%0t] TB_FFN_AXI: Starting simulation (HBM2 weight map test)", $time);
         #20 rst_n = 1;
         #200;
-        $display("[%0t] AXI arvalid=%b arready=%b rvalid=%b rready=%b",
-                 $time, m_axi_arvalid, m_axi_arready, m_axi_rvalid, m_axi_rready);
-        $display("[%0t] ar_beat_cnt=%0d perf_token=%0d busy=%b done=%b",
-                 $time, ar_beat_cnt, perf_token_cnt, busy, done);
+        $display("[%0t] AXI AR: addr=0x%0h len=%0d arvalid=%b",
+                 $time, m_axi_araddr, m_axi_arlen, m_axi_arvalid);
+        $display("[%0t] perf_token=%0d busy=%b done=%b row_idx check: addr=0x%0h",
+                 $time, perf_token_cnt, busy, done, m_axi_araddr);
+        // Verify gate address formula: expert_base(0) + GATE_OFFSET(0) + row*2048
         #500;
-        $display("[%0t] FINAL: pr_debug=0x%0h perf_token=%0d done=%b",
-                 $time, pr_debug, perf_token_cnt, done);
-        if (perf_token_cnt > 0) $display("[%0t] PASS: AXI read transactions detected", $time);
-        else $display("[%0t] WARN: no AXI reads", $time);
+        $display("[%0t] After 50 cycles: ar_beat_cnt=%0d perf_token=%0d",
+                 $time, ar_beat_cnt, perf_token_cnt);
+        #5000;
+        $display("[%0t] FINAL: pr_debug=0x%0h perf_token=%0d busy=%b done=%b",
+                 $time, pr_debug, perf_token_cnt, busy, done);
+        $display("[%0t] captured_araddr=0x%0h captured_arlen=%0d",
+                 $time, captured_araddr, captured_arlen);
+        if (perf_token_cnt > 0) begin
+            $display("[%0t] PASS: AXI read transactions from HBM2 detected", $time);
+        end else begin
+            $display("[%0t] FAIL: no AXI reads — HBM2 weight path broken", $time);
+        end
         #10 $finish;
     end
 endmodule

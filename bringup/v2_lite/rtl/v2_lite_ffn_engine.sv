@@ -39,11 +39,27 @@ module v2_lite_ffn_engine #(
     logic [9:0] gemv_cycle;
     logic [ACCUM_W-1:0] gemv_dbg_reduced;
 
-    // Ramp data pattern for activation. Weight from AXI read data.
+    // =========================================================================
+    // HBM2 Weight Address Map (per HBM2_WEIGHT_MAP.md §7)
+    // =========================================================================
+    localparam int EXPERT_STRIDE  = 28'h0900000;  // 9 MB per expert
+    localparam int GATE_OFFSET    = 28'h0000000;  // gate weight offset
+    localparam int DOWN_OFFSET    = 28'h0580000;  // down weight offset
+    localparam int ROW_BYTES_GATE = 2048;         // d × 1B FP8
+    localparam int ROW_BYTES_DOWN = 1408;         // inter × 1B FP8
+    localparam int BURST_LEN_GATE = 63;           // 2048/32 - 1
+    localparam int BURST_LEN_DOWN = 43;           // 1408/32 - 1
+
+    // Expert 0 base, row tracking
+    logic [27:0] expert_base;
+    logic [$clog2(INTER+1)-1:0] row_idx;
+    assign expert_base = 28'h0000000;  // Expert 0 for bring-up
+
+    // Ramp activation pattern. Weight from AXI read data (HBM2).
     logic [7:0] ramp;
     always_ff @(posedge clk) ramp <= ramp + 1;
     assign gemv_activ = {DSP_LANES{ramp}};
-    // Feed AXI read data into weight path — creates real HBM2→GEMV signal chain
+    // HBM2 rdata → gemv_weight — real HBM2→DSP data path (prevents DSP removal)
     assign gemv_weight = {DSP_LANES{m_axi_rdata[7:0]}};
 
     ffn_gemv_array #(.DSP_LANES(DSP_LANES),.INPUT_DIM(HIDDEN),.OUTPUT_DIM(INTER)) u_gemv(
@@ -75,13 +91,15 @@ module v2_lite_ffn_engine #(
     end
 
     // =========================================================================
-    // AXI4 Read State Machine — HBM2 weight fetch (Phase 1 bring-up)
-    // Keeps HBM2→FFN→PCIe data path alive to prevent DSP optimization
+    // AXI4 Read FSM — HBM2 gate weight fetch with proper address map
+    // per HBM2_WEIGHT_MAP.md: expert_base + GATE_OFFSET + row_idx × ROW_BYTES
     // =========================================================================
-    typedef enum logic [1:0] { AR_IDLE, AR_REQ, AR_DATA, AR_DONE } ar_st_t;
+    typedef enum logic [1:0] { AR_IDLE, AR_REQ, AR_DATA } ar_st_t;
     ar_st_t ar_st;
     logic [31:0] ar_cnt;
+    logic [27:0] gate_row_addr;
     assign dbg_hbm2_busy = (ar_st != AR_IDLE);
+    assign gate_row_addr = expert_base + GATE_OFFSET + (row_idx * ROW_BYTES_GATE);
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -89,13 +107,13 @@ module v2_lite_ffn_engine #(
             m_axi_arvalid <= 0; m_axi_araddr <= 0;
             m_axi_arlen <= 0; m_axi_arsize <= 3'd5; // 32-byte beats
             m_axi_rready <= 0;
-            ar_cnt <= 0;
+            ar_cnt <= 0; row_idx <= 0;
         end else begin
             case (ar_st)
                 AR_IDLE: begin
                     m_axi_arvalid <= 1;
-                    m_axi_araddr <= 32'h0000_0000; // HBM2 base
-                    m_axi_arlen <= 8'd3;           // 4 beats = 128 bytes
+                    m_axi_araddr <= gate_row_addr;  // HBM2 gate weight address
+                    m_axi_arlen <= BURST_LEN_GATE;    // 64 beats/row
                     m_axi_rready <= 1;
                     ar_cnt <= 0;
                     ar_st <= AR_REQ;
@@ -109,12 +127,11 @@ module v2_lite_ffn_engine #(
                 AR_DATA: begin
                     if (m_axi_rvalid && m_axi_rready) begin
                         ar_cnt <= ar_cnt + 1;
-                        if (m_axi_rlast) ar_st <= AR_DONE;
+                        if (m_axi_rlast) begin
+                            row_idx <= row_idx + 1;  // next row
+                            ar_st <= AR_IDLE;         // issue next AR
+                        end
                     end
-                end
-                AR_DONE: begin
-                    m_axi_rready <= 0;
-                    ar_st <= AR_IDLE;
                 end
                 default: ar_st <= AR_IDLE;
             endcase
