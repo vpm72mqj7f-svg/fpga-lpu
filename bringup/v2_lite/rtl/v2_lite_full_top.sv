@@ -13,6 +13,7 @@ module v2_lite_full
     refclk_pcie_ep_p, refclk_pcie_ep_edge_p, refclk_pcie_ep1_p,
     s10_pcie_perstn0, s10_pcie_perstn1, pcie_ep_waken,
     pcie_ep_i2c_scl, pcie_ep_i2c_sda,
+    pcie_ep_rx_p, pcie_ep_rx_n, pcie_ep_tx_p, pcie_ep_tx_n
     );
 
    // Shared clocks and reset
