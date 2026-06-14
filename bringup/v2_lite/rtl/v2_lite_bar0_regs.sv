@@ -149,6 +149,16 @@ module v2_lite_bar0_regs #(
     end
 
     // =========================================================================
+    // ACT Registers (0x300–0x3FF) — RO constants
+    // =========================================================================
+    localparam ADDR_ACT_BUF_SIZE       = 12'h300;
+    localparam ADDR_ACT_CPU_RD_BUF     = 12'h304;
+    localparam ADDR_ACT_CPU_WR_BUF     = 12'h308;
+    localparam ADDR_ACT_WT_FIFO_DEPTH  = 12'h310;
+    localparam ADDR_ACT_AXI_BURST      = 12'h314;
+    localparam ADDR_ACT_FFN_OUT_BYTES  = 12'h318;
+
+    // =========================================================================
     // FFN Registers (0x200–0x2FF)
     // =========================================================================
     localparam ADDR_FFN_CONTROL    = 12'h200;
@@ -196,6 +206,13 @@ module v2_lite_bar0_regs #(
             12'h224: avs_readdata = ffn_data_hi;
             12'h228: avs_readdata = ffn_data_valid;
             12'h22C: avs_readdata = ffn_xor_check;
+            // ACT RO constants
+            ADDR_ACT_BUF_SIZE:       avs_readdata = 32'd2048;
+            ADDR_ACT_CPU_RD_BUF:     avs_readdata = 32'd32;
+            ADDR_ACT_CPU_WR_BUF:     avs_readdata = 32'd32;
+            ADDR_ACT_WT_FIFO_DEPTH:  avs_readdata = 32'd512;
+            ADDR_ACT_AXI_BURST:      avs_readdata = 32'd8192;
+            ADDR_ACT_FFN_OUT_BYTES:  avs_readdata = 32'd2048;
             // PERF stubs → can be extended
             12'h400: avs_readdata = perf_hbm_bw_read;
             12'h404: avs_readdata = perf_hbm_bw_write;
