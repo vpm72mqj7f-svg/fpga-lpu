@@ -220,7 +220,11 @@ set_global_assignment -name SYSTEMVERILOG_FILE v2_lite_ffn_engine.sv
 set_global_assignment -name SYSTEMVERILOG_FILE systolic_array.sv
 set_global_assignment -name SYSTEMVERILOG_FILE hbm2_weight_reader.sv
 set_global_assignment -name SYSTEMVERILOG_FILE silu_activation.sv
+set_global_assignment -name SYSTEMVERILOG_FILE v2_lite_bar0_regs.sv
+set_global_assignment -name SYSTEMVERILOG_FILE pcie_hbm_weight_writer.sv
 set_global_assignment -name VERILOG_FILE random_start.v
+# ffn_gemv_array — replaced by pre-synthesized QDB (512 DSP, standalone proven)
+set_global_assignment -name QDB_FILE gemv_dsp.qdb
 
 # ============================================================================
 # HBM2 Qsys (ed_synth) — pre-generated from working project
@@ -258,6 +262,10 @@ set_global_assignment -name IP_FILE ip/q_sys_gpio/q_sys_gpio_pio_0.ip
 set_global_assignment -name QSYS_FILE pcie_xcvr_system.qsys
 set_global_assignment -name QSYS_FILE pcie_xcvr_test.qsys
 set_global_assignment -name QSYS_FILE xcvr_test_system.qsys
+# PCIe EP (pcie_ep.qsys — BAR0 AVMM for register access)
+set_global_assignment -name QSYS_FILE pcie_ep.qsys
+set_global_assignment -name IP_FILE ip/pcie_ep/pcie_ep_clk.ip
+set_global_assignment -name IP_FILE ip/pcie_ep/pcie_ep_pcie.ip
 # PCIe IP files
 set_global_assignment -name IP_FILE ip/pcie_xcvr_system/pcie_xcvr_system_xcvr_atx_pll_s10_htile_0.ip
 set_global_assignment -name IP_FILE ip/pcie_xcvr_system/pcie_xcvr_system_product_info_0.ip

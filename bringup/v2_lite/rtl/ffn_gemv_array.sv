@@ -53,7 +53,8 @@ module ffn_gemv_array #(
 
     // Debug
     output logic [3:0]                   dbg_fsm,
-    output logic [9:0]                   dbg_cycle
+    output logic [9:0]                   dbg_cycle,
+    output logic [ACCUM_W-1:0]           dbg_reduced_out  // DSP force-keep anchor
 );
 
     localparam int CYCLES_PER_ROW = INPUT_DIM / DSP_LANES;  // 2048/512 = 4
@@ -82,29 +83,38 @@ module ffn_gemv_array #(
     // MAC Lanes: 512 × FP8×FP8 → sign-extend to 16-bit → DSP multiply
     // =========================================================================
     // MAC accumulator wire array (exposed for reduction tree)
-    logic [DSP_LANES-1:0][ACCUM_W-1:0] mac_accum;
+    (* preserve *) logic [DSP_LANES-1:0][ACCUM_W-1:0] mac_accum;
 
     genvar li;
     generate
         for (li = 0; li < DSP_LANES; li++) begin : g_mac
-            logic signed [15:0] s0_a, s0_b;
-            always_ff @(posedge clk) begin
-                s0_a <= $signed(activ_data[li*DATA_W +: DATA_W]);
-                s0_b <= $signed(weight_data[li*DATA_W +: DATA_W]);
-            end
+            // DSP multiply using lpm_mult megafunction (direct S10 DSP mapping)
+            // 8-bit × 8-bit signed → 16-bit product
+            wire [7:0] act_byte = activ_data[li*DATA_W +: DATA_W];
+            wire [7:0] wt_byte  = weight_data[li*DATA_W +: DATA_W];
 
-            // DSP multiply: 16×16 → 32
-            (* multstyle = "dsp" *) logic signed [31:0] mult;
-            assign mult = s0_a * s0_b;
+            wire [15:0] mult_product;
+            lpm_mult #(
+                .LPM_WIDTHA(8), .LPM_WIDTHB(8),
+                .LPM_WIDTHP(16), .LPM_WIDTHS(8),
+                .LPM_REPRESENTATION("SIGNED"),
+                .LPM_PIPELINE(2),
+                .LPM_TYPE("LPM_MULT"),
+                .LPM_HINT("DEDICATED_MULTIPLIER_IMPLEMENTATION=YES,USE_EAB=OFF")
+            ) u_mult (
+                .clock(clk),
+                .dataa(act_byte),
+                .datab(wt_byte),
+                .result(mult_product)
+            );
 
-            // Pipeline register for 250MHz (PIPE_STAGES=3)
-            logic signed [31:0] mult_r1, mult_r2;
-            always_ff @(posedge clk) begin mult_r1 <= mult; mult_r2 <= mult_r1; end
+            // Sign-extend product for accumulation (16→24 bit)
+            wire signed [ACCUM_W-1:0] mult_sext = { {ACCUM_W-16{mult_product[15]}}, mult_product };
 
             always_ff @(posedge clk or negedge rst_n) begin
                 if (!rst_n || accum_clr) mac_accum[li] <= 0;
                 else if (st == S_STREAM || st == S_DRAIN)
-                    mac_accum[li] <= mac_accum[li] + mult_r2[31:16];
+                    mac_accum[li] <= mac_accum[li] + mult_sext;
             end
         end
     endgenerate
@@ -136,6 +146,9 @@ module ffn_gemv_array #(
     endgenerate
 
     wire [ACCUM_W-1:0] reduced_sum = reduce_tree[REDUCE_DEPTH][0];
+    // Secondary fanout — prevents Quartus from removing DSP driving this path
+    (* keep *) wire [ACCUM_W-1:0] dbg_reduced = reduced_sum;
+    assign dbg_reduced_out = dbg_reduced;
 
     // =========================================================================
     // FSM

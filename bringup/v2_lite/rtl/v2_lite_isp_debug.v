@@ -73,14 +73,19 @@ module v2_lite_isp_debug #(
     // ========================================================================
     wire [31:0] pcie_probe0;  // LINK_STATUS
     wire [31:0] pcie_probe1;  // LANE_STATUS
-    wire [31:0] pcie_probe2;  // ERROR_COUNTERS (TODO: real counters)
+    wire [31:0] pcie_probe2;  // VERSION (铁律 2: highest probe word = version)
+
+    // Version: {day[7:0], month[7:0], year-2000[7:0], build[7:0]}
+    localparam PCIE_VERSION = 32'h0E061A03;  // 2026-06-14 build 3
+    localparam HBM2_VERSION = 32'h0E061A03;
+    localparam FFN_VERSION  = 32'h0E061A03;
 
     assign pcie_probe0 = {12'd0,  1'b0 /*LINK_UP*/, 1'b0 /*PERSTN*/,
                           1'b0 /*CONFIG_DONE*/, pcie_atx_pll_locked,
                           6'd0 /*LINK_WIDTH*/, 5'd0 /*LINK_SPEED*/,
                           5'd0 /*LTSSM*/};
     assign pcie_probe1 = {16'd0 /*SIGNAL_DETECT*/, pcie_pll_locked_bank};
-    assign pcie_probe2 = 32'd0;  // TODO: DL/TL error counters
+    assign pcie_probe2 = PCIE_VERSION;
 
     // ========================================================================
     // HBM2 Probe Wires
@@ -88,6 +93,7 @@ module v2_lite_isp_debug #(
     wire [31:0] hbm2_probe0;  // TG_STATUS
     wire [31:0] hbm2_probe1;  // TG_TIMEOUT
     wire [31:0] hbm2_probe2;  // STATUS
+    wire [31:0] hbm2_probe3;  // VERSION (铁律 2: highest probe word = version)
 
     wire [15:0] tg_pass   = {tg7_1_pass, tg7_0_pass, tg6_1_pass, tg6_0_pass,
                              tg5_1_pass, tg5_0_pass, tg4_1_pass, tg4_0_pass,
@@ -107,6 +113,7 @@ module v2_lite_isp_debug #(
     assign hbm2_probe0 = {tg_fail, tg_pass};
     assign hbm2_probe1 = {16'd0, tg_timeout};
     assign hbm2_probe2 = {29'd0, ch_active, hbm_pll_locked, 1'b0 /*CATTRIP*/, 3'd0 /*TEMP*/};
+    assign hbm2_probe3 = HBM2_VERSION;
 
     // ========================================================================
     // FFN Probe — 7 × 32-bit = 224-bit
@@ -118,6 +125,7 @@ module v2_lite_isp_debug #(
     wire [31:0] ffn_probe4;  // SA_STATUS
     wire [31:0] ffn_probe5;  // ERRORS
     wire [31:0] ffn_probe6;  // HBM2R_STATUS
+    wire [31:0] ffn_probe7;  // VERSION (铁律 2: highest probe word = version)
 
     // probe0 STATUS: FFN FSM + submodule status
     assign ffn_probe0 = {
@@ -172,13 +180,18 @@ module v2_lite_isp_debug #(
         ffn_dbg_hbm2r_fsm            // [2:0]
     };
 
+    // probe7 VERSION
+    assign ffn_probe7 = FFN_VERSION;
+
     // ========================================================================
     // SYS Probe + Source
     // ========================================================================
     wire [31:0] sys_probe0;  // STATUS
     wire [31:0] sys_source0; // CTRL (written by JTAG)
 
-    assign sys_probe0 = {16'h0001 /*VERSION 1.0*/, 8'd0 /*CLK_STATUS*/, 4'd0 /*RESET*/, led};
+    localparam SYS_VERSION = 32'h0E061A03;  // 2026-06-14 build 3
+
+    assign sys_probe0 = {SYS_VERSION[31:16], 8'd0 /*CLK_STATUS*/, 4'd0 /*RESET*/, led};
 
     // SYS source: [0]=FFN_START, [1]=FFN_RESET, [2]=COUNTER_RESET
     // (source is read internally for debug; actual control logic TBD)
@@ -206,12 +219,12 @@ module v2_lite_isp_debug #(
     altsource_probe #(
         .sld_auto_instance_index ("YES"),
         .instance_id              ("HBM2"),
-        .probe_width              (96),     // 3 × 32-bit
+        .probe_width              (128),    // 4 × 32-bit
         .source_width             (0),
         .source_initial_value     ("0"),
         .enable_metastability     ("YES")
     ) u_hbm2_isp (
-        .probe      ({hbm2_probe2, hbm2_probe1, hbm2_probe0}),
+        .probe      ({hbm2_probe3, hbm2_probe2, hbm2_probe1, hbm2_probe0}),
         .source     (),
         .source_ena (1'b1),
         .clr        (1'b0)
@@ -221,12 +234,12 @@ module v2_lite_isp_debug #(
     altsource_probe #(
         .sld_auto_instance_index ("YES"),
         .instance_id              ("FFN"),
-        .probe_width              (224),    // 7 × 32-bit
+        .probe_width              (256),    // 8 × 32-bit
         .source_width             (0),
         .source_initial_value     ("0"),
         .enable_metastability     ("YES")
     ) u_ffn_isp (
-        .probe      ({ffn_probe6, ffn_probe5, ffn_probe4,
+        .probe      ({ffn_probe7, ffn_probe6, ffn_probe5, ffn_probe4,
                       ffn_probe3, ffn_probe2, ffn_probe1, ffn_probe0}),
         .source     (),
         .source_ena (1'b1),

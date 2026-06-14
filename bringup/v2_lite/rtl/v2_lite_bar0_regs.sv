@@ -32,6 +32,10 @@ module v2_lite_bar0_regs #(
     input  logic         ffn_busy, ffn_done, ffn_pass, ffn_error,
     input  logic [31:0]  ffn_token_cnt, ffn_cycle_cnt,
     input  logic [31:0]  ffn_expert_total, ffn_axi_rbeat,
+    // ---- FFN: data readback (Phase 1 bring-up) ----
+    input  logic [31:0]  ffn_data_lo, ffn_data_hi,
+    input  logic [31:0]  ffn_data_valid,
+    input  logic [31:0]  ffn_xor_check,
 
     // ---- SYS: global status ----
     input  logic [3:0]   sys_led,
@@ -187,6 +191,11 @@ module v2_lite_bar0_regs #(
             ADDR_FFN_CYCLE_CNT: avs_readdata = ffn_cycle_cnt;
             ADDR_FFN_EXPERT_CNT:avs_readdata = ffn_expert_total;
             ADDR_FFN_AXI_RBEAT: avs_readdata = ffn_axi_rbeat;
+            // FFN data readback (Phase 1 bring-up)
+            12'h220: avs_readdata = ffn_data_lo;
+            12'h224: avs_readdata = ffn_data_hi;
+            12'h228: avs_readdata = ffn_data_valid;
+            12'h22C: avs_readdata = ffn_xor_check;
             // PERF stubs → can be extended
             12'h400: avs_readdata = perf_hbm_bw_read;
             12'h404: avs_readdata = perf_hbm_bw_write;
