@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////////
 // v2_lite_full_top.sv — PCIe Gen3x16 + HBM2 + FFN (Triple Merge)
 // Generated: 2026-06-10, Quartus Prime Pro 26.1
 // Updated: 2026-06-11 — SystemVerilog for unpacked array port connections
@@ -12,8 +12,7 @@ module v2_lite_full
     m2u_bridge_selectwir, m2u_bridge_wsi,
     refclk_pcie_ep_p, refclk_pcie_ep_edge_p, refclk_pcie_ep1_p,
     s10_pcie_perstn0, s10_pcie_perstn1, pcie_ep_waken,
-    pcie_ep_i2c_scl, pcie_ep_i2c_sda,
-    pcie_ep_rx_p, pcie_ep_rx_n, pcie_ep_tx_p, pcie_ep_tx_n
+    pcie_ep_i2c_scl, pcie_ep_i2c_sda
     );
 
    // Shared clocks and reset
@@ -78,10 +77,7 @@ module v2_lite_full
        .perf_total_cycles(32'd0),
        .err_sa_gate_fsm(ffn_pr_debug[15:0]), .err_sa_down_fsm(ffn_pr_debug[31:16]),
        .err_hbm2r_fsm(3'd0), .err_hbm2r_wr_wm(3'd0), .err_hbm2r_rd_wm(3'd0),
-       .err_ffn_merge(1'b0), .err_ffn_silu(1'b0), .err_axi_resp(1'b0),
-       .ffn_data_lo(td[31:0]), .ffn_data_hi(td[63:32]),
-       .ffn_data_valid({14'd0, done, ffn_output_row, tv}),
-       .ffn_xor_check(led2_ffn_data_xor)
+       .err_ffn_merge(1'b0), .err_ffn_silu(1'b0), .err_axi_resp(1'b0)
    );
    assign pcie_bar0_readdata     = bar0_readdata;
    assign pcie_bar0_readdatavalid = bar0_readdatavalid;
@@ -231,18 +227,7 @@ module v2_lite_full
    );
 
    // PLL lock status comes from PCIe HIP internally — assume locked after config
-   wire pcie_atx_pll_locked = 1'b1;  // placeholder until PLL status IP connected
-
-   // PCIe PLL lock bank signals — from xcvr_atx_pll IP (16 banks)
-   // TODO: connect to actual PLL lock status from Qsys pll_status_interconnect
-   wire pcie_pll_locked_a = 1'b0, pcie_pll_locked_b = 1'b0;
-   wire pcie_pll_locked_c = 1'b0, pcie_pll_locked_d = 1'b0;
-   wire pcie_pll_locked_e = 1'b0, pcie_pll_locked_f = 1'b0;
-   wire pcie_pll_locked_g = 1'b0, pcie_pll_locked_h = 1'b0;
-   wire pcie_pll_locked_i = 1'b0, pcie_pll_locked_j = 1'b0;
-   wire pcie_pll_locked_k = 1'b0, pcie_pll_locked_l = 1'b0;
-   wire pcie_pll_locked_m = 1'b0, pcie_pll_locked_n = 1'b0;
-   wire pcie_pll_locked_o = 1'b0, pcie_pll_locked_p = 1'b0;
+   wire pcie_atx_pll_locked = 1'b1;  // placeholder
    assign pcie_ep_i2c_sda = 1'bz;
 
    // ========================================================================
@@ -367,17 +352,7 @@ module v2_lite_full
      if(!cpu_resetn) hb<=0; else hb<=hb+1;
 
    // LED[2] = XOR of FFN output bits (forces Quartus to keep compute path)
-   // XOR of FULL 16384-bit FFN output → forces Quartus to keep ALL DSP
-   wire led2_ffn_data = ^td;
-   // 32-bit folded XOR: each bit = XOR of 512 consecutive td bits
-   wire [31:0] led2_ffn_data_xor;
-   genvar xi;
-   generate
-       for (xi = 0; xi < 32; xi++)
-           assign led2_ffn_data_xor[xi] = ^td[xi*512 +: 512];
-   endgenerate
-   wire [7:0] ffn_output_row = {5'd0, ffn_dbg_expert_cnt};
-
+   wire led2_ffn_data = ^td[127:0];
    assign led[0] = hbm_all_pass;
    assign led[1] = ~pcie_atx_pll_locked;  // OFF when PCIe PLL locked (good)
    assign led[2] = fp ? hb[25] : (done ? led2_ffn_data : 1'b0);
