@@ -264,8 +264,7 @@ module v2_lite_full
        .TOP_K    (6),
        .DATA_W   (8),
        .ACCUM_W  (24),
-       .DSP_LANES (512),
-       .ROUTER_LANES (128)
+       .DSP_LANES (512)
    ) u_ffn (
        .clk               (core_clk_iopll_ref_clk_clk),
        .rst_n             (rn),
