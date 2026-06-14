@@ -223,8 +223,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE silu_activation.sv
 set_global_assignment -name SYSTEMVERILOG_FILE v2_lite_bar0_regs.sv
 set_global_assignment -name SYSTEMVERILOG_FILE pcie_hbm_weight_writer.sv
 set_global_assignment -name VERILOG_FILE random_start.v
-# ffn_gemv_array — replaced by pre-synthesized QDB (512 DSP, standalone proven)
-set_global_assignment -name QDB_FILE gemv_dsp.qdb
+# ffn_gemv_array — replaced by pre-synthesized QXP (512 DSP proven standalone)
+set_global_assignment -name QXP_FILE ../gemv_test/gemv_dsp.qxp
 
 # ============================================================================
 # HBM2 Qsys (ed_synth) — pre-generated from working project
